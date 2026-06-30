@@ -1,0 +1,8 @@
+name: nginx
+version: "1.27.4"
+description: Nginx web server for Windows
+platform: win32
+arch: x64
+url: https://nginx.org/download/nginx-1.27.4.zip
+installPath: bin/nginx
+binary: nginx.exe

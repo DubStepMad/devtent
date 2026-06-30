@@ -1,0 +1,10 @@
+name: php-8.2
+version: "8.2.26"
+description: PHP 8.2 NTS x64 for Windows
+platform: win32
+arch: x64
+url: https://windows.php.net/downloads/releases/archives/php-8.2.26-nts-Win32-vs16-x64.zip
+installPath: bin/php/php-8.2
+binary: php.exe
+postInstall:
+  - copy: php.ini-development → php.ini

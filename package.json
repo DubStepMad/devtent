@@ -1,0 +1,40 @@
+{
+  "name": "devtent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Free, open-source local development environment for Windows",
+  "license": "LicenseRef-DTCL-1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @devtent/core && npm run build -w @devtent/cli && npm run build -w @devtent/desktop",
+    "start": "npm run start -w @devtent/desktop",
+    "dev": "npm run dev -w @devtent/desktop",
+    "dist": "npm run build && npm run dist -w @devtent/desktop",
+    "pack": "npm run build && npm run pack -w @devtent/desktop",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "devtent": "node packages/cli/dist/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "local-development",
+    "php",
+    "nginx",
+    "apache",
+    "mysql",
+    "open-source",
+    "windows"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/DubStepMad/devtent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DubStepMad/devtent/issues"
+  },
+  "homepage": "https://github.com/DubStepMad/devtent#readme"
+}

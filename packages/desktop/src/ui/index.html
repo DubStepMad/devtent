@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'">
+  <title>DevTent</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="window-drag-region" aria-hidden="true"></div>
+
+  <div id="view-setup" class="view setup-view hidden">
+    <div class="setup-card">
+      <div id="setup-progress" class="setup-progress hidden">
+        <p id="setup-progress-text" class="setup-progress-text">Starting…</p>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="setup-progress-bar" class="progress-fill"></div>
+        </div>
+      </div>
+
+      <div id="setup-body">
+      <div class="logo"><img src="app-icon.png" width="72" height="72" alt=""></div>
+      <h1>Welcome to DevTent</h1>
+      <p class="subtitle">Click below to finish setup — no folders to pick.</p>
+      <div class="setup-callout">
+        <p>DevTent uses <code id="setup-root-path">c:\devtent</code> on your install drive. Drop projects in <code id="setup-www-path">c:\devtent\www</code> for sites like <code>myapp.test</code>.</p>
+      </div>
+      <button type="button" class="btn primary wide" id="setup-init">Get Started</button>
+      <label class="migrate-check setup-stack-check">
+        <input type="checkbox" id="setup-install-stack" checked>
+        Install recommended stack (PHP 8.3, Nginx, MySQL, mkcert)
+      </label>
+      <label class="migrate-check setup-stack-check">
+        <input type="checkbox" id="setup-start-services" checked>
+        Start services after setup
+      </label>
+      <p class="hint">After setup, use the tent icon in your system tray.</p>
+
+      <div class="setup-divider"></div>
+      <h2 class="setup-section-title">Import existing environment (optional)</h2>
+      <p class="setup-migrate-desc">Only runs when you click <strong>Get Started</strong> with the box below checked — <strong>not</strong> during the Windows installer or app updates. Copies websites, php.ini, database files, and runtimes from a folder you already use. The source folder is <strong>not</strong> modified or deleted.</p>
+      <label class="field-label">Environment folder</label>
+      <div class="path-row">
+        <input type="text" id="setup-laragon" placeholder="c:\path\to\environment" readonly>
+        <button type="button" class="btn secondary" id="setup-laragon-browse">Browse…</button>
+        <button type="button" class="btn secondary" id="setup-laragon-detect">Detect</button>
+      </div>
+      <label class="migrate-check">
+        <input type="checkbox" id="setup-migrate-laragon">
+        Import projects, databases &amp; runtimes from an existing folder
+      </label>
+      <div id="setup-laragon-projects" class="migrate-project-picker hidden">
+        <label class="field-label">Projects to import</label>
+        <div id="setup-laragon-project-list" class="migrate-project-list"></div>
+        <div class="migrate-project-actions">
+          <button type="button" class="link-btn" data-action="all" data-target="setup-laragon-project-list">Select all</button>
+          <button type="button" class="link-btn" data-action="none" data-target="setup-laragon-project-list">Select none</button>
+        </div>
+      </div>
+      <p id="setup-laragon-preview" class="hint"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="logo-sm"><img src="app-icon.png" width="24" height="24" alt=""></span>
+        <span>DevTent</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="services">Services</button>
+        <button class="nav-item" data-view="logs">Logs</button>
+        <button class="nav-item" data-view="projects">Projects</button>
+        <button class="nav-item" data-view="quick-add">Quick Add</button>
+        <button class="nav-item" data-view="quick-app">Quick App</button>
+        <button class="nav-item" data-view="profiles">Profiles</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="badge">DTCL · Free</span>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar window-drag">
+        <h2 id="page-title" class="no-drag">Dashboard</h2>
+        <div class="topbar-actions no-drag">
+          <button class="btn success" id="btn-start-all">▶ Start All</button>
+          <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section id="view-dashboard" class="view-panel">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Services running</span>
+              <span class="stat-value" id="stat-services">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Projects</span>
+              <span class="stat-value" id="stat-projects">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Active profile</span>
+              <span class="stat-value stat-sm" id="stat-profile">default</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Status</span>
+              <span class="stat-value stat-sm" id="stat-status">Idle</span>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Recent projects</h3>
+            <ul id="dashboard-projects" class="item-list empty-hint">No projects yet — create one in Quick App</ul>
+          </div>
+          <div class="panel">
+            <h3>Getting started</h3>
+            <ol class="steps">
+              <li>On first run, enable <strong>Install recommended stack</strong> in setup — or use <strong>Quick Add</strong> manually</li>
+              <li>Start services from the toolbar or <strong>Services</strong></li>
+              <li>Create or drop projects in <strong>Projects</strong> / <code>www/</code></li>
+              <li>Sync virtual hosts and open <code>myapp.test</code> in your browser</li>
+            </ol>
+            <button class="btn secondary" id="btn-install-recommended-stack">Install recommended stack</button>
+          </div>
+        </section>
+
+        <section id="view-services" class="view-panel hidden">
+          <p class="panel-desc">Turn services on to add them to your Procfile, then start or stop them. Install missing runtimes in <strong>Quick Add</strong> first.</p>
+          <div class="toolbar">
+            <button class="btn secondary" id="btn-enable-core-services">Enable NGINX, MySQL &amp; PHP</button>
+          </div>
+          <ul id="services-list" class="service-list"></ul>
+          <div class="panel muted-panel">
+            <p id="services-empty" class="empty-hint hidden">Install runtimes via Quick Add, then enable services with the switches above.</p>
+          </div>
+        </section>
+
+        <section id="view-logs" class="view-panel hidden">
+          <p class="panel-desc">Service output, per-site web server logs, and DevTent app diagnostics. Files are stored in <code>logs/</code> (app log in AppData).</p>
+          <div class="toolbar log-toolbar">
+            <select id="log-file-select" class="log-select" aria-label="Log file">
+              <option value="">Select a log file…</option>
+            </select>
+            <button class="btn secondary" id="btn-log-refresh">Refresh</button>
+            <label class="log-follow">
+              <input type="checkbox" id="log-follow" checked>
+              Follow
+            </label>
+            <button class="btn secondary" id="btn-open-logs-folder">Open logs/</button>
+          </div>
+          <pre id="log-viewer" class="log-viewer" aria-live="polite">Select a log file to view output.</pre>
+        </section>
+
+        <section id="view-projects" class="view-panel hidden">
+          <div class="toolbar">
+            <button class="btn primary" id="btn-sync-vhosts">Sync Virtual Hosts</button>
+            <button class="btn secondary" id="btn-update-hosts">Update hosts file (Admin)</button>
+            <button class="btn secondary" id="btn-open-www">Open www/ folder</button>
+          </div>
+          <p class="panel-desc">If <code>*.test</code> sites do not resolve, click <strong>Update hosts file (Admin)</strong>. Windows should show a UAC prompt — check the taskbar if you do not see it. DevTent itself stays non-admin.</p>
+          <p id="hosts-helper-hint" class="panel-desc hidden"></p>
+          <ul id="projects-list" class="project-list"></ul>
+          <p id="projects-empty" class="empty-hint">No projects in www/. Create one in Quick App or drop a folder into www/.</p>
+        </section>
+
+        <section id="view-quick-add" class="view-panel hidden">
+          <p class="panel-desc">One-click install for PHP, Nginx, MySQL, Node, and more. All runtimes are downloaded from official sources.</p>
+          <div id="manifests-grid" class="card-grid"></div>
+        </section>
+
+        <section id="view-quick-app" class="view-panel hidden">
+          <p class="panel-desc">Scaffold a new project in www/ with automatic virtual host setup.</p>
+          <div class="form-row">
+            <label>Template</label>
+            <select id="template-select"></select>
+          </div>
+          <div class="form-row">
+            <label>Project name</label>
+            <input type="text" id="project-name" placeholder="myapp">
+          </div>
+          <button class="btn primary" id="btn-create-project">Create Project</button>
+          <div class="panel" style="margin-top:1.5rem">
+            <h3>Plain PHP</h3>
+            <p class="panel-desc">Quick phpinfo() project — no Composer required.</p>
+            <div class="form-row inline">
+              <input type="text" id="php-project-name" placeholder="demo">
+              <button class="btn secondary" id="btn-create-php">Create PHP project</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-profiles" class="view-panel hidden">
+          <p class="panel-desc">Profiles choose which PHP version and stack configuration is active. Only one PHP version runs at a time — switch profiles to change it.</p>
+          <div class="toolbar">
+            <button type="button" class="btn primary" id="btn-new-profile">New profile</button>
+          </div>
+          <div id="profile-editor" class="panel hidden">
+            <h3 id="profile-editor-title">New profile</h3>
+            <label class="field-label" for="profile-name">Name</label>
+            <input type="text" id="profile-name" class="text-input" placeholder="laravel-84">
+            <label class="field-label" for="profile-description">Description</label>
+            <input type="text" id="profile-description" class="text-input" placeholder="PHP 8.4 + Nginx + MySQL">
+            <label class="field-label" for="profile-php-version">PHP version</label>
+            <select id="profile-php-version" class="text-input"></select>
+            <label class="field-label" for="profile-web-server">Web server</label>
+            <select id="profile-web-server" class="text-input">
+              <option value="nginx">Nginx</option>
+              <option value="apache">Apache</option>
+            </select>
+            <label class="field-label" for="profile-database">Database</label>
+            <select id="profile-database" class="text-input">
+              <option value="mysql">MySQL</option>
+              <option value="postgresql">PostgreSQL</option>
+              <option value="none">None</option>
+            </select>
+            <div class="toolbar" style="margin-top: 1rem">
+              <button type="button" class="btn primary" id="btn-save-profile">Save</button>
+              <button type="button" class="btn secondary" id="btn-cancel-profile">Cancel</button>
+            </div>
+          </div>
+          <ul id="profiles-list" class="profile-list"></ul>
+        </section>
+
+        <section id="view-settings" class="view-panel hidden">
+          <div class="panel">
+            <h3>DevTent root</h3>
+            <p class="panel-desc mono" id="settings-root"></p>
+            <div class="toolbar">
+              <button class="btn secondary" id="btn-open-root">Open folder</button>
+              <button class="btn secondary" id="btn-open-terminal">Open terminal</button>
+              <button class="btn secondary" id="btn-change-root">Change location…</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Quick links</h3>
+            <div class="toolbar">
+              <button class="btn secondary" id="btn-open-www-settings">www/</button>
+              <button class="btn secondary" id="btn-open-logs">logs/</button>
+              <button class="btn secondary" id="btn-open-bin">bin/</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>MySQL backups</h3>
+            <p class="panel-desc">Automatic backups run daily while DevTent is open, and before MySQL stops. Backups are kept for 7 days in <code>data/backups/mysql/</code>.</p>
+            <div class="toolbar">
+              <button class="btn secondary" id="btn-backup-mysql">Backup now</button>
+            </div>
+            <ul id="mysql-backups-list" class="backup-list panel-desc"></ul>
+          </div>
+          <div class="panel">
+            <h3>Import environment</h3>
+            <p class="panel-desc">Copy projects from an existing <code>www/</code> folder, php.ini files, databases, and runtimes. The source folder is left untouched.</p>
+            <label class="field-label">Environment folder</label>
+            <div class="form-row inline">
+              <input type="text" id="migrate-laragon-path" placeholder="c:\path\to\environment" readonly style="flex:1">
+              <button class="btn secondary" id="btn-migrate-laragon-detect">Detect</button>
+              <button class="btn secondary" id="btn-migrate-laragon-browse">Browse…</button>
+            </div>
+            <p id="migrate-laragon-preview" class="panel-desc"></p>
+            <div id="migrate-laragon-projects" class="migrate-project-picker hidden">
+              <label class="field-label">Projects to import</label>
+              <div id="migrate-laragon-project-list" class="migrate-project-list"></div>
+              <div class="migrate-project-actions">
+                <button type="button" class="link-btn" data-action="all" data-target="migrate-laragon-project-list">Select all</button>
+                <button type="button" class="link-btn" data-action="none" data-target="migrate-laragon-project-list">Select none</button>
+              </div>
+            </div>
+            <button class="btn primary" id="btn-migrate-laragon">Import environment</button>
+            <p id="migrate-laragon-result" class="panel-desc"></p>
+          </div>
+          <div class="panel">
+            <h3>About</h3>
+            <p class="panel-desc" id="about-version">DevTent — free, open-source local dev environment.<br>Licensed under DTCL v1.0. Free forever. Not for sale.</p>
+            <p class="panel-desc update-status-line" id="update-status-line"></p>
+            <div class="about-actions">
+              <button class="btn secondary" id="btn-check-updates">Check for updates</button>
+              <button class="btn secondary" id="btn-github">GitHub</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Update rollback</h3>
+            <p class="panel-desc" id="rollback-status">Before each in-app update, DevTent saves a copy of the current app. Restore it here if an update causes problems.</p>
+            <button class="btn secondary" id="btn-rollback-app" disabled>Restore previous version</button>
+          </div>
+        </section>
+      </div>
+
+      <footer class="statusbar">
+        <span id="statusbar-root"></span>
+        <span id="statusbar-msg">Ready</span>
+      </footer>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="update-overlay" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-title">
+    <div class="update-dialog">
+      <h2 id="update-title">Update available</h2>
+      <p class="update-version-line" id="update-version-line"></p>
+      <div id="update-notes" class="update-notes"></div>
+      <div id="update-progress" class="update-progress hidden">
+        <div class="update-progress-bar-wrap">
+          <div id="update-progress-bar" class="update-progress-bar"></div>
+        </div>
+        <p id="update-progress-text" class="panel-desc"></p>
+      </div>
+      <div id="update-actions" class="update-actions">
+        <button class="btn primary" id="btn-update-install">Download &amp; install</button>
+        <button class="btn secondary" id="btn-update-release-notes">View release notes</button>
+        <button class="btn secondary" id="btn-update-later">Remind me later</button>
+        <button type="button" class="link-btn" id="btn-update-skip">Skip this version</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

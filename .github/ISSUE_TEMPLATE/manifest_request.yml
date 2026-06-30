@@ -1,0 +1,45 @@
+name: Manifest / Runtime Request
+description: Request a new Quick Add runtime (PHP version, tool, etc.)
+title: "[Manifest] "
+labels: ["manifest"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask for a new runtime to be added under `manifests/`. If you have official download URLs and know the install layout, a PR is even better — see [CONTRIBUTING.md](https://github.com/DubStepMad/devtent/blob/main/CONTRIBUTING.md).
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime or tool name
+      placeholder: e.g. PHP 8.5, Adminer, Apache 2.4
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version (if specific)
+      placeholder: e.g. 8.5.0
+
+  - type: input
+    id: url
+    attributes:
+      label: Official download URL (if known)
+      placeholder: https://…
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why do you need this?
+      placeholder: e.g. My team standardizes on PHP 8.5; Laragon/Herd already ship it.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can submit a manifest YAML PR if you point me at the right URL/layout
+          required: false

@@ -1,0 +1,8 @@
+name: node-22
+version: "22.14.0"
+description: Node.js 22 LTS for Windows
+platform: win32
+arch: x64
+url: https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip
+installPath: bin/node/node-22
+binary: node.exe

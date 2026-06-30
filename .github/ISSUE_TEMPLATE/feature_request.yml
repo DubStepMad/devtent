@@ -1,0 +1,52 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem and your proposed solution. DevTent must stay **free, open source, and unsellable** under [DTCL v1.0](https://github.com/DubStepMad/devtent/blob/main/LICENSE).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What workflow is painful today? Who benefits (beginners, teams, Laravel devs, etc.)?
+      placeholder: e.g. I need to switch between Apache and Nginx without manually editing the Procfile.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should it work in the UI or CLI? Keep scope reasonable for a small OSS project.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Desktop app / tray
+        - CLI
+        - Core engine (services, profiles, vhosts)
+        - Quick Add manifest
+        - Quick App template
+        - Installer / updates
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Contributor checklist
+      options:
+        - label: This feature fits DTCL v1.0 — free, open source, no paid tiers or license keys
+          required: true
+        - label: I am willing to open a PR for this (optional but appreciated)
+          required: false

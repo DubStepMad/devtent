@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+
+      - name: Smoke test CLI
+        run: |
+          node packages/cli/dist/index.js init ./test-instance
+          node packages/cli/dist/index.js profile list --root ./test-instance
+          node packages/cli/dist/index.js vhost sync --root ./test-instance
+
+      - name: Verify installer packs
+        run: npm run pack -w @devtent/desktop
+
+      - name: Electron E2E smoke
+        working-directory: packages/desktop
+        run: npx electron . --e2e-smoke

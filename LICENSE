@@ -1,0 +1,221 @@
+DevTent Community License (DTCL) Version 1.0
+Copyright (C) 2026 DevTent Contributors
+
+Everyone is permitted to copy and distribute verbatim copies of this license
+document, but changing it is not allowed.
+
+================================================================================
+PREAMBLE
+================================================================================
+
+DevTent exists as a free, community-owned alternative to proprietary local
+development tools. This license ensures that DevTent and all works derived
+from it remain free to use, free to modify, free to share — and never sold.
+
+================================================================================
+1. DEFINITIONS
+================================================================================
+
+  "DevTent" means the software, documentation, manifests, templates, and
+  associated materials distributed under this License.
+
+  "You" means any individual or legal entity exercising permissions granted
+  by this License.
+
+  "Derivative Work" means any work based upon DevTent or any portion thereof,
+  including modifications, extensions, integrations, or combinations with other
+  software, whether or not distributed separately.
+
+  "Source Code" means the preferred form for making modifications, including
+  all scripts, configuration, and build instructions necessary to compile and
+  run the software.
+
+  "Convey" means to distribute, publish, sublicense, lend, lease, host, or
+  otherwise make available to any third party.
+
+  "Sell" or "Sale" means to exchange DevTent or a Derivative Work for money
+  or anything of monetary value, including but not limited to: purchase prices,
+  subscription fees, licensing fees, download fees, paywalls, in-app purchases,
+  donations required as a condition of access, or any fee tied to obtaining or
+  using the software.
+
+================================================================================
+2. PERMITTED USES
+================================================================================
+
+  You may, at no charge:
+
+    a) Use DevTent for any purpose, including personal, educational,
+       non-commercial, and commercial software development.
+
+    b) Study, modify, and create Derivative Works of DevTent.
+
+    c) Convey exact copies of DevTent, provided you do so at no charge and
+       comply with Section 4 (Source Code) and Section 5 (License Notice).
+
+    d) Convey Derivative Works, provided you do so at no charge and comply
+       with Section 3 (Copyleft), Section 4, and Section 5.
+
+    e) Contribute improvements back to the community via pull requests,
+       patches, or any open collaboration channel.
+
+================================================================================
+3. COPYLEFT — DERIVATIVE WORKS MUST STAY OPEN SOURCE
+================================================================================
+
+  If you Convey a Derivative Work, you MUST:
+
+    a) License the entire Derivative Work under this License (DTCL v1.0).
+
+    b) Make the complete Source Code of the Derivative Work publicly
+       available at no charge, in a manner that allows any recipient to
+       download, use, modify, and redistribute it under this License.
+
+    c) Keep intact all copyright notices and this License in all copies.
+
+    d) Document substantial changes you made to the original software.
+
+  You may NOT Convey a Derivative Work under a proprietary, closed-source,
+  or more restrictive license. The community's right to access and build upon
+  all improvements is non-negotiable.
+
+================================================================================
+4. SOURCE CODE
+================================================================================
+
+  When you Convey DevTent or a Derivative Work, you must provide the
+  complete corresponding Source Code by one of the following methods:
+
+    a) Include the Source Code alongside the binary or executable; or
+
+    b) Offer the Source Code from a publicly accessible network server at no
+       charge, with a clear written offer valid for at least three (3) years.
+
+  The Source Code must be in the preferred form for modification and must
+  include all build scripts and instructions needed to produce a working copy.
+
+================================================================================
+5. LICENSE NOTICE
+================================================================================
+
+  Every copy of DevTent or a Derivative Work that you Convey must include:
+
+    a) This License in its entirety, or a prominent link to it; and
+
+    b) A notice stating that the software is licensed under DTCL v1.0 and
+       may not be sold.
+
+================================================================================
+6. PROHIBITION ON SALE — NO EXCEPTIONS
+================================================================================
+
+  YOU MAY NOT SELL DEVTENT OR ANY DERIVATIVE WORK. THIS PROHIBITION IS
+  ABSOLUTE AND APPLIES TO ALL FORMS OF COMMERCIAL EXPLOITATION OF THE
+  SOFTWARE ITSELF, INCLUDING BUT NOT LIMITED TO:
+
+    a) Selling copies of DevTent or Derivative Works, whether on physical
+       media or as digital downloads.
+
+    b) Charging any fee to download, install, access, or use DevTent or a
+       Derivative Work.
+
+    c) Offering DevTent or a Derivative Work as part of a paid product,
+       bundle, subscription, or service where access to the software is a
+       material component of what is being purchased.
+
+    d) Operating a hosted or network-accessible version of DevTent or a
+       Derivative Work (including "DevTent Pro", "DevTent Cloud", or similar)
+       for which users must pay any fee.
+
+    e) Using DevTent or a Derivative Work as a loss leader, upsell, or
+       gateway to paid software access in any form.
+
+    f) Accepting payment in exchange for a license key, activation code, or
+       any mechanism that gates access to DevTent or a Derivative Work.
+
+  CLARIFICATION: This section prohibits selling THE SOFTWARE. It does NOT
+  prohibit you from using DevTent to develop and sell your own separate
+  applications, websites, or services — so long as you are not selling
+  DevTent itself or a Derivative Work of it.
+
+  CLARIFICATION: Voluntary, unconditional donations to support development
+  are permitted, provided donors receive no exclusive access, features, or
+  copies that non-donors cannot obtain freely.
+
+================================================================================
+7. NETWORK USE
+================================================================================
+
+  If you operate DevTent or a Derivative Work as a network service (making
+  functionality available to users over a network without conveying a copy
+  to their machines), you must:
+
+    a) Provide the complete Source Code of the version you operate, at no
+       charge, to any user who interacts with the service; and
+
+    b) Not charge any fee for access to the service, consistent with
+       Section 6.
+
+================================================================================
+8. PATENTS
+================================================================================
+
+  Each contributor grants you a perpetual, worldwide, royalty-free patent
+  license to make, use, and Convey DevTent and Derivative Works, solely
+  to the extent that such activity is permitted under this License.
+
+  If you initiate patent litigation alleging that DevTent infringes a
+  patent, your rights under this License terminate automatically.
+
+================================================================================
+9. TERMINATION
+================================================================================
+
+  Your rights under this License terminate automatically if you violate any
+  of its terms. Upon termination, you must cease all use and Conveyance of
+  DevTent and any Derivative Works.
+
+  Sections 6, 10, 11, and 12 survive termination.
+
+================================================================================
+10. DISCLAIMER OF WARRANTY
+================================================================================
+
+  DEVTENT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+  THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+  FROM, OUT OF, OR IN CONNECTION WITH DEVTENT OR THE USE OR OTHER DEALINGS
+  IN DEVTENT.
+
+================================================================================
+11. LIMITATION OF LIABILITY
+================================================================================
+
+  IN NO EVENT SHALL ANY COPYRIGHT HOLDER BE LIABLE FOR ANY INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES
+  WHATSOEVER, ARISING FROM THE USE OF DEVTENT, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+================================================================================
+12. GENERAL
+================================================================================
+
+  a) This License represents the complete agreement regarding DevTent. No
+     additional terms may be imposed that restrict rights granted here.
+
+  b) If any provision of this License is held unenforceable, the remaining
+     provisions remain in full effect.
+
+  c) Failure to enforce any provision does not waive the right to enforce it
+     later.
+
+  d) "Free" means free as in freedom and free as in price. DevTent must
+     always be both.
+
+================================================================================
+
+For a plain-language summary, see docs/LICENSE-FAQ.md in the DevTent repository.
+This document is not legal advice. Consult a qualified attorney for questions
+about your specific use case.

@@ -1,0 +1,75 @@
+{
+  "name": "@devtent/desktop",
+  "version": "1.0.0",
+  "description": "DevTent Desktop — primary GUI for your local dev environment",
+  "license": "LicenseRef-DTCL-1.0",
+  "author": "DevTent Contributors",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/build-preload.mjs && npm run generate-icons && npm run copy-assets",
+    "copy-assets": "node scripts/copy-assets.mjs",
+    "generate-icons": "node scripts/generate-icons.mjs",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron .",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "pack": "npm run build && node scripts/ensure-eb-nsis.cjs && electron-builder --dir",
+    "dist": "npm run build && node scripts/ensure-eb-nsis.cjs && electron-builder --win"
+  },
+  "dependencies": {
+    "@devtent/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "electron": "35.7.5",
+    "electron-builder": "^25.1.8",
+    "pngjs": "^7.0.0",
+    "to-ico": "^1.1.5",
+    "typescript": "^5.8.2"
+  },
+  "build": {
+    "appId": "dev.devtent.app",
+    "productName": "DevTent",
+    "icon": "assets/icon.png",
+    "afterPack": "scripts/after-pack.cjs",
+    "electronVersion": "35.7.5",
+    "npmRebuild": false,
+    "asar": true,
+    "compression": "normal",
+    "copyright": "Copyright © 2026 DevTent Contributors",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "dist/manifests", "to": "manifests" },
+      { "from": "dist/templates", "to": "templates" },
+      { "from": "assets", "to": "assets" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico",
+      "legalTrademarks": "DevTent Contributors",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "runAfterFinish": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DevTent",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "include": "build/installer.nsh"
+    }
+  }
+}

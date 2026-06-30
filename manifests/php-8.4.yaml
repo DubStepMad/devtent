@@ -1,0 +1,10 @@
+name: php-8.4
+version: "8.4.3"
+description: PHP 8.4 NTS x64 for Windows
+platform: win32
+arch: x64
+url: https://windows.php.net/downloads/releases/archives/php-8.4.3-nts-Win32-vs17-x64.zip
+installPath: bin/php/php-8.4
+binary: php.exe
+postInstall:
+  - copy: php.ini-development → php.ini

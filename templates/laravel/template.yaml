@@ -1,0 +1,6 @@
+name: laravel
+description: Create a new Laravel project via Composer
+commands:
+  - composer create-project laravel/laravel {path}
+postCreate:
+  - cd {path} && php artisan key:generate

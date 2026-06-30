@@ -1,0 +1,83 @@
+name: Bug Report
+description: Something is broken or not working as expected
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in as much as you can — logs and exact steps help a lot on Windows.
+
+        For setup questions, use [Discussions](https://github.com/DubStepMad/devtent/discussions) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened?
+      placeholder: e.g. MySQL starts then exits immediately; dashboard shows "Idle" but services should be running.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Fresh install from DevTent Setup 1.0.0.exe
+        2. Install recommended stack
+        3. Click Start All
+        4. …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: DevTent version
+      description: Settings → About, or the installer filename (e.g. 1.0.0)
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_type
+    attributes:
+      label: How are you running DevTent?
+      options:
+        - Windows installer (.exe)
+        - Built from source (`npm start`)
+        - Portable folder only (CLI)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Other (not officially supported in v1)
+    validations:
+      required: true
+
+  - type: input
+    id: root
+    attributes:
+      label: DevTent root folder (optional)
+      description: e.g. `C:\devtent` or `P:\devtent`
+      placeholder: C:\devtent
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or errors (optional)
+      description: Paste relevant lines from Dashboard → Logs, `logs/` in your DevTent folder, or `%APPDATA%\DevTent\logs\app.log`
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, Procfile contents, profile settings, etc.

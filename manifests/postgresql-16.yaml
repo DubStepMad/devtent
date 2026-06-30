@@ -1,0 +1,9 @@
+name: postgresql-16
+version: "16.6"
+description: PostgreSQL 16 for Windows (portable binaries)
+platform: win32
+arch: x64
+url: https://get.enterprisedb.com/postgresql/postgresql-16.6-1-windows-x64-binaries.zip
+installPath: bin/postgresql
+binary: bin/postgres.exe
+archiveSubdir: pgsql

@@ -1,0 +1,8 @@
+name: redis
+version: "5.0.14.1"
+description: Redis 5 for Windows (community port)
+platform: win32
+arch: x64
+url: https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip
+installPath: bin/redis
+binary: redis-server.exe

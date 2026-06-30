@@ -1,0 +1,517 @@
+import { ipcMain, dialog, shell, BrowserWindow } from "electron";
+import path from "node:path";
+import {
+  initDevTent,
+  getState,
+  hasExistingEnvironment,
+  startAll,
+  stopAll,
+  startService,
+  stopService,
+  parseProcfile,
+  generateVirtualHosts,
+  elevateHostsSync,
+  listProfiles,
+  switchProfile,
+  createProfile,
+  updateProfile,
+  deleteProfile,
+  applyPhpVersionToActiveProfile,
+  listManifestsWithStatus,
+  loadManifest,
+  installFromManifest,
+  syncPhpProcfileFromProfile,
+  listTemplates,
+  createFromTemplate,
+  writePlainPhpProject,
+  enableSsl,
+  isServiceRunning,
+  getServiceStatuses,
+  getProcfileToggles,
+  setProcfileToggle,
+  readProcfileRaw,
+  writeProcfileRaw,
+  enableCoreServicesIfReady,
+  detectLaragonInstalls,
+  previewLaragonMigration,
+  migrateFromLaragon,
+  installRecommendedStack,
+  backupMysql,
+  listMysqlBackups,
+  maybeDailyMysqlBackup,
+  listLogFiles,
+  readLogTail,
+} from "@devtent/core";
+import {
+  loadSettings,
+  saveSettings,
+  isInitialized,
+  getManifestsDir,
+  getTemplatesDir,
+  getDefaultRoot,
+} from "./paths.js";
+import { broadcastRefresh, setTrayRunning, hideTrayPopup } from "./tray.js";
+import { applyWindowMode } from "./window-layout.js";
+import { validateExternalUrl, resolveRootSubpath } from "./security.js";
+import { openFolderInShell } from "./open-folder.js";
+import { markSetupCompleted } from "./startup-environment.js";
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getCurrentAppVersion,
+  skipUpdateVersion,
+  type UpdateCheckResult,
+  type UpdateInfo,
+} from "./update-checker.js";
+import { queueInstallerLaunch } from "./install-lifecycle.js";
+import {
+  APP_LOG_VIRTUAL_NAME,
+  getAppLogInfo,
+  readAppLogTail,
+} from "./app-logger.js";
+import {
+  backupAppBeforeUpdate,
+  listAppBackups,
+  rollbackAppBinary,
+} from "./update-backup.js";
+
+let currentRoot = "";
+let openDashboardHandler: (() => void) | null = null;
+let requestQuitHandler: (() => void) | null = null;
+
+export function setOpenDashboardHandler(handler: () => void): void {
+  openDashboardHandler = handler;
+}
+
+export function setRequestQuitHandler(handler: () => void): void {
+  requestQuitHandler = handler;
+}
+
+export function getCurrentRoot(): string {
+  return currentRoot;
+}
+
+export async function refreshRoot(): Promise<string> {
+  const settings = await loadSettings();
+  currentRoot = settings.root;
+  return currentRoot;
+}
+
+function getWindow(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows()[0] ?? null;
+}
+
+function sendProgress(message: string, percent?: number): void {
+  const payload = percent !== undefined ? { message, percent } : { message };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("devtent:progress", payload);
+    }
+  }
+}
+
+function sendUpdateDownloadProgress(percent: number, message: string): void {
+  const payload = { percent, message };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("devtent:update-download-progress", payload);
+    }
+  }
+}
+
+export function broadcastUpdateAvailable(result: UpdateCheckResult): void {
+  if (result.status !== "available") return;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("devtent:update-available", result);
+    }
+  }
+}
+
+async function afterServiceChange(): Promise<void> {
+  const running = getServiceStatuses();
+  setTrayRunning(running.length > 0);
+  broadcastRefresh();
+}
+
+export function registerIpcHandlers(): void {
+  ipcMain.handle("devtent:getRoot", async () => {
+    await refreshRoot();
+    const settings = await loadSettings();
+    const initialized = await isInitialized(currentRoot);
+    return {
+      root: currentRoot,
+      initialized,
+      setupCompleted: settings.setupCompleted ?? false,
+      hasExistingData: await hasExistingEnvironment(currentRoot),
+    };
+  });
+
+  ipcMain.handle("devtent:getDefaultRoot", () => getDefaultRoot());
+
+  ipcMain.handle("devtent:setWindowMode", async (_e, mode: "setup" | "dashboard") => {
+    applyWindowMode(mode);
+  });
+
+  ipcMain.handle("devtent:pickRoot", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      title: "Choose DevTent folder",
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("devtent:pickLaragonRoot", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+      title: "Choose your existing environment folder",
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("devtent:detectLaragon", async () => {
+    await refreshRoot();
+    return detectLaragonInstalls(currentRoot);
+  });
+
+  ipcMain.handle("devtent:previewLaragonMigration", async (_e, laragonRoot: string) => {
+    return previewLaragonMigration(laragonRoot);
+  });
+
+  ipcMain.handle("devtent:migrateFromLaragon", async (_e, laragonRoot: string, projects?: string[]) => {
+    sendProgress("Starting environment import…", 46);
+    const result = await migrateFromLaragon(
+      laragonRoot,
+      currentRoot,
+      (msg, percent) => sendProgress(msg, percent),
+      projects !== undefined ? { projects } : undefined
+    );
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:setRoot", async (_e, root: string) => {
+    await saveSettings({ root });
+    currentRoot = root;
+    return { root, initialized: await isInitialized(root) };
+  });
+
+  ipcMain.handle("devtent:init", async (_e, root?: string) => {
+    const target = root ?? currentRoot;
+    sendProgress("Creating environment…", 5);
+    await initDevTent(target, (msg, percent) => sendProgress(msg, percent));
+    currentRoot = target;
+    await markSetupCompleted(target);
+    return { root: target, initialized: true };
+  });
+
+  ipcMain.handle("devtent:getState", async () => {
+    await refreshRoot();
+    if (!(await isInitialized(currentRoot))) {
+      return {
+        root: currentRoot,
+        initialized: false,
+        services: [],
+        virtualHosts: [],
+        activeProfile: "default",
+      };
+    }
+    const state = await getState(currentRoot);
+    return { ...state, initialized: true };
+  });
+
+  ipcMain.handle("devtent:syncCoreServices", async () => {
+    const enabled = await enableCoreServicesIfReady(currentRoot);
+    if (enabled) broadcastRefresh();
+    return { enabled };
+  });
+
+  ipcMain.handle("devtent:startAll", async () => {
+    const result = await startAll(currentRoot);
+    await afterServiceChange();
+    return result;
+  });
+
+  ipcMain.handle("devtent:stopAll", async () => {
+    const result = await stopAll(currentRoot);
+    await afterServiceChange();
+    return result;
+  });
+
+  ipcMain.handle("devtent:startService", async (_e, name: string) => {
+    const result = await startService(currentRoot, name);
+    await afterServiceChange();
+    return result;
+  });
+
+  ipcMain.handle("devtent:stopService", async (_e, name: string) => {
+    const result = await stopService(name, currentRoot);
+    await afterServiceChange();
+    return result;
+  });
+
+  ipcMain.handle("devtent:getServices", async () => {
+    const entries = await parseProcfile(currentRoot);
+    const running = getServiceStatuses();
+    return entries.map((entry) => ({
+      ...entry,
+      running: isServiceRunning(entry.name),
+      pid: running.find((r) => r.name === entry.name)?.pid,
+    }));
+  });
+
+  ipcMain.handle("devtent:syncVhosts", async () => {
+    return generateVirtualHosts(currentRoot);
+  });
+
+  ipcMain.handle("devtent:elevateHostsSync", async () => {
+    return elevateHostsSync(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listProfiles", async () => {
+    const { loadConfig } = await import("@devtent/core");
+    const config = await loadConfig(currentRoot);
+    const profiles = await listProfiles(currentRoot);
+    return { active: config.activeProfile, profiles };
+  });
+
+  ipcMain.handle("devtent:switchProfile", async (_e, name: string) => {
+    const profile = await switchProfile(currentRoot, name);
+    broadcastRefresh();
+    return profile;
+  });
+
+  ipcMain.handle(
+    "devtent:createProfile",
+    async (
+      _e,
+      input: {
+        name: string;
+        description?: string;
+        phpVersion?: string;
+        webServer?: "nginx" | "apache";
+        database?: "mysql" | "postgresql" | "none";
+      }
+    ) => {
+      const profile = await createProfile(currentRoot, input);
+      broadcastRefresh();
+      return profile;
+    }
+  );
+
+  ipcMain.handle(
+    "devtent:updateProfile",
+    async (
+      _e,
+      name: string,
+      patch: {
+        description?: string;
+        phpVersion?: string;
+        webServer?: "nginx" | "apache";
+        database?: "mysql" | "postgresql" | "none";
+      }
+    ) => {
+      const profile = await updateProfile(currentRoot, name, patch);
+      broadcastRefresh();
+      return profile;
+    }
+  );
+
+  ipcMain.handle("devtent:deleteProfile", async (_e, name: string) => {
+    await deleteProfile(currentRoot, name);
+    broadcastRefresh();
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:listManifests", async () => {
+    return listManifestsWithStatus(currentRoot, getManifestsDir());
+  });
+
+  ipcMain.handle("devtent:installManifest", async (_e, name: string) => {
+    const manifest = await loadManifest(getManifestsDir(), name);
+    sendProgress(`Installing ${manifest.name}…`);
+    const installPath = await installFromManifest(currentRoot, manifest, sendProgress);
+
+    if (name.startsWith("php-")) {
+      await applyPhpVersionToActiveProfile(currentRoot, name);
+      const toggles = await getProcfileToggles(currentRoot);
+      const php = toggles.find((t) => t.id === "php-fpm");
+      if (php?.runtimeInstalled && !php.enabled) {
+        await setProcfileToggle(currentRoot, "php-fpm", true);
+      } else if (php?.enabled) {
+        await syncPhpProcfileFromProfile(currentRoot);
+      }
+    }
+
+    broadcastRefresh();
+    return { name, installPath };
+  });
+
+  ipcMain.handle("devtent:installRecommendedStack", async () => {
+    sendProgress("Installing recommended stack…", 5);
+    const result = await installRecommendedStack(
+      currentRoot,
+      getManifestsDir(),
+      (msg, percent) => sendProgress(msg, percent)
+    );
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:backupMysql", async () => {
+    sendProgress("Backing up MySQL…");
+    return backupMysql(currentRoot, "manual", sendProgress);
+  });
+
+  ipcMain.handle("devtent:listMysqlBackups", async () => {
+    return listMysqlBackups(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listTemplates", async () => {
+    return listTemplates(getTemplatesDir());
+  });
+
+  ipcMain.handle("devtent:createProject", async (_e, template: string, projectName: string) => {
+    sendProgress(`Creating ${projectName}…`);
+    if (template === "php") {
+      await writePlainPhpProject(currentRoot, projectName);
+      await generateVirtualHosts(currentRoot);
+      return { path: path.join(currentRoot, "www", projectName) };
+    }
+    const projectPath = await createFromTemplate(
+      currentRoot,
+      template,
+      projectName,
+      getTemplatesDir(),
+      sendProgress
+    );
+    await generateVirtualHosts(currentRoot);
+    return { path: projectPath };
+  });
+
+  ipcMain.handle("devtent:enableSsl", async (_e, domain: string) => {
+    return enableSsl(currentRoot, domain);
+  });
+
+  ipcMain.handle("devtent:openPath", async (_e, subpath: string) => {
+    const full = resolveRootSubpath(currentRoot, subpath);
+    return openFolderInShell(full);
+  });
+
+  ipcMain.handle("devtent:openExternal", async (_e, url: string) => {
+    return shell.openExternal(validateExternalUrl(url));
+  });
+
+  ipcMain.handle("devtent:getProcfileToggles", async () => {
+    return getProcfileToggles(currentRoot);
+  });
+
+  ipcMain.handle("devtent:setProcfileToggle", async (_e, id: string, enabled: boolean) => {
+    const result = await setProcfileToggle(currentRoot, id, enabled);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:readProcfileRaw", async () => {
+    return readProcfileRaw(currentRoot);
+  });
+
+  ipcMain.handle("devtent:writeProcfileRaw", async (_e, content: string) => {
+    await writeProcfileRaw(currentRoot, content);
+    broadcastRefresh();
+  });
+
+  ipcMain.handle("devtent:openTerminal", async () => {
+    const { writePathScript } = await import("@devtent/core");
+    const script = await writePathScript(currentRoot);
+    if (process.platform === "win32") {
+      const { spawn } = await import("node:child_process");
+      spawn("cmd.exe", ["/k", script], { detached: true, shell: true });
+    } else {
+      const { spawn } = await import("node:child_process");
+      spawn("x-terminal-emulator", ["-e", `bash -c 'source "${script}" && exec bash'`], {
+        detached: true,
+      });
+    }
+  });
+
+  ipcMain.handle("devtent:quit", async () => {
+    if (requestQuitHandler) {
+      requestQuitHandler();
+    } else {
+      const { app } = await import("electron");
+      app.quit();
+    }
+  });
+
+  ipcMain.handle("devtent:getAppVersion", () => getCurrentAppVersion());
+
+  ipcMain.handle("devtent:listLogs", async () => {
+    await refreshRoot();
+    const serviceLogs = await listLogFiles(currentRoot);
+    const appLog = await getAppLogInfo();
+    const appEntry = appLog
+      ? [{ ...appLog, label: "DevTent app.log" }]
+      : [];
+    return [...appEntry, ...serviceLogs];
+  });
+
+  ipcMain.handle("devtent:readLogTail", async (_e, fileName: string, lines?: number) => {
+    if (fileName === APP_LOG_VIRTUAL_NAME) {
+      return readAppLogTail(lines ?? 500);
+    }
+    await refreshRoot();
+    return readLogTail(currentRoot, fileName, lines ?? 500);
+  });
+
+  ipcMain.handle("devtent:checkForUpdates", async (_e, options?: { respectSkip?: boolean }) => {
+    return checkForUpdates(options);
+  });
+
+  ipcMain.handle("devtent:skipUpdateVersion", async (_e, version: string) => {
+    await skipUpdateVersion(version);
+  });
+
+  ipcMain.handle("devtent:downloadAndInstallUpdate", async (_e, update: UpdateInfo) => {
+    await backupAppBeforeUpdate(update.latestVersion);
+    const installerPath = await downloadUpdate(update, sendUpdateDownloadProgress);
+    queueInstallerLaunch(installerPath);
+    if (requestQuitHandler) {
+      requestQuitHandler();
+    } else {
+      const { app } = await import("electron");
+      app.quit();
+    }
+    return { installerPath };
+  });
+
+  ipcMain.handle("devtent:listAppBackups", async () => listAppBackups());
+
+  ipcMain.handle("devtent:rollbackApp", async () => {
+    await rollbackAppBinary();
+    if (requestQuitHandler) {
+      requestQuitHandler();
+    } else {
+      const { app } = await import("electron");
+      app.quit();
+    }
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:closeQuickPanel", async () => {
+    hideTrayPopup();
+  });
+
+  ipcMain.handle("devtent:openDashboard", async (_e, view?: string) => {
+    openDashboardHandler?.();
+    if (view) {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send("devtent:navigate", view);
+        }
+      }
+    }
+  });
+}

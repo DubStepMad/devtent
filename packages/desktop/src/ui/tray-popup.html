@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevTent</title>
+  <link rel="stylesheet" href="tray-popup.css">
+</head>
+<body>
+  <div class="popup" id="popup">
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <img src="app-icon.png" width="28" height="28" alt="">
+        </div>
+        <div>
+          <h1>DevTent</h1>
+          <span class="tagline">Free · Open · Not for sale</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-pill" id="global-status">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Idle</span>
+        </div>
+        <button type="button" class="popup-close" id="btn-popup-close" title="Close panel" aria-label="Close panel">×</button>
+      </div>
+    </header>
+
+    <div class="popup-body">
+    <section class="section">
+      <h2 class="section-title">Quick Access</h2>
+      <button class="row-btn" id="btn-sites">
+        <span class="row-icon">🌐</span>
+        <span class="row-label">Sites</span>
+        <span class="row-meta" id="sites-count">0</span>
+        <span class="chevron">›</span>
+      </button>
+      <button class="row-btn" id="btn-www">
+        <span class="row-icon">📁</span>
+        <span class="row-label">Open www/</span>
+        <span class="chevron">›</span>
+      </button>
+      <button class="row-btn" id="btn-dashboard">
+        <span class="row-icon">📊</span>
+        <span class="row-label">Full Dashboard</span>
+        <span class="chevron">›</span>
+      </button>
+    </section>
+
+    <hr class="divider">
+
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Enable Services</h2>
+        <button class="text-btn" id="btn-edit-procfile">Edit raw</button>
+      </div>
+      <ul class="toggle-list" id="procfile-toggles"></ul>
+      <div class="procfile-editor hidden" id="procfile-editor">
+        <textarea id="procfile-raw" rows="5" spellcheck="false"></textarea>
+        <button class="row-btn accent" id="btn-save-procfile">Save Procfile</button>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">Services</h2>
+        <button class="text-btn" id="btn-stop-all" title="Stop all">⏸ Stop all</button>
+      </div>
+      <ul class="service-list" id="service-list">
+        <li class="empty">No services in Procfile yet</li>
+      </ul>
+      <button class="row-btn accent" id="btn-start-all">
+        <span class="row-icon">▶</span>
+        <span class="row-label">Start all services</span>
+      </button>
+    </section>
+
+    <hr class="divider">
+
+    <section class="section collapsible hidden" id="sites-section">
+      <h2 class="section-title">Your sites</h2>
+      <ul class="site-list" id="site-list"></ul>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Profile</h2>
+      <ul class="profile-list" id="profile-list"></ul>
+    </section>
+    </div>
+
+    <footer class="popup-footer">
+      <button class="footer-btn" id="btn-terminal" title="Terminal">⌨</button>
+      <button class="footer-btn" id="btn-logs" title="Logs">📋</button>
+      <button class="footer-btn" id="btn-settings" title="Dashboard">⚙</button>
+      <button class="footer-btn danger" id="btn-quit" title="Quit">⏻</button>
+    </footer>
+  </div>
+
+  <script src="tray-popup.js"></script>
+</body>
+</html>

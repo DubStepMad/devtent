@@ -1,0 +1,4 @@
+name: plain-php
+description: Minimal PHP project with index.php
+commands:
+  - echo Created — use quick-app php {name} instead
