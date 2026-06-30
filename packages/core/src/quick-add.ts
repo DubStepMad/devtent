@@ -158,6 +158,12 @@ async function runPostInstall(
     await ensureComposerBat(installPath, log);
   }
 
+  if (manifest.name === "nginx") {
+    const { ensureNginxSupportFiles } = await import("./nginx-support.js");
+    await ensureNginxSupportFiles(root);
+    log("Synced nginx mime.types and fastcgi_params to etc/nginx/");
+  }
+
   if (!manifest.postInstall) return;
 
   for (const step of manifest.postInstall) {

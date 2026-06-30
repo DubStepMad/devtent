@@ -5,6 +5,7 @@ import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
 import { backupMysql, writeMysqlIni } from "./mysql.js";
+import { ensureNginxSupportFiles } from "./nginx-support.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
 
@@ -99,6 +100,9 @@ export async function parseProcfile(root: string): Promise<ProcfileEntry[]> {
 }
 
 async function prepareServiceStart(root: string, name: string): Promise<void> {
+  if (name === "nginx") {
+    await ensureNginxSupportFiles(root);
+  }
   if (name === "mysql") {
     const entries = await parseProcfile(root);
     const mysql = entries.find((e) => e.name === "mysql");

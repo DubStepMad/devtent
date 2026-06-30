@@ -291,6 +291,10 @@ export async function applyPhpVersionToActiveProfile(
 }
 
 async function writeDefaultNginxConf(root: string): Promise<void> {
+  await mkdir(path.join(root, "etc", "nginx"), { recursive: true });
+  const { ensureNginxSupportFiles } = await import("./nginx-support.js");
+  await ensureNginxSupportFiles(root);
+
   const nginxConf = path.join(root, "etc/nginx/nginx.conf");
   if (await pathExists(nginxConf)) return;
 
