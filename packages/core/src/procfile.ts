@@ -133,7 +133,7 @@ export async function enableCoreServicesIfReady(root: string): Promise<boolean> 
   if (entries.length > 0) return false;
 
   const { syncProfileProcfileFromProfile } = await import("./profile-procfile.js");
-  await syncProfileProcfileFromProfile(root);
+  await syncProfileProcfileFromProfile(root, { mode: "replace" });
   const after = await parseProcfile(root);
   return after.length > 0;
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import type { DevTentConfig, Profile, ServiceDefinition } from "./types.js";
 import { DEFAULT_PHP_VERSION, normalizeProfile } from "./profile-runtime.js";
+import { hasExistingEnvironment } from "./environment.js";
 
 export const CONFIG_FILENAME = "devtent.toml";
 export const DEFAULT_PROFILE = "default";
@@ -200,7 +201,7 @@ export async function switchProfile(root: string, name: string): Promise<Profile
   config.activeProfile = name;
   await saveConfig(root, config);
   const { syncProfileProcfileFromProfile } = await import("./profile-procfile.js");
-  await syncProfileProcfileFromProfile(root);
+  await syncProfileProcfileFromProfile(root, { mode: "replace" });
   return profile;
 }
 
@@ -258,7 +259,7 @@ export async function updateProfile(
   const config = await loadConfig(root);
   if (config.activeProfile === name) {
     const { syncProfileProcfileFromProfile } = await import("./profile-procfile.js");
-    await syncProfileProcfileFromProfile(root);
+    await syncProfileProcfileFromProfile(root, { mode: "replace" });
   }
 
   return profile;
@@ -395,6 +396,7 @@ Include etc/apache/sites/*.conf
 async function writeDefaultProcfile(root: string): Promise<void> {
   const procfilePath = path.join(root, "Procfile");
   if (await pathExists(procfilePath)) return;
+  if (await hasExistingEnvironment(root)) return;
 
   const content = `# DevTent Procfile — one service per line
 # Format: name: command

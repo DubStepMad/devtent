@@ -65,8 +65,11 @@ export async function installRecommendedStack(
     }
   }
 
-  await syncProfileProcfileFromProfile(root);
   const { parseProcfile } = await import("./services.js");
+  const existing = await parseProcfile(root);
+  if (existing.length === 0) {
+    await syncProfileProcfileFromProfile(root, { mode: "replace" });
+  }
   const servicesEnabled = (await parseProcfile(root)).map((e) => e.name);
   bump(`Enabled ${servicesEnabled.join(", ") || "services"}`);
 

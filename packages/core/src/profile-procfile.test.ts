@@ -31,7 +31,6 @@ describe("profile-procfile", () => {
     });
 
     await switchProfile(tmp, "apache-pg");
-    await syncProfileProcfileFromProfile(tmp);
 
     const entries = await parseProcfile(tmp);
     const names = entries.map((e) => e.name).sort();
@@ -39,7 +38,7 @@ describe("profile-procfile", () => {
     assert.deepEqual(names, ["apache", "php-fpm", "postgresql"]);
   });
 
-  it("syncProfileProcfileFromProfile preserves redis and mailpit", async () => {
+  it("merge mode keeps existing procfile entries on update", async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-profile-"));
 
     await initDevTent(tmp, () => {});
