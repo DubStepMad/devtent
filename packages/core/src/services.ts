@@ -1,12 +1,78 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { openSync } from "node:fs";
+import { openSync, appendFileSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
-import { backupMysql } from "./mysql.js";
+import { backupMysql, writeMysqlIni } from "./mysql.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
+
+const START_ORDER = ["php-fpm", "nginx", "apache", "mysql", "postgresql", "redis", "mailpit"];
+
+const STARTUP_VERIFY_MS = 600;
+
+export function parseProcfileCommand(command: string): { executable: string; args: string[] } {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && /\s/.test(ch)) {
+      if (current) tokens.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+
+  if (current) tokens.push(current);
+
+  if (!tokens.length) {
+    throw new Error(`Invalid Procfile command: ${command}`);
+  }
+  return { executable: tokens[0]!, args: tokens.slice(1) };
+}
+
+function sortEntriesForStart(entries: ProcfileEntry[]): ProcfileEntry[] {
+  return [...entries].sort((a, b) => {
+    const ai = START_ORDER.indexOf(a.name);
+    const bi = START_ORDER.indexOf(b.name);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isChildAlive(child: ChildProcess): boolean {
+  if (child.exitCode !== null || child.signalCode !== null) return false;
+  if (!child.pid) return false;
+  return isPidAlive(child.pid);
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function appendServiceLog(logPath: string, message: string): void {
+  try {
+    appendFileSync(logPath, `\n[devtent] ${message}\n`);
+  } catch {
+    // ignore
+  }
+}
 
 export async function parseProcfile(root: string): Promise<ProcfileEntry[]> {
   const procfilePath = path.join(root, "Procfile");
@@ -32,6 +98,20 @@ export async function parseProcfile(root: string): Promise<ProcfileEntry[]> {
   return entries;
 }
 
+async function prepareServiceStart(root: string, name: string): Promise<void> {
+  if (name === "mysql") {
+    const entries = await parseProcfile(root);
+    const mysql = entries.find((e) => e.name === "mysql");
+    if (mysql && !mysql.command.includes("--defaults-file=")) {
+      await saveProcfileEntry(root, {
+        name: "mysql",
+        command: "bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini --console",
+      });
+    }
+    await writeMysqlIni(root);
+  }
+}
+
 export async function startService(root: string, name: string): Promise<ServiceStatus> {
   const entries = await parseProcfile(root);
   const entry = entries.find((e) => e.name === name);
@@ -40,7 +120,7 @@ export async function startService(root: string, name: string): Promise<ServiceS
     throw new Error(`Service "${name}" not found in Procfile`);
   }
 
-  if (runningProcesses.has(name)) {
+  if (isServiceRunning(name)) {
     const existing = runningProcesses.get(name)!;
     return {
       name,
@@ -50,28 +130,59 @@ export async function startService(root: string, name: string): Promise<ServiceS
     };
   }
 
+  await prepareServiceStart(root, name);
+
   const config = await loadConfig(root);
   await mkdir(resolvePath(root, config.paths.logs), { recursive: true });
+  await mkdir(resolvePath(root, "tmp"), { recursive: true });
 
   const logPath = path.join(root, config.paths.logs, `${name}.log`);
   const logFd = openSync(logPath, "a");
 
-  const child = spawn(entry.command, [], {
+  const { executable, args } = parseProcfileCommand(entry.command);
+  const exePath = resolvePath(root, executable);
+  if (!(await pathExists(exePath))) {
+    throw new Error(`Service "${name}" binary not found: ${executable}`);
+  }
+
+  const child = spawn(exePath, args, {
     cwd: root,
-    shell: true,
+    shell: false,
+    windowsHide: true,
     detached: process.platform !== "win32",
     stdio: ["ignore", logFd, logFd],
     env: { ...process.env, DEVTENT_ROOT: root },
   });
 
-  child.unref();
+  if (!child.pid) {
+    throw new Error(`Service "${name}" failed to start`);
+  }
+
+  if (process.platform !== "win32") {
+    child.unref();
+  }
 
   const startedAt = new Date();
   runningProcesses.set(name, { process: child, startedAt });
 
-  child.on("exit", () => {
+  child.on("exit", (code, signal) => {
     runningProcesses.delete(name);
+    appendServiceLog(
+      logPath,
+      `Process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`
+    );
   });
+
+  await waitMs(STARTUP_VERIFY_MS);
+
+  if (!isChildAlive(child)) {
+    runningProcesses.delete(name);
+    return {
+      name,
+      running: false,
+      error: `Exited during startup — see logs/${name}.log`,
+    };
+  }
 
   return {
     name,
@@ -109,13 +220,18 @@ export async function stopService(name: string, root?: string, options?: { skipB
 
 export async function startAll(root: string, services?: string[]): Promise<ServiceStatus[]> {
   const entries = await parseProcfile(root);
-  const toStart = services
-    ? entries.filter((e) => services.includes(e.name))
-    : entries;
+  const toStart = sortEntriesForStart(
+    services ? entries.filter((e) => services.includes(e.name)) : entries
+  );
 
   const results: ServiceStatus[] = [];
   for (const entry of toStart) {
-    results.push(await startService(root, entry.name));
+    try {
+      results.push(await startService(root, entry.name));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      results.push({ name: entry.name, running: false, error: message });
+    }
   }
   return results;
 }
@@ -134,13 +250,21 @@ export async function stopAll(
 }
 
 export function getServiceStatuses(): ServiceStatus[] {
-  return [...runningProcesses.entries()].map(([name, { process, startedAt }]) => ({
-    name,
-    running: true,
-    pid: process.pid,
-    startedAt: startedAt.toISOString(),
-    uptime: Date.now() - startedAt.getTime(),
-  }));
+  const statuses: ServiceStatus[] = [];
+  for (const [name, { process, startedAt }] of runningProcesses.entries()) {
+    if (!isChildAlive(process)) {
+      runningProcesses.delete(name);
+      continue;
+    }
+    statuses.push({
+      name,
+      running: true,
+      pid: process.pid,
+      startedAt: startedAt.toISOString(),
+      uptime: Date.now() - startedAt.getTime(),
+    });
+  }
+  return statuses;
 }
 
 export async function saveProcfileEntry(root: string, entry: ProcfileEntry): Promise<void> {
@@ -157,5 +281,11 @@ export async function saveProcfileEntry(root: string, entry: ProcfileEntry): Pro
 }
 
 export function isServiceRunning(name: string): boolean {
-  return runningProcesses.has(name);
+  const entry = runningProcesses.get(name);
+  if (!entry) return false;
+  if (!isChildAlive(entry.process)) {
+    runningProcesses.delete(name);
+    return false;
+  }
+  return true;
 }

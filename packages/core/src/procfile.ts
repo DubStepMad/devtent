@@ -67,7 +67,7 @@ export async function getServicePresets(root: string): Promise<ServicePreset[]> 
     {
       id: "mysql",
       name: "MySQL",
-      command: "bin/mysql/bin/mysqld.exe --datadir=data/mysql --console",
+      command: "bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini --console",
     },
     {
       id: "postgresql",

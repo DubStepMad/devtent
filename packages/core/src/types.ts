@@ -89,6 +89,7 @@ export interface ServiceStatus {
   port?: number;
   uptime?: number;
   startedAt?: string;
+  error?: string;
 }
 
 export interface ProcfileEntry {

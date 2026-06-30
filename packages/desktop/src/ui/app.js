@@ -298,7 +298,7 @@ async function refreshServices() {
     const statusText = isRunning
       ? `Running · pid ${runningMap.get(svc.id)?.pid ?? "?"}`
       : svc.enabled
-        ? "Enabled · stopped"
+        ? "Configured · not running"
         : "Disabled";
     const runtimeLabel = svc.runtimeInstalled
       ? ""
@@ -330,8 +330,12 @@ async function refreshServices() {
 
     li.querySelector(".btn-start-svc").onclick = async () => {
       if (!svc.enabled) return;
-      await withLoading(() => api.startService(svc.id), `Starting ${svc.name}…`);
-      showToast(`${svc.name} started`, "success");
+      const result = await withLoading(() => api.startService(svc.id), `Starting ${svc.name}…`);
+      if (!result?.running) {
+        showToast(result?.error || `${svc.name} exited during startup — check logs/${svc.id}.log`, "error");
+      } else {
+        showToast(`${svc.name} started`, "success");
+      }
       await refreshAll();
       await refreshServices();
     };
@@ -991,8 +995,15 @@ async function boot() {
   });
 
   document.getElementById("btn-start-all").onclick = async () => {
-    await withLoading(() => api.startAll(), "Starting services…");
-    showToast("All services started", "success");
+    const results = await withLoading(() => api.startAll(), "Starting services…");
+    const failed = (results ?? []).filter((r) => !r.running);
+    if (failed.length) {
+      const names = failed.map((r) => r.name).join(", ");
+      const detail = failed[0]?.error ? ` ${failed[0].error}` : "";
+      showToast(`Could not start: ${names}.${detail} Check Dashboard → Logs.`, "error");
+    } else {
+      showToast("All services started", "success");
+    }
     await refreshAll();
     await refreshServices();
   };

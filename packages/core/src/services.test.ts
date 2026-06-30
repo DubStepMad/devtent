@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { initDevTent } from "./config.js";
-import { parseProcfile, startService } from "./services.js";
+import { parseProcfile, startService, parseProcfileCommand } from "./services.js";
 import { validateManifestPlatform } from "./quick-add.js";
 import type { QuickAddManifest } from "./types.js";
 
@@ -17,6 +17,12 @@ describe("Services", () => {
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
+  });
+
+  it("parses procfile commands with quoted arguments", () => {
+    const parsed = parseProcfileCommand('bin/foo.exe --datadir="data/mysql" --console');
+    assert.equal(parsed.executable, "bin/foo.exe");
+    assert.deepEqual(parsed.args, ["--datadir=data/mysql", "--console"]);
   });
 
   it("parses Procfile with comments and blank lines", async () => {
