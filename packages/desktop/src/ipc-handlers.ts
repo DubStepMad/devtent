@@ -42,6 +42,7 @@ import {
   listLogFiles,
   readLogTail,
 } from "@devtent/core";
+import type { ProcfileEntry, ProcfileToggle } from "@devtent/core";
 import {
   loadSettings,
   saveSettings,
@@ -185,7 +186,7 @@ export function registerIpcHandlers(): void {
     const result = await migrateFromLaragon(
       laragonRoot,
       currentRoot,
-      (msg, percent) => sendProgress(msg, percent),
+      (msg: string, percent?: number) => sendProgress(msg, percent),
       projects !== undefined ? { projects } : undefined
     );
     broadcastRefresh();
@@ -201,7 +202,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("devtent:init", async (_e, root?: string) => {
     const target = root ?? currentRoot;
     sendProgress("Creating environment…", 5);
-    await initDevTent(target, (msg, percent) => sendProgress(msg, percent));
+    await initDevTent(target, (msg: string, percent?: number) => sendProgress(msg, percent));
     currentRoot = target;
     await markSetupCompleted(target);
     return { root: target, initialized: true };
@@ -255,7 +256,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("devtent:getServices", async () => {
     const entries = await parseProcfile(currentRoot);
     const running = getServiceStatuses();
-    return entries.map((entry) => ({
+    return entries.map((entry: ProcfileEntry) => ({
       ...entry,
       running: isServiceRunning(entry.name),
       pid: running.find((r) => r.name === entry.name)?.pid,
@@ -337,7 +338,7 @@ export function registerIpcHandlers(): void {
     if (name.startsWith("php-")) {
       await applyPhpVersionToActiveProfile(currentRoot, name);
       const toggles = await getProcfileToggles(currentRoot);
-      const php = toggles.find((t) => t.id === "php-fpm");
+      const php = toggles.find((t: ProcfileToggle) => t.id === "php-fpm");
       if (php?.runtimeInstalled && !php.enabled) {
         await setProcfileToggle(currentRoot, "php-fpm", true);
       } else if (php?.enabled) {
@@ -354,7 +355,7 @@ export function registerIpcHandlers(): void {
     const result = await installRecommendedStack(
       currentRoot,
       getManifestsDir(),
-      (msg, percent) => sendProgress(msg, percent)
+      (msg: string, percent?: number) => sendProgress(msg, percent)
     );
     broadcastRefresh();
     return result;
