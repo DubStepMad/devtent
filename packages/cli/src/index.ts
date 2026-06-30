@@ -461,8 +461,10 @@ async function runMigrateImport(opts: {
   log(`  Report: ${path.join(root, "etc", "laragon-migration")}`);
 }
 
-program
-  .command("migrate import")
+const migrateCmd = program.command("migrate").description("Import from other local environments");
+
+migrateCmd
+  .command("import")
   .description("Import projects and config from an existing local environment folder")
   .requiredOption("--from <path>", "Environment root folder (needs www/ and bin/php)")
   .option("-r, --root <path>", "DevTent root directory")
@@ -472,8 +474,8 @@ program
   )
   .action(runMigrateImport);
 
-program
-  .command("migrate laragon")
+migrateCmd
+  .command("laragon")
   .description("Alias for migrate import (legacy)")
   .requiredOption("--from <path>", "Environment root folder")
   .option("-r, --root <path>", "DevTent root directory")
