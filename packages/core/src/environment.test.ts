@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { hasExistingEnvironment } from "./environment.js";
+import { hasExistingEnvironment, isDevTentEnvironment } from "./environment.js";
 
 describe("hasExistingEnvironment", () => {
   it("detects devtent.toml", async () => {
@@ -30,6 +30,28 @@ describe("hasExistingEnvironment", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "env-empty-"));
     try {
       assert.equal(await hasExistingEnvironment(root), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("isDevTentEnvironment", () => {
+  it("detects devtent.toml and nginx.conf markers", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "env-dt-markers-"));
+    try {
+      await writeFile(path.join(root, "devtent.toml"), "version = 1\n", "utf-8");
+      assert.equal(await isDevTentEnvironment(root), true);
+
+      const layout = await mkdtemp(path.join(os.tmpdir(), "env-dt-layout-"));
+      await mkdir(path.join(layout, "etc", "nginx"), { recursive: true });
+      await writeFile(
+        path.join(layout, "etc", "nginx", "nginx.conf"),
+        "# DevTent — auto-generated nginx config\n",
+        "utf-8"
+      );
+      assert.equal(await isDevTentEnvironment(layout), true);
+      await rm(layout, { recursive: true, force: true });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

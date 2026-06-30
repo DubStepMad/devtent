@@ -624,11 +624,16 @@ async function refreshMysqlBackups() {
 }
 
 async function refreshAll() {
-  const { root, initialized } = await api.getRoot();
-  if (!initialized) {
-    showSetup(true);
-    await api.setWindowMode("setup");
-    return;
+  const status = await api.getRoot();
+  if (!status.initialized) {
+    if (!isFreshInstall(status)) {
+      await api.setRoot(await api.getDefaultRoot());
+      await api.init(status.root);
+    } else {
+      showSetup(true);
+      await api.setWindowMode("setup");
+      return;
+    }
   }
   await api.setWindowMode("dashboard");
   showSetup(false);
@@ -735,16 +740,25 @@ function setupShowsProjectList() {
   return document.getElementById("setup-migrate-laragon")?.checked ?? false;
 }
 
+function isFreshInstall(status) {
+  return !status?.hasExistingData && !status?.setupCompleted;
+}
+
 function configureSetupForExistingInstall(status) {
-  if (!status?.hasExistingData && !status?.setupCompleted) return;
+  if (isFreshInstall(status)) return;
+
+  document.getElementById("setup-import-section")?.classList.add("hidden");
+  document.getElementById("setup-migrate-laragon").checked = false;
+
   const stackCheck = document.getElementById("setup-install-stack");
   const startCheck = document.getElementById("setup-start-services");
   if (stackCheck) stackCheck.checked = false;
   if (startCheck) startCheck.checked = false;
+
   const subtitle = document.querySelector("#view-setup .subtitle");
   if (subtitle) {
     subtitle.textContent =
-      "Existing environment detected — use Get Started to finish config only. Import from another folder is optional below.";
+      "Your projects and data are already in this folder — click Get Started to finish config only (no import).";
   }
 }
 
@@ -837,8 +851,24 @@ async function boot() {
   };
 
   if (!rootStatus.initialized) {
-    showSetup(true);
-    await api.setWindowMode("setup");
+    if (!isFreshInstall(rootStatus)) {
+      await withLoading(async () => {
+        const root = await api.getDefaultRoot();
+        await api.setRoot(root);
+        await api.init(root);
+      }, "Finishing setup…");
+      await api.setWindowMode("dashboard");
+      showSetup(false);
+      await refreshAll();
+      await refreshServices();
+      await refreshProjects();
+      await refreshManifests();
+      await refreshTemplates();
+      await refreshProfiles();
+    } else {
+      showSetup(true);
+      await api.setWindowMode("setup");
+    }
   } else {
     await api.setWindowMode("dashboard");
     showSetup(false);
@@ -896,9 +926,12 @@ async function boot() {
       return;
     }
 
-    const migrate = document.getElementById("setup-migrate-laragon").checked;
+    const migrate =
+      isFreshInstall(rootStatus) &&
+      document.getElementById("setup-migrate-laragon").checked;
     const laragonPath = document.getElementById("setup-laragon").value.trim();
-    const installStack = document.getElementById("setup-install-stack").checked;
+    const installStack =
+      isFreshInstall(rootStatus) && document.getElementById("setup-install-stack").checked;
     const startServices = document.getElementById("setup-start-services").checked;
     const initBtn = document.getElementById("setup-init");
 
@@ -912,7 +945,9 @@ async function boot() {
       await api.setRoot(root);
       await api.init(root);
       if (migrate && laragonPath) {
-        const projects = getSelectedProjects("setup-laragon-project-list");
+        const list = document.getElementById("setup-laragon-project-list");
+        const hasPicker = list?.querySelector(".migrate-project-cb");
+        const projects = hasPicker ? getSelectedProjects("setup-laragon-project-list") : undefined;
         await api.migrateFromLaragon(laragonPath, projects);
       }
       if (installStack) {

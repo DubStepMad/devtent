@@ -39,6 +39,23 @@ describe("Laragon migration", () => {
     }
   });
 
+  it("does not treat DevTent layout without devtent.toml as Laragon", async () => {
+    const devtent = await mkdtemp(path.join(os.tmpdir(), "devtent-layout-"));
+    try {
+      await mkdir(path.join(devtent, "www", "myapp"), { recursive: true });
+      await mkdir(path.join(devtent, "bin", "php", "php-8.3"), { recursive: true });
+      await mkdir(path.join(devtent, "etc", "nginx"), { recursive: true });
+      await writeFile(
+        path.join(devtent, "etc", "nginx", "nginx.conf"),
+        "# DevTent — auto-generated nginx config\n",
+        "utf-8"
+      );
+      assert.equal(await isLaragonRoot(devtent), false);
+    } finally {
+      await rm(devtent, { recursive: true, force: true });
+    }
+  });
+
   it("does not allow DevTent folder to be used as import source", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "devtent-same-root-"));
     try {

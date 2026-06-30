@@ -37,9 +37,10 @@
       </label>
       <p class="hint">After setup, use the tent icon in your system tray.</p>
 
+      <div id="setup-import-section" class="setup-import-section">
       <div class="setup-divider"></div>
       <h2 class="setup-section-title">Import existing environment (optional)</h2>
-      <p class="setup-migrate-desc">Only runs when you click <strong>Get Started</strong> with the box below checked — <strong>not</strong> during the Windows installer or app updates. Copies websites, php.ini, database files, and runtimes from a folder you already use. The source folder is <strong>not</strong> modified or deleted.</p>
+      <p class="setup-migrate-desc">Only for a <strong>brand-new</strong> install into an empty folder. Choose a Laragon (or similar) folder and check the box below — never runs during the Windows installer or in-place updates.</p>
       <label class="field-label">Environment folder</label>
       <div class="path-row">
         <input type="text" id="setup-laragon" placeholder="c:\path\to\environment" readonly>
@@ -59,6 +60,7 @@
         </div>
       </div>
       <p id="setup-laragon-preview" class="hint"></p>
+      </div>
       </div>
     </div>
   </div>

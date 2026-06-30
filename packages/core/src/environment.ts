@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./config.js";
 
@@ -14,6 +14,27 @@ export async function hasExistingEnvironment(root: string): Promise<boolean> {
   if (await pathExists(wwwDir)) {
     const entries = await readdir(wwwDir, { withFileTypes: true }).catch(() => []);
     if (entries.some((e) => e.isDirectory())) return true;
+  }
+
+  return false;
+}
+
+/** True when a folder looks like DevTent (even if devtent.toml was lost during an update). */
+export async function isDevTentEnvironment(dir: string): Promise<boolean> {
+  if (!(await pathExists(dir))) return false;
+  if (await pathExists(path.join(dir, CONFIG_FILENAME))) return true;
+  if (await pathExists(path.join(dir, "profiles", "default.toml"))) return true;
+
+  const procfilePath = path.join(dir, "Procfile");
+  if (await pathExists(procfilePath)) {
+    const content = await readFile(procfilePath, "utf-8").catch(() => "");
+    if (/devtent/i.test(content)) return true;
+  }
+
+  const nginxConf = path.join(dir, "etc", "nginx", "nginx.conf");
+  if (await pathExists(nginxConf)) {
+    const content = await readFile(nginxConf, "utf-8").catch(() => "");
+    if (content.includes("DevTent")) return true;
   }
 
   return false;

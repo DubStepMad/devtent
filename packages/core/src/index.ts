@@ -115,7 +115,7 @@ export {
 } from "./recommended-stack.js";
 export type { RecommendedStackResult } from "./recommended-stack.js";
 
-export { hasExistingEnvironment } from "./environment.js";
+export { hasExistingEnvironment, isDevTentEnvironment } from "./environment.js";
 
 export { listLogFiles, readLogTail, readLogContent } from "./logs.js";
 export type { LogFileInfo } from "./logs.js";

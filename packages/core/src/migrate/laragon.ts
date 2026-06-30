@@ -1,6 +1,7 @@
 import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, resolvePath } from "../config.js";
+import { isDevTentEnvironment } from "../environment.js";
 import { generateVirtualHosts } from "../vhosts.js";
 
 export interface LaragonInstallInfo {
@@ -92,8 +93,7 @@ function isDataDirName(name: string): boolean {
 export async function isLaragonRoot(dir: string): Promise<boolean> {
   if (!(await pathExists(dir))) return false;
 
-  // DevTent uses www/ + bin/php too — never treat an initialized DevTent folder as Laragon.
-  if (await pathExists(path.join(dir, "devtent.toml"))) return false;
+  if (await isDevTentEnvironment(dir)) return false;
 
   const hasWww = await pathExists(path.join(dir, "www"));
   const hasLaragonExe = await pathExists(path.join(dir, "laragon.exe"));
@@ -515,6 +515,12 @@ export async function migrateFromLaragon(
 
   if (!(await isLaragonRoot(laragonRoot))) {
     throw new Error(`Not a recognized environment folder: ${laragonRoot}`);
+  }
+
+  if (await isDevTentEnvironment(laragonRoot)) {
+    throw new Error(
+      "That folder is a DevTent install, not an import source. Reinstall into the same folder to keep your projects, or pick Laragon/XAMPP."
+    );
   }
 
   const sourceRoot = path.resolve(laragonRoot);
