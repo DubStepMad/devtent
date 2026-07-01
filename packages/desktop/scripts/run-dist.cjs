@@ -41,7 +41,7 @@ function tryRemoveDir(dir) {
 function copyInstallers(fromDir, toDir) {
   fs.mkdirSync(toDir, { recursive: true });
   for (const name of fs.readdirSync(fromDir)) {
-    if (!/^DevTent Setup .+\.exe(\.blockmap)?$/i.test(name)) continue;
+    if (!/^DevTent( Setup .+|\.Setup\.\d+\.\d+\.\d+)\.exe(\.blockmap)?$/i.test(name)) continue;
     fs.copyFileSync(path.join(fromDir, name), path.join(toDir, name));
     console.log(`Copied ${name} → release/`);
   }

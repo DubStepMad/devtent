@@ -57,6 +57,7 @@
       "legalTrademarks": "DevTent Contributors",
       "signAndEditExecutable": true
     },
+    "artifactName": "DevTent Setup ${version}.${ext}",
     "nsis": {
       "oneClick": false,
       "perMachine": false,

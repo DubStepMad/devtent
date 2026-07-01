@@ -39,8 +39,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
-          $installer = Get-ChildItem "packages/desktop/release" -Filter "DevTent Setup *.exe" | Select-Object -First 1
-          if (-not $installer) { throw "Installer not found" }
+          $installer = Get-ChildItem "packages/desktop/release" -Filter "*.exe" |
+            Where-Object { $_.Name -match '^DevTent( Setup |\.Setup\.)' } |
+            Select-Object -First 1
+          if (-not $installer) { throw "Installer not found in packages/desktop/release" }
           gh release create "${{ github.ref_name }}" `
             --title "DevTent $version" `
             --notes-file CHANGELOG.md `

@@ -1,6 +1,12 @@
 export const GITHUB_OWNER = "DubStepMad";
 export const GITHUB_REPO = "devtent";
 export const INSTALLER_NAME_PREFIX = "DevTent Setup";
+const INSTALLER_DOT_NAME_PATTERN = /^DevTent\.Setup\.\d+\.\d+\.\d+\.exe$/i;
+
+export function isWindowsInstallerAssetName(name: string): boolean {
+  if (!name.toLowerCase().endsWith(".exe")) return false;
+  return name.startsWith(INSTALLER_NAME_PREFIX) || INSTALLER_DOT_NAME_PATTERN.test(name);
+}
 
 export type GitHubReleaseAsset = {
   name: string;
@@ -55,10 +61,7 @@ export function validateReleaseDownloadUrl(url: string): string {
 }
 
 export function findInstallerAsset(release: GitHubRelease): { name: string; url: string } | null {
-  const asset = release.assets.find(
-    (a) =>
-      a.name.toLowerCase().endsWith(".exe") && a.name.startsWith(INSTALLER_NAME_PREFIX)
-  );
+  const asset = release.assets.find((a) => isWindowsInstallerAssetName(a.name));
   if (!asset) return null;
   return { name: asset.name, url: validateReleaseDownloadUrl(asset.browser_download_url) };
 }
