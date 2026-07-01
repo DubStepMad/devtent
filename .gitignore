@@ -15,5 +15,7 @@ demo-instance/
 .vscode/
 test-instance/
 packages/desktop/release/
+packages/desktop/release-build/
+packages/desktop/release-*/
 packages/desktop/assets/icon*.png
 packages/desktop/assets/icon.ico

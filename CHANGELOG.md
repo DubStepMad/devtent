@@ -2,6 +2,39 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.0.1] - 2026-07-01
+
+Bug-fix and UX release focused on Apache, profiles, installer reliability, and the Services page.
+
+### Added
+
+- **Profile-driven Services page** — dropdown to switch profiles; list shows only that profile's stack; Start / Stop / Restart per service (Procfile toggles removed)
+- **Profile switch warnings** — confirms before stopping services not in the new profile
+- **`restartService`** API and UI action
+- **Laravel-style document roots** — virtual hosts use `public/` (or Symfony `web/`) automatically, matching Laragon
+- **Apache support module** — portable `httpd.conf` v3, procfile auto-repair, Windows-safe PHP-CGI proxy handler
+- **Profile repair** — restores active profile from `profiles/.active` when `devtent.toml` is lost on reinstall
+- **Install lock** — blocks DevTent from starting during NSIS install/update; fixes false "cannot close" and copy/delete loops
+- **Hosts elevation dialog** — UAC prompt only from "Update hosts file (Admin)"; Sync Virtual Hosts no longer spams elevation
+- **Portable installer update** — skips destructive legacy uninstaller; preserves `www/`, `bin/`, profiles, and Procfile
+- Tests for Apache, hosts elevation, profile services, config repair, install lock, and Laragon migration guards
+
+### Changed
+
+- `getState()` lists virtual hosts without rewriting the hosts file on every page load
+- Laragon import removed from setup wizard (Settings → Import environment only, with `explicitImport` guard)
+- `switchProfile()` stops running services not in the new profile and syncs Procfile with merge/replace logic
+- Setup wizard no longer re-runs on reinstall when environment data already exists
+
+### Fixed
+
+- **Apache** — `-d .` ServerRoot fix; PHP via `proxy:fcgi` + `ProxyFCGISetEnvIf` on Windows (no more `127.0.0.1:9000p` proxy errors)
+- **Apache** — `httpd.conf` paths relative to install root (not `bin/apache/etc/...`)
+- **Installer** — no longer launches DevTent via `ExecWait --quit` when the app is not running
+- **Profiles** — active profile preserved across portable reinstall when marker exists
+- **Procfile** — merge mode keeps existing services on update; Apache command auto-repaired on start
+- **Migration** — install/setup cannot copy Laragon `www` projects without explicit Settings import
+
 ## [1.0.0] - 2026-06-29
 
 First public release.
@@ -42,4 +75,5 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.0.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.1
 [1.0.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.0

@@ -53,9 +53,15 @@ export async function isManifestInstalled(
 ): Promise<boolean> {
   if (manifest.binary) {
     const binaryPath = resolvePath(root, path.join(manifest.installPath, manifest.binary));
-    if (await pathExists(binaryPath)) return true;
+    return pathExists(binaryPath);
   }
-  return pathExists(resolvePath(root, manifest.installPath));
+
+  const installPath = resolvePath(root, manifest.installPath);
+  if (!(await pathExists(installPath))) return false;
+
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(installPath).catch(() => []);
+  return entries.length > 0;
 }
 
 export async function isPhpVersionInstalled(root: string, phpVersion: string): Promise<boolean> {

@@ -85,6 +85,8 @@ export async function installFromManifest(
     const binaryName = manifest.binary ?? path.basename(new URL(manifest.url).pathname);
     const destPath = path.join(installPath, binaryName);
     await downloadFile(manifest.url, destPath, log);
+    await validateDownloadedFile(destPath, "exe");
+    await verifyManifestInstall(root, manifest, installPath);
     await runPostInstall(root, installPath, manifest, log);
     log(`✓ ${manifest.name} installed to ${destPath}`);
     return installPath;
@@ -94,9 +96,11 @@ export async function installFromManifest(
   await mkdir(path.dirname(zipPath), { recursive: true });
 
   await downloadFile(manifest.url, zipPath, log);
+  await validateDownloadedFile(zipPath, "zip");
   log(`Extracting to ${manifest.installPath}...`);
   await extractZip(zipPath, installPath, log);
   await normalizeExtractedArchive(installPath, manifest.archiveSubdir);
+  await verifyManifestInstall(root, manifest, installPath);
   await runPostInstall(root, installPath, manifest, log);
 
   log(`✓ ${manifest.name} installed to ${manifest.installPath}`);
@@ -234,9 +238,19 @@ async function runShellCommand(
 }
 
 async function downloadFile(url: string, dest: string, log: (msg: string) => void): Promise<void> {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: { "User-Agent": "DevTent/1.0 (+https://github.com/DubStepMad/devtent)" },
+    redirect: "follow",
+  });
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status} ${response.statusText} — ${url}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (/text\/html/i.test(contentType)) {
+    throw new Error(
+      `Download returned HTML instead of a binary archive — the URL may be outdated: ${url}`
+    );
   }
 
   if (!response.body) {
@@ -267,6 +281,47 @@ async function downloadFile(url: string, dest: string, log: (msg: string) => voi
     writer.on("finish", resolve);
     writer.on("error", reject);
   });
+}
+
+async function validateDownloadedFile(
+  dest: string,
+  downloadType: "zip" | "exe"
+): Promise<void> {
+  const { readFile } = await import("node:fs/promises");
+  const head = await readFile(dest);
+  if (head.length < 4) {
+    throw new Error("Downloaded file is empty or truncated.");
+  }
+
+  const prefix = head.subarray(0, Math.min(head.length, 256)).toString("utf-8").trimStart();
+  if (prefix.startsWith("<!DOCTYPE") || prefix.startsWith("<html") || prefix.startsWith("<HTML")) {
+    throw new Error("Downloaded file is an HTML page, not an archive — check the manifest URL.");
+  }
+
+  if (downloadType === "zip") {
+    const magic = head.readUInt32LE(0);
+    if (magic !== 0x04034b50 && magic !== 0x06054b50) {
+      throw new Error("Downloaded file is not a valid ZIP archive.");
+    }
+  }
+}
+
+async function verifyManifestInstall(
+  root: string,
+  manifest: QuickAddManifest,
+  installPath: string
+): Promise<void> {
+  if (!(await isManifestInstalled(root, manifest))) {
+    throw new Error(
+      `${manifest.name} extraction finished but ${manifest.binary ?? "expected files"} was not found under ${manifest.installPath}/`
+    );
+  }
+
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(installPath).catch(() => []);
+  if (entries.length === 0) {
+    throw new Error(`${manifest.name} install folder is empty after extraction.`);
+  }
 }
 
 async function extractZip(zipPath: string, dest: string, log: (msg: string) => void): Promise<void> {

@@ -9,7 +9,7 @@ const api = {
   previewLaragonMigration: (laragonRoot: string) =>
     ipcRenderer.invoke("devtent:previewLaragonMigration", laragonRoot),
   migrateFromLaragon: (laragonRoot: string, projects?: string[]) =>
-    ipcRenderer.invoke("devtent:migrateFromLaragon", laragonRoot, projects),
+    ipcRenderer.invoke("devtent:migrateFromLaragon", laragonRoot, projects, "settings-import"),
   setRoot: (root: string) => ipcRenderer.invoke("devtent:setRoot", root),
   init: (root?: string) => ipcRenderer.invoke("devtent:init", root),
   getState: () => ipcRenderer.invoke("devtent:getState"),
@@ -17,7 +17,11 @@ const api = {
   stopAll: () => ipcRenderer.invoke("devtent:stopAll"),
   startService: (name: string) => ipcRenderer.invoke("devtent:startService", name),
   stopService: (name: string) => ipcRenderer.invoke("devtent:stopService", name),
+  restartService: (name: string) => ipcRenderer.invoke("devtent:restartService", name),
   getServices: () => ipcRenderer.invoke("devtent:getServices"),
+  getProfileServices: (profileName?: string) =>
+    ipcRenderer.invoke("devtent:getProfileServices", profileName),
+  previewProfileSwitch: (name: string) => ipcRenderer.invoke("devtent:previewProfileSwitch", name),
   syncVhosts: () => ipcRenderer.invoke("devtent:syncVhosts"),
   elevateHostsSync: () => ipcRenderer.invoke("devtent:elevateHostsSync"),
   listProfiles: () => ipcRenderer.invoke("devtent:listProfiles"),

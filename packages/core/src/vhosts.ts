@@ -1,13 +1,16 @@
-import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
+import { readFile, writeFile, readdir, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { VirtualHost } from "./types.js";
-import { requestElevatedHostsSync, getElevatedHostsSyncMessage, getElevatedHostsSyncFailureMessage } from "./hosts-elevate.js";
+import { apachePhpHandlerBlock } from "./apache-support.js";
+import { requestElevatedHostsSync, prepareHostsSyncFiles, getElevatedHostsSyncMessage, getElevatedHostsSyncFailureMessage } from "./hosts-elevate.js";
 
 export interface HostsSyncResult {
   updated: boolean;
   requiresAdmin: boolean;
+  hostsCurrent?: boolean;
   elevationRequested?: boolean;
+  elevationPending?: boolean;
   elevationLaunchFailed?: boolean;
   hostsHelperPath?: string;
   message?: string;
@@ -22,6 +25,8 @@ export interface HostsSyncOptions {
   root?: string;
   /** When true, skip direct write and only launch the elevated helper (Windows). */
   elevateOnly?: boolean;
+  /** When true, prepare the helper script but do not launch UAC (desktop shows a dialog first). */
+  deferElevation?: boolean;
 }
 
 const MARKER_START = "# devtent-start";
@@ -50,6 +55,14 @@ export function buildHostsContent(existingContent: string, vhosts: VirtualHost[]
   return existingContent.trimEnd() + "\n\n" + block + "\n";
 }
 
+function normalizeHostsContent(content: string): string {
+  return content.replace(/\r\n/g, "\n").trimEnd();
+}
+
+function hostsContentMatches(a: string, b: string): boolean {
+  return normalizeHostsContent(a) === normalizeHostsContent(b);
+}
+
 export async function discoverProjects(wwwRoot: string): Promise<string[]> {
   if (!(await pathExists(wwwRoot))) return [];
 
@@ -57,18 +70,54 @@ export async function discoverProjects(wwwRoot: string): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
-export async function generateVirtualHosts(root: string): Promise<VhostSyncResult> {
+async function isDirectory(dirPath: string): Promise<boolean> {
+  try {
+    return (await stat(dirPath)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Laragon-style web root: Laravel/Symfony public/ (or web/) when present. */
+export async function resolveProjectWebRoot(projectDir: string): Promise<string> {
+  const publicDir = path.join(projectDir, "public");
+  if (await isDirectory(publicDir)) {
+    return publicDir;
+  }
+
+  const webDir = path.join(projectDir, "web");
+  if ((await isDirectory(webDir)) && (await pathExists(path.join(webDir, "index.php")))) {
+    return webDir;
+  }
+
+  return projectDir;
+}
+
+/** List projects under www/ as virtual hosts without writing configs or syncing hosts. */
+export async function listVirtualHosts(root: string): Promise<VirtualHost[]> {
   const config = await loadConfig(root);
   const wwwRoot = resolvePath(root, config.paths.www);
-  const tld = config.tld;
   const projects = await discoverProjects(wwwRoot);
+  const vhosts: VirtualHost[] = [];
 
-  const vhosts: VirtualHost[] = projects.map((name) => ({
-    name,
-    domain: `${name}.${tld}`,
-    root: path.join(wwwRoot, name),
-    ssl: config.ssl.enabled,
-  }));
+  for (const name of projects) {
+    const projectDir = path.join(wwwRoot, name);
+    vhosts.push({
+      name,
+      domain: `${name}.${config.tld}`,
+      root: await resolveProjectWebRoot(projectDir),
+      ssl: config.ssl.enabled,
+    });
+  }
+
+  return vhosts;
+}
+
+export async function generateVirtualHosts(
+  root: string,
+  options?: { deferHostsElevation?: boolean; skipHostsSync?: boolean }
+): Promise<VhostSyncResult> {
+  const vhosts = await listVirtualHosts(root);
 
   await mkdir(resolvePath(root, "etc/nginx/sites"), { recursive: true });
   await mkdir(resolvePath(root, "etc/apache/sites"), { recursive: true });
@@ -78,7 +127,12 @@ export async function generateVirtualHosts(root: string): Promise<VhostSyncResul
     await writeApacheSite(root, vhost);
   }
 
-  const hosts = await syncHostsFile(vhosts, { root });
+  const hosts = options?.skipHostsSync
+    ? { updated: false, requiresAdmin: false }
+    : await syncHostsFile(vhosts, {
+        root,
+        deferElevation: options?.deferHostsElevation,
+      });
 
   return { vhosts, hosts };
 }
@@ -128,12 +182,11 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
   ServerName ${vhost.domain}
   DocumentRoot "${rootPath}"
   <Directory "${rootPath}">
+    Options -Indexes +FollowSymLinks
     AllowOverride All
     Require all granted
   </Directory>
-  <FilesMatch \\.php$>
-    SetHandler "proxy:fcgi://127.0.0.1:9000"
-  </FilesMatch>
+  ${apachePhpHandlerBlock()}
   ErrorLog "logs/${vhost.name}-error.log"
   CustomLog "logs/${vhost.name}-access.log" common
 </VirtualHost>
@@ -162,6 +215,10 @@ export async function syncHostsFile(
 
   const newContent = buildHostsContent(existing, vhosts);
 
+  if (!options?.elevateOnly && hostsContentMatches(existing, newContent)) {
+    return { updated: false, requiresAdmin: false, hostsCurrent: true };
+  }
+
   if (options?.elevateOnly) {
     return launchOrInstruct(vhosts, options, newContent);
   }
@@ -180,6 +237,17 @@ async function launchOrInstruct(
   newContent: string
 ): Promise<HostsSyncResult> {
   if (process.platform === "win32" && options?.root && newContent) {
+    if (options.deferElevation) {
+      const { batchFile } = await prepareHostsSyncFiles(options.root, newContent);
+      return {
+        updated: false,
+        requiresAdmin: true,
+        elevationPending: true,
+        hostsHelperPath: batchFile,
+        message: getElevatedHostsSyncMessage(batchFile),
+      };
+    }
+
     const { launched, batchFile } = await requestElevatedHostsSync(options.root, newContent);
     if (launched) {
       return {
@@ -208,18 +276,12 @@ async function launchOrInstruct(
 }
 
 /** Re-run hosts sync using only the elevated CMD helper (Windows). */
-export async function elevateHostsSync(root: string): Promise<HostsSyncResult> {
-  const config = await loadConfig(root);
-  const wwwRoot = resolvePath(root, config.paths.www);
-  const projects = await discoverProjects(wwwRoot);
-  const vhosts: VirtualHost[] = projects.map((name) => ({
-    name,
-    domain: `${name}.${config.tld}`,
-    root: path.join(wwwRoot, name),
-    ssl: config.ssl.enabled,
-  }));
-
-  return syncHostsFile(vhosts, { root, elevateOnly: true });
+export async function elevateHostsSync(
+  root: string,
+  options?: { deferElevation?: boolean }
+): Promise<HostsSyncResult> {
+  const vhosts = await listVirtualHosts(root);
+  return syncHostsFile(vhosts, { root, elevateOnly: true, deferElevation: options?.deferElevation });
 }
 
 export function getHostsSyncInstructions(vhosts: VirtualHost[]): string {

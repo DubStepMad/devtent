@@ -21,6 +21,8 @@ export interface LaragonDatabaseInfo {
 export interface LaragonMigrationOptions {
   /** When set, only these www/ folder names are copied. Omit to import all projects. */
   projects?: string[];
+  /** Must be true — blocks accidental import during install/setup. */
+  explicitImport?: boolean;
 }
 
 export interface LaragonMigrationResult {
@@ -501,6 +503,12 @@ export async function migrateFromLaragon(
   onProgress?: (msg: string, percent?: number) => void,
   options?: LaragonMigrationOptions
 ): Promise<LaragonMigrationResult> {
+  if (!options?.explicitImport) {
+    throw new Error(
+      "Environment import was not started explicitly. In the app use Settings → Import environment; from the CLI use: devtent migrate import --from <path>"
+    );
+  }
+
   const report = (msg: string, percent?: number) => onProgress?.(msg, percent);
   const result: LaragonMigrationResult = {
     laragonRoot,

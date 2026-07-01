@@ -32,6 +32,9 @@ import {
   readProcfileRaw,
   writeProcfileRaw,
   enableCoreServicesIfReady,
+  getProfileServices,
+  previewProfileSwitch,
+  restartService,
   detectLaragonInstalls,
   previewLaragonMigration,
   migrateFromLaragon,
@@ -56,6 +59,8 @@ import { applyWindowMode } from "./window-layout.js";
 import { validateExternalUrl, resolveRootSubpath } from "./security.js";
 import { openFolderInShell } from "./open-folder.js";
 import { markSetupCompleted } from "./startup-environment.js";
+import { setupCompletedForRoot } from "./setup-completion.js";
+import { assertInstallNotInProgress } from "./install-lock.js";
 import {
   checkForUpdates,
   downloadUpdate,
@@ -75,6 +80,7 @@ import {
   listAppBackups,
   rollbackAppBinary,
 } from "./update-backup.js";
+import { completeStandaloneHostsElevation } from "./hosts-elevation.js";
 
 let currentRoot = "";
 let openDashboardHandler: (() => void) | null = null;
@@ -144,6 +150,7 @@ export function registerIpcHandlers(): void {
       root: currentRoot,
       initialized,
       setupCompleted: settings.setupCompleted ?? false,
+      setupCompletedForRoot: setupCompletedForRoot(settings, currentRoot),
       hasExistingData: await hasExistingEnvironment(currentRoot),
     };
   });
@@ -181,17 +188,33 @@ export function registerIpcHandlers(): void {
     return previewLaragonMigration(laragonRoot);
   });
 
-  ipcMain.handle("devtent:migrateFromLaragon", async (_e, laragonRoot: string, projects?: string[]) => {
-    sendProgress("Starting environment import…", 46);
-    const result = await migrateFromLaragon(
-      laragonRoot,
-      currentRoot,
-      (msg: string, percent?: number) => sendProgress(msg, percent),
-      projects !== undefined ? { projects } : undefined
-    );
-    broadcastRefresh();
-    return result;
-  });
+  ipcMain.handle(
+    "devtent:migrateFromLaragon",
+    async (_e, laragonRoot: string, projects: string[] | undefined, via: string) => {
+      if (via !== "settings-import") {
+        throw new Error(
+          "Environment import is only available from Settings → Import environment."
+        );
+      }
+      await assertInstallNotInProgress(getDefaultRoot());
+      await refreshRoot();
+      if (!(await isInitialized(currentRoot))) {
+        throw new Error("Finish setup first, then import from Settings.");
+      }
+      sendProgress("Starting environment import…", 46);
+      const result = await migrateFromLaragon(
+        laragonRoot,
+        currentRoot,
+        (msg: string, percent?: number) => sendProgress(msg, percent),
+        {
+          explicitImport: true,
+          ...(projects !== undefined ? { projects } : {}),
+        }
+      );
+      broadcastRefresh();
+      return result;
+    }
+  );
 
   ipcMain.handle("devtent:setRoot", async (_e, root: string) => {
     await saveSettings({ root });
@@ -201,6 +224,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("devtent:init", async (_e, root?: string) => {
     const target = root ?? currentRoot;
+    await assertInstallNotInProgress(getDefaultRoot());
     sendProgress("Creating environment…", 5);
     await initDevTent(target, (msg: string, percent?: number) => sendProgress(msg, percent));
     currentRoot = target;
@@ -253,6 +277,20 @@ export function registerIpcHandlers(): void {
     return result;
   });
 
+  ipcMain.handle("devtent:restartService", async (_e, name: string) => {
+    const result = await restartService(currentRoot, name);
+    await afterServiceChange();
+    return result;
+  });
+
+  ipcMain.handle("devtent:getProfileServices", async (_e, profileName?: string) => {
+    return getProfileServices(currentRoot, profileName);
+  });
+
+  ipcMain.handle("devtent:previewProfileSwitch", async (_e, name: string) => {
+    return previewProfileSwitch(currentRoot, name);
+  });
+
   ipcMain.handle("devtent:getServices", async () => {
     const entries = await parseProcfile(currentRoot);
     const running = getServiceStatuses();
@@ -264,11 +302,15 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:syncVhosts", async () => {
-    return generateVirtualHosts(currentRoot);
+    return generateVirtualHosts(currentRoot, {
+      deferHostsElevation: process.platform === "win32",
+    });
   });
 
   ipcMain.handle("devtent:elevateHostsSync", async () => {
-    return elevateHostsSync(currentRoot);
+    const defer = process.platform === "win32";
+    const hosts = await elevateHostsSync(currentRoot, { deferElevation: defer });
+    return defer ? completeStandaloneHostsElevation(hosts, getWindow) : hosts;
   });
 
   ipcMain.handle("devtent:listProfiles", async () => {
@@ -279,9 +321,10 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:switchProfile", async (_e, name: string) => {
-    const profile = await switchProfile(currentRoot, name);
+    const result = await switchProfile(currentRoot, name);
+    await afterServiceChange();
     broadcastRefresh();
-    return profile;
+    return result;
   });
 
   ipcMain.handle(
@@ -351,6 +394,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:installRecommendedStack", async () => {
+    await assertInstallNotInProgress(getDefaultRoot());
     sendProgress("Installing recommended stack…", 5);
     const result = await installRecommendedStack(
       currentRoot,
@@ -378,7 +422,7 @@ export function registerIpcHandlers(): void {
     sendProgress(`Creating ${projectName}…`);
     if (template === "php") {
       await writePlainPhpProject(currentRoot, projectName);
-      await generateVirtualHosts(currentRoot);
+      await generateVirtualHosts(currentRoot, { skipHostsSync: true });
       return { path: path.join(currentRoot, "www", projectName) };
     }
     const projectPath = await createFromTemplate(
@@ -388,7 +432,7 @@ export function registerIpcHandlers(): void {
       getTemplatesDir(),
       sendProgress
     );
-    await generateVirtualHosts(currentRoot);
+    await generateVirtualHosts(currentRoot, { skipHostsSync: true });
     return { path: projectPath };
   });
 

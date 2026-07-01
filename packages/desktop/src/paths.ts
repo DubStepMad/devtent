@@ -8,6 +8,8 @@ import { __dirname } from "./dir.js";
 export interface DesktopSettings {
   root: string;
   setupCompleted?: boolean;
+  /** Install folder where setupCompleted was recorded (portable updates). */
+  setupCompletedRoot?: string;
   skipUpdateVersion?: string;
   lastUpdateCheckAt?: number;
   trayPopupPosition?: { x: number; y: number };
@@ -15,6 +17,11 @@ export interface DesktopSettings {
 
 /** Portable default: folder containing DevTent.exe when packaged; {drive}:\\devtent in dev. */
 export function getDefaultRoot(): string {
+  return getInstallRootEarly();
+}
+
+/** Safe before app.whenReady — used to read the install lock at process start. */
+export function getInstallRootEarly(): string {
   if (app.isPackaged) {
     return normalizeInstallRoot(path.dirname(app.getPath("exe")));
   }

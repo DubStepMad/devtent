@@ -3,23 +3,19 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath } from "./config.js";
 
+export interface HostsSyncHelperFiles {
+  batchFile: string;
+}
+
 export interface ElevatedHostsSyncLaunch {
   launched: boolean;
   batchFile: string;
 }
 
-function escapePowerShellSingleQuoted(value: string): string {
-  return value.replace(/'/g, "''");
-}
-
-export async function requestElevatedHostsSync(
+export async function prepareHostsSyncFiles(
   root: string,
   newContent: string
-): Promise<ElevatedHostsSyncLaunch> {
-  if (process.platform !== "win32") {
-    return { launched: false, batchFile: "" };
-  }
-
+): Promise<HostsSyncHelperFiles> {
   const tmpDir = resolvePath(root, "tmp");
   await mkdir(tmpDir, { recursive: true });
 
@@ -51,35 +47,53 @@ export async function requestElevatedHostsSync(
   ].join("\r\n");
 
   await writeFile(batchFile, batch, "utf-8");
+  return { batchFile };
+}
 
-  const batchArg = escapePowerShellSingleQuoted(batchFile);
-  const psScript = [
-    `Start-Process -FilePath $env:ComSpec -ArgumentList '/c','${batchArg}' -Verb RunAs -WindowStyle Normal`,
-  ].join("; ");
-  const encoded = Buffer.from(psScript, "utf16le").toString("base64");
+/** Launch UAC via Shell.Application — more reliable from Electron than hidden PowerShell. */
+export async function launchElevatedHostsSync(batchFile: string): Promise<boolean> {
+  if (process.platform !== "win32") return false;
+
+  const vbsPath = path.join(path.dirname(batchFile), "devtent-elevate-hosts.vbs");
+  const escapedBatch = batchFile.replace(/"/g, '""');
+  const vbs = `CreateObject("Shell.Application").ShellExecute "${escapedBatch}", "", "", "runas", 1\r\n`;
+  await writeFile(vbsPath, vbs, "utf-8");
+
+  const wscript = path.join(
+    process.env.SystemRoot ?? "C:\\Windows",
+    "System32",
+    "wscript.exe"
+  );
 
   return new Promise((resolve) => {
-    const child = spawn(
-      process.env.SystemRoot
-        ? path.join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-        : "powershell.exe",
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
-      { detached: true, stdio: "ignore", windowsHide: true }
-    );
-
-    child.once("error", () => resolve({ launched: false, batchFile }));
-    child.once("spawn", () => {
-      child.unref();
-      resolve({ launched: true, batchFile });
+    const child = spawn(wscript, ["//Nologo", vbsPath], {
+      windowsHide: false,
+      stdio: "ignore",
     });
+
+    child.once("error", () => resolve(false));
+    child.once("spawn", () => resolve(true));
   });
+}
+
+export async function requestElevatedHostsSync(
+  root: string,
+  newContent: string
+): Promise<ElevatedHostsSyncLaunch> {
+  if (process.platform !== "win32") {
+    return { launched: false, batchFile: "" };
+  }
+
+  const { batchFile } = await prepareHostsSyncFiles(root, newContent);
+  const launched = await launchElevatedHostsSync(batchFile);
+  return { launched, batchFile };
 }
 
 export function getElevatedHostsSyncMessage(batchFile?: string): string {
   if (batchFile) {
     return (
-      "Look for the Windows Administrator (UAC) prompt — it may be behind other windows or on the taskbar. " +
-      "Click Yes to update your hosts file. DevTent does not need to run as admin."
+      "Click Yes on the Windows security prompt to update your hosts file. " +
+      "DevTent does not need to run as admin."
     );
   }
   return "Approve the Administrator prompt to update your hosts file. DevTent does not need to run as admin.";

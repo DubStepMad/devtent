@@ -39,17 +39,22 @@ export async function writeProcfileRaw(root: string, content: string): Promise<v
 }
 
 export async function getServicePresets(root: string): Promise<ServicePreset[]> {
-  let phpVersion = DEFAULT_PHP_VERSION;
-  let phpLabel = "PHP";
-
   try {
     const config = await loadConfig(root);
     const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
-    phpVersion = profile.phpVersion ?? DEFAULT_PHP_VERSION;
-    phpLabel = getPhpDisplayName(phpVersion);
+    return getServicePresetsForProfile(root, profile);
   } catch {
+    return getServicePresetsForProfile(root, normalizeProfile({ name: "default" }));
   }
+}
 
+export async function getServicePresetsForProfile(
+  root: string,
+  profile: import("./types.js").Profile
+): Promise<ServicePreset[]> {
+  const normalized = normalizeProfile(profile);
+  const phpVersion = normalized.phpVersion ?? DEFAULT_PHP_VERSION;
+  const phpLabel = getPhpDisplayName(phpVersion);
   const phpPaths = resolvePhpPaths(phpVersion);
   const phpCommand = phpPaths.procfileCommand;
 
@@ -62,7 +67,7 @@ export async function getServicePresets(root: string): Promise<ServicePreset[]> 
     {
       id: "apache",
       name: "Apache",
-      command: "bin/apache/bin/httpd.exe -f etc/apache/httpd.conf -d bin/apache",
+      command: "bin/apache/bin/httpd.exe -d . -f etc/apache/httpd.conf",
     },
     {
       id: "mysql",
@@ -133,7 +138,7 @@ export async function enableCoreServicesIfReady(root: string): Promise<boolean> 
   if (entries.length > 0) return false;
 
   const { syncProfileProcfileFromProfile } = await import("./profile-procfile.js");
-  await syncProfileProcfileFromProfile(root, { mode: "replace" });
+  await syncProfileProcfileFromProfile(root, { mode: "merge" });
   const after = await parseProcfile(root);
   return after.length > 0;
 }

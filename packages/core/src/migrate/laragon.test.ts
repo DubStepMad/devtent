@@ -65,11 +65,28 @@ describe("Laragon migration", () => {
       await initDevTent(root);
 
       await assert.rejects(
-        () => migrateFromLaragon(root, root),
+        () => migrateFromLaragon(root, root, undefined, { explicitImport: true }),
         /Not a recognized environment folder/
       );
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("requires explicitImport so install/setup cannot copy www projects", async () => {
+    const laragon = await mkdtemp(path.join(os.tmpdir(), "laragon-guard-"));
+    const devtent = await mkdtemp(path.join(os.tmpdir(), "devtent-guard-"));
+    try {
+      await mkdir(path.join(laragon, "www", "site"), { recursive: true });
+      await writeFile(path.join(laragon, "laragon.exe"), "", "utf-8");
+      await initDevTent(devtent);
+      await assert.rejects(
+        () => migrateFromLaragon(laragon, devtent),
+        /not started explicitly/i
+      );
+    } finally {
+      await rm(laragon, { recursive: true, force: true });
+      await rm(devtent, { recursive: true, force: true });
     }
   });
 
@@ -135,6 +152,7 @@ describe("Laragon migration", () => {
       assert.equal(preview.databases.length, 1);
 
       const result = await migrateFromLaragon(laragon, devtent, undefined, {
+        explicitImport: true,
         projects: ["blog"],
       });
       assert.deepEqual(result.projectsCopied, ["blog"]);
@@ -170,6 +188,7 @@ describe("Laragon migration", () => {
       await initDevTent(devtent);
 
       const result = await migrateFromLaragon(laragon, devtent, undefined, {
+        explicitImport: true,
         projects: ["keep"],
       });
       assert.deepEqual(result.projectsCopied, ["keep"]);

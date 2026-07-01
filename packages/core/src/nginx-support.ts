@@ -4,6 +4,20 @@ import { pathExists, resolvePath } from "./config.js";
 
 const SUPPORT_FILES = ["mime.types", "fastcgi_params"] as const;
 
+/** Nginx default temp dirs (relative to -p prefix) when not overridden in nginx.conf. */
+const NGINX_TEMP_DIRS = [
+  "temp/client_body_temp",
+  "temp/proxy_temp",
+  "temp/fastcgi_temp",
+  "temp/uwsgi_temp",
+  "temp/scgi_temp",
+  "tmp/client_body_temp",
+  "tmp/proxy_temp",
+  "tmp/fastcgi_temp",
+  "tmp/uwsgi_temp",
+  "tmp/scgi_temp",
+] as const;
+
 const BUNDLED_REL_DIRS = ["bin/nginx/conf", "bin/nginx"];
 
 const DEFAULT_MIME_TYPES = `types {
@@ -133,10 +147,18 @@ const DEFAULTS: Record<(typeof SUPPORT_FILES)[number], string> = {
   "fastcgi_params": DEFAULT_FASTCGI_PARAMS,
 };
 
+/** Create nginx buffer/temp directories under the install prefix (-p .). */
+export async function ensureNginxTempDirs(root: string): Promise<void> {
+  for (const dir of NGINX_TEMP_DIRS) {
+    await mkdir(path.join(root, dir), { recursive: true });
+  }
+}
+
 /** Copy nginx conf helpers into etc/nginx/ (mime.types, fastcgi_params). */
 export async function ensureNginxSupportFiles(root: string): Promise<void> {
   const etcNginx = path.join(root, "etc", "nginx");
   await mkdir(etcNginx, { recursive: true });
+  await ensureNginxTempDirs(root);
 
   for (const file of SUPPORT_FILES) {
     const dest = path.join(etcNginx, file);

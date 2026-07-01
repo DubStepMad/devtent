@@ -148,6 +148,17 @@ function handleHostsSyncResult(result) {
     showToast("Virtual hosts synced — hosts file updated", "success");
     return;
   }
+  if (hosts?.hostsCurrent) {
+    showToast("Virtual hosts synced — hosts file already up to date", "success");
+    return;
+  }
+  if (hosts?.elevationPending) {
+    showToast(
+      "Virtual host configs synced. Click Update hosts file (Admin) to add *.test domains.",
+      "info"
+    );
+    return;
+  }
   if (hosts?.elevationLaunchFailed) {
     showToast(hosts.message || "Could not open the Administrator prompt.", "error");
     return;
@@ -155,7 +166,7 @@ function handleHostsSyncResult(result) {
   if (hosts?.elevationRequested) {
     showToast(
       hosts.message ||
-        "Look for the Windows Administrator (UAC) prompt — it may be behind other windows. Click Yes to update your hosts file.",
+        "Click Yes on the Windows security prompt to update your hosts file.",
       "success"
     );
     return;
@@ -272,37 +283,89 @@ function startLogFollow() {
   }, 2000);
 }
 
-async function refreshServices() {
-  if (api.syncCoreServices) {
-    const { enabled } = await api.syncCoreServices();
-    if (enabled) showToast("Core services enabled — NGINX, MySQL, and PHP", "success");
-  }
+async function confirmAndSwitchProfile(targetName) {
+  const { active } = await api.listProfiles();
+  if (targetName === active) return false;
 
-  const toggles = await api.getProcfileToggles();
+  const preview = await api.previewProfileSwitch(targetName);
+  let message = `Switch to profile "${targetName}"?`;
+  if (preview.runningToStop.length) {
+    message += `\n\nThese running services are not in that profile and will be stopped:\n${preview.runningToStop.join(", ")}`;
+  }
+  if (!confirm(message)) return false;
+
+  const result = await withLoading(() => api.switchProfile(targetName), "Switching profile…");
+  if (result.stoppedServices?.length) {
+    showToast(`Stopped: ${result.stoppedServices.join(", ")}`, "info");
+  }
+  showToast(`Active profile: ${targetName}`, "success");
+  return true;
+}
+
+let servicesProfileSelectBound = false;
+
+async function refreshServicesProfileSelect() {
+  const select = document.getElementById("services-profile-select");
+  if (!select) return;
+
+  const { active, profiles } = await api.listProfiles();
+  select.innerHTML = "";
+  profiles.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.name;
+    opt.textContent = p.description ? `${p.name} — ${p.description}` : p.name;
+    if (p.name === active) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  if (!servicesProfileSelectBound) {
+    servicesProfileSelectBound = true;
+    select.addEventListener("change", async () => {
+      const target = select.value;
+      const switched = await confirmAndSwitchProfile(target);
+      if (!switched) {
+        const { active: current } = await api.listProfiles();
+        select.value = current;
+        return;
+      }
+      await refreshServices();
+      await refreshAll();
+    });
+  } else {
+    select.value = active;
+  }
+}
+
+async function refreshServices() {
+  await refreshServicesProfileSelect();
+
+  const { active } = await api.listProfiles();
+  const services = await api.getProfileServices(active);
   const running = await api.getServices();
   const runningMap = new Map(running.map((s) => [s.name, s]));
   const list = document.getElementById("services-list");
   const empty = document.getElementById("services-empty");
   list.innerHTML = "";
 
-  if (!toggles.length) {
+  if (!services.length) {
     empty.classList.remove("hidden");
     return;
   }
   empty.classList.add("hidden");
 
-  toggles.forEach((svc) => {
+  services.forEach((svc) => {
     const li = document.createElement("li");
     const isRunning = runningMap.get(svc.id)?.running;
     const dotClass = isRunning ? "running" : "stopped";
     const statusText = isRunning
       ? `Running · pid ${runningMap.get(svc.id)?.pid ?? "?"}`
-      : svc.enabled
-        ? "Configured · not running"
-        : "Disabled";
+      : svc.runtimeInstalled
+        ? "Not running"
+        : "Runtime not installed";
     const runtimeLabel = svc.runtimeInstalled
       ? ""
       : '<span class="service-badge missing">runtime not installed</span>';
+    const controlsDisabled = !svc.runtimeInstalled ? "disabled" : "";
 
     li.innerHTML = `
       <div class="service-info">
@@ -313,23 +376,16 @@ async function refreshServices() {
         <div class="service-cmd">${statusText}</div>
       </div>
       <div class="service-actions">
-        <button type="button" class="service-toggle ${svc.enabled ? "on" : ""}" title="${svc.enabled ? "Disable in Procfile" : "Enable in Procfile"}"></button>
-        <button class="btn sm success btn-start-svc" ${svc.enabled ? "" : "disabled"}>Start</button>
-        <button class="btn sm secondary btn-stop-svc" ${svc.enabled ? "" : "disabled"}>Stop</button>
+        <button class="btn sm success btn-start-svc" ${controlsDisabled}>Start</button>
+        <button class="btn sm secondary btn-stop-svc" ${controlsDisabled}>Stop</button>
+        <button class="btn sm secondary btn-restart-svc" ${controlsDisabled}>Restart</button>
       </div>`;
 
-    li.querySelector(".service-toggle").onclick = async () => {
-      if (!svc.runtimeInstalled && !svc.enabled) {
+    li.querySelector(".btn-start-svc").onclick = async () => {
+      if (!svc.runtimeInstalled) {
         showToast(`Install ${svc.name} via Quick Add first`, "error");
         return;
       }
-      await api.setProcfileToggle(svc.id, !svc.enabled);
-      await refreshServices();
-      await refreshAll();
-    };
-
-    li.querySelector(".btn-start-svc").onclick = async () => {
-      if (!svc.enabled) return;
       const result = await withLoading(() => api.startService(svc.id), `Starting ${svc.name}…`);
       if (!result?.running) {
         showToast(result?.error || `${svc.name} exited during startup — check logs/${svc.id}.log`, "error");
@@ -341,9 +397,27 @@ async function refreshServices() {
     };
 
     li.querySelector(".btn-stop-svc").onclick = async () => {
-      if (!svc.enabled) return;
+      if (!svc.runtimeInstalled) return;
       await withLoading(() => api.stopService(svc.id), `Stopping ${svc.name}…`);
       showToast(`${svc.name} stopped`, "success");
+      await refreshAll();
+      await refreshServices();
+    };
+
+    li.querySelector(".btn-restart-svc").onclick = async () => {
+      if (!svc.runtimeInstalled) {
+        showToast(`Install ${svc.name} via Quick Add first`, "error");
+        return;
+      }
+      const result = await withLoading(
+        () => api.restartService(svc.id),
+        `Restarting ${svc.name}…`
+      );
+      if (!result?.running) {
+        showToast(result?.error || `${svc.name} failed to restart — check logs/${svc.id}.log`, "error");
+      } else {
+        showToast(`${svc.name} restarted`, "success");
+      }
       await refreshAll();
       await refreshServices();
     };
@@ -552,8 +626,8 @@ async function refreshProfiles() {
       </div>`;
 
     li.querySelector(".btn-use-profile").onclick = async () => {
-      await withLoading(() => api.switchProfile(p.name), "Switching profile…");
-      showToast(`Active profile: ${p.name}`, "success");
+      const switched = await confirmAndSwitchProfile(p.name);
+      if (!switched) return;
       await refreshProfiles();
       await refreshServices();
       await refreshAll();
@@ -736,19 +810,12 @@ async function autoDetectLaragon(
   }
 }
 
-function setupShowsProjectList() {
-  return document.getElementById("setup-migrate-laragon")?.checked ?? false;
-}
-
 function isFreshInstall(status) {
-  return !status?.hasExistingData && !status?.setupCompleted;
+  return !status?.hasExistingData && !status?.setupCompletedForRoot;
 }
 
 function configureSetupForExistingInstall(status) {
   if (isFreshInstall(status)) return;
-
-  document.getElementById("setup-import-section")?.classList.add("hidden");
-  document.getElementById("setup-migrate-laragon").checked = false;
 
   const stackCheck = document.getElementById("setup-install-stack");
   const startCheck = document.getElementById("setup-start-services");
@@ -758,7 +825,7 @@ function configureSetupForExistingInstall(status) {
   const subtitle = document.querySelector("#view-setup .subtitle");
   if (subtitle) {
     subtitle.textContent =
-      "Your projects and data are already in this folder — click Get Started to finish config only (no import).";
+      "Your projects and data are already in this folder — click Get Started to finish config only.";
   }
 }
 
@@ -818,36 +885,11 @@ async function boot() {
   document.getElementById("setup-www-path").textContent = formatPath(`${defaultRoot}\\www`);
   configureSetupForExistingInstall(rootStatus);
 
-  const migrateCheck = document.getElementById("setup-migrate-laragon");
   const stackCheck = document.getElementById("setup-install-stack");
   const startCheck = document.getElementById("setup-start-services");
-  migrateCheck.onchange = async () => {
-    if (migrateCheck.checked) {
-      stackCheck.checked = false;
-      stackCheck.disabled = true;
-      startCheck.checked = true;
-      const laragonPath = document.getElementById("setup-laragon").value.trim();
-      if (laragonPath) {
-        await updateLaragonPreview(
-          laragonPath,
-          "setup-laragon-preview",
-          "setup-laragon-project-list",
-          "setup-laragon-projects",
-          true
-        );
-      }
-    } else {
-      stackCheck.disabled = false;
-      if (!rootStatus.hasExistingData && !rootStatus.setupCompleted) {
-        stackCheck.checked = true;
-      }
-      document.getElementById("setup-laragon-projects")?.classList.add("hidden");
-      document.getElementById("setup-laragon-project-list").innerHTML = "";
-    }
-  };
   stackCheck.onchange = () => {
     if (!stackCheck.checked) startCheck.checked = false;
-    else if (!migrateCheck.checked) startCheck.checked = true;
+    else startCheck.checked = true;
   };
 
   if (!rootStatus.initialized) {
@@ -880,30 +922,6 @@ async function boot() {
     await refreshProfiles();
   }
 
-  document.getElementById("setup-laragon-browse").onclick = async () => {
-    const picked = await api.pickLaragonRoot();
-    if (picked) {
-      document.getElementById("setup-laragon").value = formatPath(picked);
-      await updateLaragonPreview(
-        picked,
-        "setup-laragon-preview",
-        "setup-laragon-project-list",
-        "setup-laragon-projects",
-        setupShowsProjectList()
-      );
-    }
-  };
-
-  document.getElementById("setup-laragon-detect")?.addEventListener("click", async () => {
-    await autoDetectLaragon(
-      "setup-laragon",
-      "setup-laragon-preview",
-      "setup-laragon-project-list",
-      "setup-laragon-projects",
-      setupShowsProjectList()
-    );
-  });
-
   document.querySelectorAll(".migrate-project-actions button").forEach((btn) => {
     btn.onclick = () => {
       const list = document.getElementById(btn.dataset.target);
@@ -926,12 +944,10 @@ async function boot() {
       return;
     }
 
-    const migrate =
-      isFreshInstall(rootStatus) &&
-      document.getElementById("setup-migrate-laragon").checked;
-    const laragonPath = document.getElementById("setup-laragon").value.trim();
+    const latestStatus = await api.getRoot();
+    const freshInstall = isFreshInstall(latestStatus);
     const installStack =
-      isFreshInstall(rootStatus) && document.getElementById("setup-install-stack").checked;
+      freshInstall && document.getElementById("setup-install-stack").checked;
     const startServices = document.getElementById("setup-start-services").checked;
     const initBtn = document.getElementById("setup-init");
 
@@ -944,12 +960,6 @@ async function boot() {
       setSetupProgress(3, "Preparing…");
       await api.setRoot(root);
       await api.init(root);
-      if (migrate && laragonPath) {
-        const list = document.getElementById("setup-laragon-project-list");
-        const hasPicker = list?.querySelector(".migrate-project-cb");
-        const projects = hasPicker ? getSelectedProjects("setup-laragon-project-list") : undefined;
-        await api.migrateFromLaragon(laragonPath, projects);
-      }
       if (installStack) {
         await api.installRecommendedStack();
       }
@@ -958,19 +968,17 @@ async function boot() {
         await api.startAll();
         handleHostsSyncResult(await api.syncVhosts());
       }
-      if (!migrate && !installStack) {
+      if (!installStack) {
         setSetupProgress(100, "Environment ready");
       }
       await new Promise((r) => setTimeout(r, 400));
 
       const doneMsg =
-        migrate && laragonPath
-          ? "DevTent ready — environment imported!"
-          : installStack && startServices
-            ? "DevTent ready — stack installed and running!"
-            : installStack
-              ? "DevTent ready — recommended stack installed!"
-              : "DevTent initialized!";
+        installStack && startServices
+          ? "DevTent ready — stack installed and running!"
+          : installStack
+            ? "DevTent ready — recommended stack installed!"
+            : "DevTent initialized!";
       showToast(doneMsg, "success");
       await api.setWindowMode("dashboard");
       showSetupProgress(false);
@@ -1015,20 +1023,6 @@ async function boot() {
     };
   });
 
-  document.getElementById("btn-enable-core-services")?.addEventListener("click", async () => {
-    const toggles = await api.getProcfileToggles();
-    const coreIds = ["nginx", "mysql", "php-fpm"];
-    for (const id of coreIds) {
-      const svc = toggles.find((t) => t.id === id);
-      if (svc?.runtimeInstalled && !svc.enabled) {
-        await api.setProcfileToggle(id, true);
-      }
-    }
-    showToast("Core services enabled", "success");
-    await refreshServices();
-    await refreshAll();
-  });
-
   document.getElementById("btn-start-all").onclick = async () => {
     const results = await withLoading(() => api.startAll(), "Starting services…");
     const failed = (results ?? []).filter((r) => !r.running);
@@ -1070,11 +1064,13 @@ async function boot() {
   function showHostsHelperHint(hosts) {
     const el = document.getElementById("hosts-helper-hint");
     if (!el) return;
-    if (hosts?.hostsHelperPath && (hosts.elevationRequested || hosts.elevationLaunchFailed)) {
+    if (hosts?.hostsHelperPath && (hosts.elevationPending || hosts.elevationRequested || hosts.elevationLaunchFailed)) {
       el.classList.remove("hidden");
-      el.textContent = hosts.elevationLaunchFailed
+      el.textContent = hosts.elevationPending
+        ? "Hosts file still needs admin approval — click Update hosts file (Admin) above."
+        : hosts.elevationLaunchFailed
         ? `Manual fallback: right-click ${formatPath(hosts.hostsHelperPath)} and choose Run as administrator.`
-        : `If no UAC prompt appeared, right-click ${formatPath(hosts.hostsHelperPath)} and choose Run as administrator.`;
+        : `If no UAC prompt appeared after clicking Continue, right-click ${formatPath(hosts.hostsHelperPath)} and choose Run as administrator.`;
     } else {
       el.classList.add("hidden");
       el.textContent = "";

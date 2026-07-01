@@ -1,5 +1,6 @@
 export {
   initDevTent,
+  repairDevTentEnvironment,
   loadConfig,
   saveConfig,
   loadProfile,
@@ -23,6 +24,7 @@ export {
 export {
   startService,
   stopService,
+  restartService,
   startAll,
   stopAll,
   getServiceStatuses,
@@ -33,7 +35,9 @@ export {
 
 export {
   generateVirtualHosts,
+  listVirtualHosts,
   discoverProjects,
+  resolveProjectWebRoot,
   syncHostsFile,
   elevateHostsSync,
   getHostsSyncInstructions,
@@ -42,7 +46,7 @@ export {
 } from "./vhosts.js";
 export type { HostsSyncResult, VhostSyncResult, HostsSyncOptions } from "./vhosts.js";
 
-export type { CreateProfileInput, UpdateProfileInput } from "./config.js";
+export type { CreateProfileInput, UpdateProfileInput, SwitchProfileResult } from "./config.js";
 
 export {
   loadManifest,
@@ -86,6 +90,7 @@ export {
   readProcfileRaw,
   writeProcfileRaw,
   getServicePresets,
+  getServicePresetsForProfile,
   getProcfileToggles,
   setProcfileToggle,
   updateProcfileEntry,
@@ -93,7 +98,29 @@ export {
   syncPhpProcfileFromProfile,
 } from "./procfile.js";
 
+export {
+  ensureApacheConfig,
+  APACHE_PROCFILE_COMMAND,
+  needsApacheProcfileRepair,
+  apachePhpHandlerBlock,
+} from "./apache-support.js";
+
+export {
+  prepareHostsSyncFiles,
+  launchElevatedHostsSync,
+  requestElevatedHostsSync,
+  getElevatedHostsSyncMessage,
+  getElevatedHostsSyncFailureMessage,
+} from "./hosts-elevate.js";
+
 export { syncProfileProcfileFromProfile } from "./profile-procfile.js";
+
+export {
+  getProfileServiceIds,
+  getProfileServices,
+  previewProfileSwitch,
+} from "./profile-services.js";
+export type { ProfileService } from "./profile-services.js";
 
 export {
   writeMysqlIni,
@@ -152,10 +179,10 @@ export type {
 export async function getState(root: string): Promise<import("./types.js").DevTentState> {
   const { loadConfig } = await import("./config.js");
   const { getServiceStatuses } = await import("./services.js");
-  const { generateVirtualHosts } = await import("./vhosts.js");
+  const { listVirtualHosts } = await import("./vhosts.js");
 
   const config = await loadConfig(root);
-  const virtualHosts = (await generateVirtualHosts(root)).vhosts;
+  const virtualHosts = await listVirtualHosts(root);
 
   return {
     root,

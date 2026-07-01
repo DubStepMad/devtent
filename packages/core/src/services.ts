@@ -6,6 +6,7 @@ import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
 import { backupMysql, writeMysqlIni } from "./mysql.js";
 import { ensureNginxSupportFiles } from "./nginx-support.js";
+import { ensureApacheConfig, APACHE_PROCFILE_COMMAND, needsApacheProcfileRepair } from "./apache-support.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
 
@@ -103,6 +104,17 @@ async function prepareServiceStart(root: string, name: string): Promise<void> {
   if (name === "nginx") {
     await ensureNginxSupportFiles(root);
   }
+  if (name === "apache") {
+    await ensureApacheConfig(root);
+    const entries = await parseProcfile(root);
+    const apache = entries.find((e) => e.name === "apache");
+    if (apache && needsApacheProcfileRepair(apache.command)) {
+      const httpd = resolvePath(root, "bin/apache/bin/httpd.exe");
+      if (await pathExists(httpd)) {
+        await saveProcfileEntry(root, { name: "apache", command: APACHE_PROCFILE_COMMAND });
+      }
+    }
+  }
   if (name === "mysql") {
     const entries = await parseProcfile(root);
     const mysql = entries.find((e) => e.name === "mysql");
@@ -194,6 +206,12 @@ export async function startService(root: string, name: string): Promise<ServiceS
     pid: child.pid,
     startedAt: startedAt.toISOString(),
   };
+}
+
+export async function restartService(root: string, name: string): Promise<ServiceStatus> {
+  await stopService(name, root);
+  await waitMs(300);
+  return startService(root, name);
 }
 
 export async function stopService(name: string, root?: string, options?: { skipBackup?: boolean }): Promise<ServiceStatus> {

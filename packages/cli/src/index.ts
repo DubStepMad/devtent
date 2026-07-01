@@ -246,7 +246,7 @@ profileCmd
   .option("-r, --root <path>", "DevTent root directory")
   .action(async (name: string, opts: { root?: string }) => {
     const root = resolveRoot(opts.root);
-    const profile = await switchProfile(root, name);
+    const { profile } = await switchProfile(root, name);
     log(`✓ Switched to profile: ${profile.name}`);
   });
 
@@ -449,6 +449,7 @@ async function runMigrateImport(opts: {
     .map((name) => name.trim())
     .filter(Boolean);
   const result = await migrateFromLaragon(path.resolve(opts.from), root, log, {
+    explicitImport: true,
     projects,
   });
   log("");

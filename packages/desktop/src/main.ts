@@ -13,16 +13,29 @@ import { createAppIcon } from "./icon.js";
 import { spawn } from "node:child_process";
 import { takePendingInstallerPath } from "./install-lifecycle.js";
 import { initAppLogger } from "./app-logger.js";
+import { getDefaultRoot, getInstallRootEarly } from "./paths.js";
+import { isInstallInProgressSync, shouldExitForInstallInProgress } from "./install-lock.js";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const isE2eSmoke = process.argv.includes("--e2e-smoke");
+const wantsQuit = process.argv.includes("--quit");
+
+function shouldBlockForInstallLock(): boolean {
+  return !isE2eSmoke && !wantsQuit && isInstallInProgressSync(getInstallRootEarly());
+}
 
 initAppLogger();
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
+// Exit before Electron boots when the NSIS installer holds the lock file.
+if (shouldBlockForInstallLock()) {
+  app.exit(0);
+}
+
 // Single instance: second launch focuses the app; --quit asks the running instance to exit (for updates).
-const wantsQuit = process.argv.includes("--quit");
 if (isE2eSmoke) {
   app.whenReady().then(() => {
     console.log("E2E_SMOKE_OK");
@@ -36,6 +49,10 @@ if (!hasInstanceLock) {
   process.exit(0);
 } else {
   app.on("second-instance", (_event, argv) => {
+    if (shouldBlockForInstallLock()) {
+      app.exit(0);
+      return;
+    }
     if (argv.some((a) => a === "--quit")) {
       requestQuit();
       return;
@@ -135,6 +152,11 @@ app.whenReady().then(async () => {
     app.setAppUserModelId("dev.devtent.app");
   }
 
+  if (!wantsQuit && (await shouldExitForInstallInProgress(getDefaultRoot()))) {
+    app.quit();
+    return;
+  }
+
   Menu.setApplicationMenu(null);
 
   registerIpcHandlers();
@@ -210,7 +232,14 @@ app.on("before-quit", () => {
   destroyTray();
   const installerPath = takePendingInstallerPath();
   if (installerPath && process.platform === "win32") {
-    spawn(installerPath, [], { detached: true, stdio: "ignore" }).unref();
+    // Wait for this process to exit before starting Setup — avoids DevTent + Setup running together.
+    const launcher = path.join(tmpdir(), `devtent-run-installer-${process.pid}.cmd`);
+    writeFileSync(
+      launcher,
+      `@echo off\r\ntimeout /t 2 /nobreak >nul\r\nstart "" "${installerPath.replace(/"/g, '""')}"\r\ndel "%~f0"\r\n`,
+      "utf-8"
+    );
+    spawn("cmd.exe", ["/c", launcher], { detached: true, stdio: "ignore" }).unref();
   }
   // Exit immediately so the NSIS installer can replace files (do not await service stop).
   process.exit(0);

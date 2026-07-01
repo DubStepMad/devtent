@@ -35,32 +35,7 @@
         <input type="checkbox" id="setup-start-services" checked>
         Start services after setup
       </label>
-      <p class="hint">After setup, use the tent icon in your system tray.</p>
-
-      <div id="setup-import-section" class="setup-import-section">
-      <div class="setup-divider"></div>
-      <h2 class="setup-section-title">Import existing environment (optional)</h2>
-      <p class="setup-migrate-desc">Only for a <strong>brand-new</strong> install into an empty folder. Choose a Laragon (or similar) folder and check the box below — never runs during the Windows installer or in-place updates.</p>
-      <label class="field-label">Environment folder</label>
-      <div class="path-row">
-        <input type="text" id="setup-laragon" placeholder="c:\path\to\environment" readonly>
-        <button type="button" class="btn secondary" id="setup-laragon-browse">Browse…</button>
-        <button type="button" class="btn secondary" id="setup-laragon-detect">Detect</button>
-      </div>
-      <label class="migrate-check">
-        <input type="checkbox" id="setup-migrate-laragon">
-        Import projects, databases &amp; runtimes from an existing folder
-      </label>
-      <div id="setup-laragon-projects" class="migrate-project-picker hidden">
-        <label class="field-label">Projects to import</label>
-        <div id="setup-laragon-project-list" class="migrate-project-list"></div>
-        <div class="migrate-project-actions">
-          <button type="button" class="link-btn" data-action="all" data-target="setup-laragon-project-list">Select all</button>
-          <button type="button" class="link-btn" data-action="none" data-target="setup-laragon-project-list">Select none</button>
-        </div>
-      </div>
-      <p id="setup-laragon-preview" class="hint"></p>
-      </div>
+      <p class="hint">After setup, use the tent icon in your system tray. To import from Laragon or another environment, use <strong>Settings → Import environment</strong> after setup.</p>
       </div>
     </div>
   </div>
@@ -132,13 +107,16 @@
         </section>
 
         <section id="view-services" class="view-panel hidden">
-          <p class="panel-desc">Turn services on to add them to your Procfile, then start or stop them. Install missing runtimes in <strong>Quick Add</strong> first.</p>
-          <div class="toolbar">
-            <button class="btn secondary" id="btn-enable-core-services">Enable NGINX, MySQL &amp; PHP</button>
+          <p class="panel-desc">Start, stop, or restart services for the active profile. Install missing runtimes in <strong>Quick Add</strong> first.</p>
+          <div class="toolbar services-toolbar">
+            <label class="services-profile-label">
+              Profile
+              <select id="services-profile-select" class="services-profile-select" aria-label="Active profile"></select>
+            </label>
           </div>
           <ul id="services-list" class="service-list"></ul>
           <div class="panel muted-panel">
-            <p id="services-empty" class="empty-hint hidden">Install runtimes via Quick Add, then enable services with the switches above.</p>
+            <p id="services-empty" class="empty-hint hidden">Install runtimes via Quick Add for this profile's stack.</p>
           </div>
         </section>
 
@@ -256,7 +234,7 @@
           </div>
           <div class="panel">
             <h3>Import environment</h3>
-            <p class="panel-desc">Copy projects from an existing <code>www/</code> folder, php.ini files, databases, and runtimes. The source folder is left untouched.</p>
+            <p class="panel-desc">The only place to import from Laragon or another local environment. Copies projects from <code>www/</code>, php.ini files, databases, and runtimes. Never runs during install or first-run setup — use this panel when you choose to import.</p>
             <label class="field-label">Environment folder</label>
             <div class="form-row inline">
               <input type="text" id="migrate-laragon-path" placeholder="c:\path\to\environment" readonly style="flex:1">

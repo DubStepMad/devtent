@@ -26,6 +26,31 @@ describe("hasExistingEnvironment", () => {
     }
   });
 
+  it("detects active Procfile without DevTent header", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "env-procfile-"));
+    try {
+      await writeFile(
+        path.join(root, "Procfile"),
+        "nginx: bin/nginx/nginx.exe -p . -c etc/nginx/nginx.conf\n",
+        "utf-8"
+      );
+      assert.equal(await isDevTentEnvironment(root), true);
+      assert.equal(await hasExistingEnvironment(root), true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("detects installed runtimes without config", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "env-bin-"));
+    try {
+      await mkdir(path.join(root, "bin", "nginx"), { recursive: true });
+      assert.equal(await hasExistingEnvironment(root), true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns false for empty folder", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "env-empty-"));
     try {

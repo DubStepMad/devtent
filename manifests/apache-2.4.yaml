@@ -1,9 +1,9 @@
 name: apache-2.4
-version: "2.4.63"
-description: Apache HTTP Server 2.4 for Windows (Apache Lounge)
+version: "2.4.68"
+description: Apache HTTP Server 2.4 for Windows (Apache Lounge VS18)
 platform: win32
 arch: x64
-url: https://www.apachelounge.com/download/VS17/binaries/httpd-2.4.63-250131-win64-VS17.zip
+url: https://www.apachelounge.com/download/VS18/binaries/httpd-2.4.68-260617-Win64-VS18.zip
 installPath: bin/apache
 binary: bin/httpd.exe
 archiveSubdir: Apache24

@@ -1,14 +1,16 @@
-import { mkdir, readFile, writeFile, access, readdir, copyFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access, readdir, copyFile, unlink, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import type { DevTentConfig, Profile, ServiceDefinition } from "./types.js";
 import { DEFAULT_PHP_VERSION, normalizeProfile } from "./profile-runtime.js";
+import { ensureApacheConfig } from "./apache-support.js";
 import { hasExistingEnvironment } from "./environment.js";
 
 export const CONFIG_FILENAME = "devtent.toml";
 export const DEFAULT_PROFILE = "default";
+const ACTIVE_PROFILE_MARKER = path.join("profiles", ".active");
 
 export const DEFAULT_DIRS = [
   "bin",
@@ -102,6 +104,85 @@ export async function loadConfig(root: string): Promise<DevTentConfig> {
 export async function saveConfig(root: string, config: DevTentConfig): Promise<void> {
   const configPath = path.join(root, CONFIG_FILENAME);
   await writeFile(configPath, stringifyToml(config as unknown as Record<string, unknown>), "utf-8");
+  await writeActiveProfileMarker(root, config.activeProfile);
+}
+
+async function writeActiveProfileMarker(root: string, profileName: string): Promise<void> {
+  const markerPath = path.join(root, ACTIVE_PROFILE_MARKER);
+  await mkdir(path.dirname(markerPath), { recursive: true });
+  await writeFile(markerPath, `${profileName.trim()}\n`, "utf-8");
+}
+
+async function readActiveProfileMarker(root: string): Promise<string | null> {
+  const markerPath = path.join(root, ACTIVE_PROFILE_MARKER);
+  if (!(await pathExists(markerPath))) return null;
+  const name = (await readFile(markerPath, "utf-8")).trim();
+  return name || null;
+}
+
+async function inferActiveProfileForRepair(root: string): Promise<string> {
+  const marker = await readActiveProfileMarker(root);
+  if (marker && (await pathExists(path.join(root, "profiles", `${marker}.toml`)))) {
+    return marker;
+  }
+
+  const profiles = await listProfiles(root);
+  if (profiles.length === 0) return DEFAULT_PROFILE;
+  if (profiles.length === 1) return profiles[0]!.name;
+
+  const withMtime = await Promise.all(
+    profiles.map(async (profile) => {
+      const profilePath = path.join(root, "profiles", `${profile.name}.toml`);
+      const info = await stat(profilePath);
+      return { name: profile.name, mtimeMs: info.mtimeMs };
+    })
+  );
+  withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return withMtime[0]?.name ?? DEFAULT_PROFILE;
+}
+
+/**
+ * Recreate devtent.toml after an app update without resetting profiles or Procfile.
+ */
+export async function repairDevTentEnvironment(
+  root: string,
+  onProgress?: (msg: string, percent?: number) => void
+): Promise<DevTentConfig> {
+  root = normalizeInstallRoot(root);
+  const report = (msg: string, percent?: number) => onProgress?.(msg, percent);
+  const configPath = path.join(root, CONFIG_FILENAME);
+
+  if (await pathExists(configPath)) {
+    report("Environment already initialized", 45);
+    return loadConfig(root);
+  }
+
+  report("Repairing environment configuration…", 8);
+  await mkdir(root, { recursive: true });
+  for (const dir of DEFAULT_DIRS) {
+    await mkdir(path.join(root, dir), { recursive: true });
+  }
+
+  const config = getDefaultConfig(root);
+  config.activeProfile = await inferActiveProfileForRepair(root);
+  await saveConfig(root, config);
+
+  const defaultProfilePath = path.join(root, "profiles", `${DEFAULT_PROFILE}.toml`);
+  if (!(await pathExists(defaultProfilePath))) {
+    await saveProfile(root, getDefaultProfile());
+  }
+
+  if (!(await pathExists(path.join(root, "etc", "nginx", "nginx.conf")))) {
+    await writeDefaultNginxConf(root);
+  }
+  if (!(await pathExists(path.join(root, "etc", "apache", "httpd.conf")))) {
+    await writeDefaultApacheConf(root);
+  }
+  await writeDefaultProcfile(root);
+  await writeReadme(root);
+
+  report("Environment repaired", 45);
+  return config;
 }
 
 export async function initDevTent(
@@ -130,10 +211,7 @@ export async function initDevTent(
 
   report("Writing configuration…", 36);
   const config = getDefaultConfig(root);
-
-  if (!(await pathExists(configPath))) {
-    await saveConfig(root, config);
-  }
+  await saveConfig(root, config);
 
   const defaultProfile = getDefaultProfile();
   const profilePath = path.join(root, "profiles", `${DEFAULT_PROFILE}.toml`);
@@ -195,14 +273,29 @@ export async function listProfiles(root: string): Promise<Profile[]> {
   return profiles;
 }
 
-export async function switchProfile(root: string, name: string): Promise<Profile> {
+export interface SwitchProfileResult {
+  profile: Profile;
+  stoppedServices: string[];
+}
+
+export async function switchProfile(root: string, name: string): Promise<SwitchProfileResult> {
   const profile = await loadProfile(root, name);
+  const { getProfileServiceIds } = await import("./profile-services.js");
+  const { getServiceStatuses, stopService } = await import("./services.js");
+  const allowed = new Set(getProfileServiceIds(profile));
+  const stoppedServices: string[] = [];
+  for (const svc of getServiceStatuses()) {
+    if (!svc.running || allowed.has(svc.name)) continue;
+    await stopService(svc.name, root);
+    stoppedServices.push(svc.name);
+  }
+
   const config = await loadConfig(root);
   config.activeProfile = name;
   await saveConfig(root, config);
   const { syncProfileProcfileFromProfile } = await import("./profile-procfile.js");
   await syncProfileProcfileFromProfile(root, { mode: "replace" });
-  return profile;
+  return { profile, stoppedServices };
 }
 
 export interface CreateProfileInput {
@@ -314,6 +407,11 @@ http {
   sendfile      on;
   keepalive_timeout 65;
   client_max_body_size 128m;
+  client_body_temp_path tmp/client_body_temp;
+  proxy_temp_path       tmp/proxy_temp;
+  fastcgi_temp_path     tmp/fastcgi_temp;
+  uwsgi_temp_path       tmp/uwsgi_temp;
+  scgi_temp_path        tmp/scgi_temp;
 
   server {
     listen 80 default_server;
@@ -340,57 +438,7 @@ http {
 }
 
 async function writeDefaultApacheConf(root: string): Promise<void> {
-  const apacheConf = path.join(root, "etc/apache/httpd.conf");
-  if (await pathExists(apacheConf)) return;
-
-  const content = `# DevTent — auto-generated Apache config
-Define SRVROOT "bin/apache"
-ServerRoot "\${SRVROOT}"
-Listen 80
-
-LoadModule access_compat_module modules/mod_access_compat.so
-LoadModule actions_module modules/mod_actions.so
-LoadModule alias_module modules/mod_alias.so
-LoadModule auth_basic_module modules/mod_auth_basic.so
-LoadModule authn_core_module modules/mod_authn_core.so
-LoadModule authz_core_module modules/mod_authz_core.so
-LoadModule authz_host_module modules/mod_authz_host.so
-LoadModule autoindex_module modules/mod_autoindex.so
-LoadModule dir_module modules/mod_dir.so
-LoadModule env_module modules/mod_env.so
-LoadModule log_config_module modules/mod_log_config.so
-LoadModule mime_module modules/mod_mime.so
-LoadModule proxy_module modules/mod_proxy.so
-LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
-LoadModule rewrite_module modules/mod_rewrite.so
-LoadModule setenvif_module modules/mod_setenvif.so
-
-PidFile tmp/apache.pid
-ErrorLog logs/apache-error.log
-LogLevel warn
-
-<Directory />
-  AllowOverride none
-  Require all denied
-</Directory>
-
-DocumentRoot "www"
-<Directory "www">
-  Options Indexes FollowSymLinks
-  AllowOverride All
-  Require all granted
-</Directory>
-
-DirectoryIndex index.php index.html
-TypesConfig conf/mime.types
-
-<FilesMatch \\.php$>
-  SetHandler "proxy:fcgi://127.0.0.1:9000"
-</FilesMatch>
-
-Include etc/apache/sites/*.conf
-`;
-  await writeFile(apacheConf, content, "utf-8");
+  await ensureApacheConfig(root);
 }
 
 async function writeDefaultProcfile(root: string): Promise<void> {

@@ -53,7 +53,7 @@ describe("DevTent config", () => {
         webServer: "nginx",
       });
 
-      const profile = await switchProfile(tmp, "php82");
+      const { profile } = await switchProfile(tmp, "php82");
       assert.equal(profile.name, "php82");
 
       const config = await loadConfig(tmp);
@@ -99,6 +99,37 @@ describe("Virtual hosts", () => {
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
+  });
+
+  it("uses public/ as document root for Laravel-style projects", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-test-"));
+    try {
+      await initDevTent(tmp);
+      const { mkdir, writeFile } = await import("node:fs/promises");
+      await mkdir(path.join(tmp, "www", "myapp", "public"), { recursive: true });
+      await writeFile(path.join(tmp, "www", "myapp", "artisan"), "", "utf-8");
+      await writeFile(path.join(tmp, "www", "myapp", "public", "index.php"), "<?php", "utf-8");
+
+      const { vhosts } = await generateVirtualHosts(tmp);
+      assert.match(vhosts[0].root.replace(/\\/g, "/"), /\/www\/myapp\/public$/);
+
+      const apacheConf = await readFile(path.join(tmp, "etc/apache/sites/myapp.conf"), "utf-8");
+      assert.match(apacheConf, /DocumentRoot ".*\/public"/);
+      assert.match(apacheConf, /proxy:fcgi:\/\/127\.0\.0\.1:9000\//);
+      assert.match(apacheConf, /ProxyFCGISetEnvIf/);
+
+      const nginxConf = await readFile(path.join(tmp, "etc/nginx/sites/myapp.conf"), "utf-8");
+      assert.match(nginxConf, /root ".*\/public"/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("buildHostsContent is stable when reapplied", () => {
+    const vhosts = [{ name: "myapp", domain: "myapp.test", root: "C:/devtent/www/myapp", ssl: false }];
+    const first = buildHostsContent("127.0.0.1 localhost\n", vhosts);
+    const second = buildHostsContent(first, vhosts);
+    assert.equal(first.replace(/\r\n/g, "\n").trimEnd(), second.replace(/\r\n/g, "\n").trimEnd());
   });
 
   it("merges devtent hosts block", () => {
