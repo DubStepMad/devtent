@@ -1,6 +1,6 @@
 {
   "name": "devtent",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Free, open-source local development environment for Windows",
   "license": "LicenseRef-DTCL-1.0",

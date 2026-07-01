@@ -2,6 +2,13 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.0.2] - 2026-07-01
+
+### Fixed
+
+- **In-app updater** — recognizes GitHub release assets named `DevTent.Setup.*.exe` (electron-builder default); fixes false “Release has no Windows installer attached” on update check
+- **Release builds** — pin installer `artifactName` to `DevTent Setup ${version}.exe` and broaden CI asset discovery
+
 ## [1.0.1] - 2026-07-01
 
 Bug-fix and UX release focused on Apache, profiles, installer reliability, and the Services page.
@@ -75,5 +82,6 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.0.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.2
 [1.0.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.1
 [1.0.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.0
