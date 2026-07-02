@@ -8,16 +8,18 @@ import { ensureApacheConfig, APACHE_PROCFILE_COMMAND } from "./apache-support.js
 import { initDevTent } from "./config.js";
 
 describe("apache support", () => {
-  it("writes v3 config without broken global SetHandler", async () => {
+  it("writes v4 config without broken global SetHandler", async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-apache-"));
     await initDevTent(tmp, () => {});
 
     await ensureApacheConfig(tmp);
 
     const conf = await readFile(path.join(tmp, "etc", "apache", "httpd.conf"), "utf-8");
-    assert.match(conf, /DevTent apache config v3/);
+    assert.match(conf, /DevTent apache config v4/);
     assert.match(conf, /ServerRoot "\."/);
     assert.match(conf, /Define APACHE_ROOT "bin\/apache"/);
+    assert.match(conf, /LoadModule ssl_module/);
+    assert.match(conf, /Listen 443/);
     assert.doesNotMatch(conf, /SetHandler "proxy:fcgi/);
     assert.doesNotMatch(conf, /Define SRVROOT/);
   });
@@ -33,8 +35,23 @@ describe("apache support", () => {
 
     await ensureApacheConfig(tmp);
     const conf = await readFile(path.join(tmp, "etc", "apache", "httpd.conf"), "utf-8");
-    assert.match(conf, /DevTent apache config v3/);
+    assert.match(conf, /DevTent apache config v4/);
     assert.match(conf, /ServerRoot "\."/);
+  });
+
+  it("upgrades v3 config to v4 with mod_ssl", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-apache-v3-"));
+    await mkdir(path.join(tmp, "etc", "apache", "sites"), { recursive: true });
+    await writeFile(
+      path.join(tmp, "etc", "apache", "httpd.conf"),
+      "# DevTent apache config v3\nListen 80\n",
+      "utf-8"
+    );
+
+    await ensureApacheConfig(tmp);
+    const conf = await readFile(path.join(tmp, "etc", "apache", "httpd.conf"), "utf-8");
+    assert.match(conf, /DevTent apache config v4/);
+    assert.match(conf, /LoadModule ssl_module/);
   });
 
   it("builds Windows php handler block for php-cgi", async () => {

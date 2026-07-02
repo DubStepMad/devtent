@@ -15,13 +15,16 @@ async function isPresetRuntimeInstalled(root: string, preset: ServicePreset): Pr
   return pathExists(resolvePath(root, binary));
 }
 
-/** Service ids included in a profile stack (excludes optional redis/mailpit). */
+/** Service ids included in a profile stack. */
 export function getProfileServiceIds(profile: Profile): string[] {
   const normalized = normalizeProfile(profile);
   const ids: string[] = ["php-fpm"];
   ids.push(normalized.webServer === "apache" ? "apache" : "nginx");
   if (normalized.database && normalized.database !== "none") {
     ids.push(normalized.database);
+  }
+  for (const id of normalized.services ?? []) {
+    if (!ids.includes(id)) ids.push(id);
   }
   return ids;
 }

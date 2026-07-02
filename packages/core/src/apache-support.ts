@@ -13,7 +13,7 @@ export function needsApacheProcfileRepair(command: string): boolean {
   return false;
 }
 
-const CONFIG_MARKER = "# DevTent apache config v3";
+const CONFIG_MARKER = "# DevTent apache config v4";
 
 /** Windows php-cgi needs GENERIC backend + explicit SCRIPT_FILENAME (drive letters break ProxyPassMatch). */
 export function apachePhpHandlerBlock(): string {
@@ -31,6 +31,7 @@ function apacheHttpdConf(): string {
 Define APACHE_ROOT "bin/apache"
 ServerRoot "."
 Listen 80
+Listen 443
 
 LoadModule access_compat_module "\${APACHE_ROOT}/modules/mod_access_compat.so"
 LoadModule actions_module "\${APACHE_ROOT}/modules/mod_actions.so"
@@ -48,6 +49,11 @@ LoadModule proxy_module "\${APACHE_ROOT}/modules/mod_proxy.so"
 LoadModule proxy_fcgi_module "\${APACHE_ROOT}/modules/mod_proxy_fcgi.so"
 LoadModule rewrite_module "\${APACHE_ROOT}/modules/mod_rewrite.so"
 LoadModule setenvif_module "\${APACHE_ROOT}/modules/mod_setenvif.so"
+LoadModule socache_shmcb_module "\${APACHE_ROOT}/modules/mod_socache_shmcb.so"
+LoadModule ssl_module "\${APACHE_ROOT}/modules/mod_ssl.so"
+
+SSLRandomSeed startup builtin
+SSLRandomSeed connect builtin
 
 PidFile tmp/apache.pid
 ErrorLog logs/apache-error.log

@@ -1,0 +1,8 @@
+name: node-20
+version: "20.18.3"
+description: Node.js 20 LTS for Windows
+platform: win32
+arch: x64
+url: https://nodejs.org/dist/v20.18.3/node-v20.18.3-win-x64.zip
+installPath: bin/node/node-20
+binary: node.exe

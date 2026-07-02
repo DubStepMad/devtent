@@ -1,0 +1,8 @@
+name: node-21
+version: "21.7.3"
+description: Node.js 21 for Windows
+platform: win32
+arch: x64
+url: https://nodejs.org/dist/v21.7.3/node-v21.7.3-win-x64.zip
+installPath: bin/node/node-21
+binary: node.exe

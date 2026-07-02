@@ -41,9 +41,19 @@ import {
   installRecommendedStack,
   backupMysql,
   listMysqlBackups,
+  restoreMysql,
   maybeDailyMysqlBackup,
   listLogFiles,
   readLogTail,
+  getEnvironmentHealth,
+  exportEnvironment,
+  importEnvironmentBundle,
+  searchLogFiles,
+  parseLogLineLocations,
+  listNodeVersions,
+  installNodeVersion,
+  applyNodeVersionToActiveProfile,
+  clearActiveNodeVersion,
 } from "@devtent/core";
 import type { ProcfileEntry, ProcfileToggle } from "@devtent/core";
 import {
@@ -81,6 +91,7 @@ import {
   rollbackAppBinary,
 } from "./update-backup.js";
 import { completeStandaloneHostsElevation } from "./hosts-elevation.js";
+import { openFileInEditor } from "./open-in-editor.js";
 
 let currentRoot = "";
 let openDashboardHandler: (() => void) | null = null;
@@ -152,6 +163,7 @@ export function registerIpcHandlers(): void {
       setupCompleted: settings.setupCompleted ?? false,
       setupCompletedForRoot: setupCompletedForRoot(settings, currentRoot),
       hasExistingData: await hasExistingEnvironment(currentRoot),
+      stopServicesOnQuit: settings.stopServicesOnQuit !== false,
     };
   });
 
@@ -220,6 +232,51 @@ export function registerIpcHandlers(): void {
     await saveSettings({ root });
     currentRoot = root;
     return { root, initialized: await isInitialized(root) };
+  });
+
+  ipcMain.handle("devtent:setStopServicesOnQuit", async (_e, enabled: boolean) => {
+    await saveSettings({ stopServicesOnQuit: enabled });
+    return { stopServicesOnQuit: enabled };
+  });
+
+  ipcMain.handle("devtent:pickExportFolder", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      title: "Choose export destination",
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("devtent:pickImportBundle", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+      title: "Choose DevTent export folder",
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(
+    "devtent:exportEnvironment",
+    async (_e, destPath: string, options?: { includeBin?: boolean }) => {
+      sendProgress("Exporting environment…", 10);
+      const result = await exportEnvironment(currentRoot, destPath, options);
+      sendProgress("Export complete", 100);
+      return result;
+    }
+  );
+
+  ipcMain.handle("devtent:importEnvironmentBundle", async (_e, bundlePath: string) => {
+    sendProgress("Importing environment bundle…", 10);
+    const result = await importEnvironmentBundle(currentRoot, bundlePath);
+    broadcastRefresh();
+    sendProgress("Import complete", 100);
+    return result;
+  });
+
+  ipcMain.handle("devtent:getEnvironmentHealth", async () => {
+    return getEnvironmentHealth(currentRoot);
   });
 
   ipcMain.handle("devtent:init", async (_e, root?: string) => {
@@ -337,6 +394,7 @@ export function registerIpcHandlers(): void {
         phpVersion?: string;
         webServer?: "nginx" | "apache";
         database?: "mysql" | "postgresql" | "none";
+        services?: ("redis" | "mailpit")[];
       }
     ) => {
       const profile = await createProfile(currentRoot, input);
@@ -355,6 +413,7 @@ export function registerIpcHandlers(): void {
         phpVersion?: string;
         webServer?: "nginx" | "apache";
         database?: "mysql" | "postgresql" | "none";
+        services?: ("redis" | "mailpit")[];
       }
     ) => {
       const profile = await updateProfile(currentRoot, name, patch);
@@ -414,6 +473,13 @@ export function registerIpcHandlers(): void {
     return listMysqlBackups(currentRoot);
   });
 
+  ipcMain.handle("devtent:restoreMysql", async (_e, backupId: string) => {
+    sendProgress("Restoring MySQL backup…");
+    const result = await restoreMysql(currentRoot, backupId, sendProgress);
+    broadcastRefresh();
+    return result;
+  });
+
   ipcMain.handle("devtent:listTemplates", async () => {
     return listTemplates(getTemplatesDir());
   });
@@ -437,7 +503,9 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:enableSsl", async (_e, domain: string) => {
-    return enableSsl(currentRoot, domain);
+    const result = await enableSsl(currentRoot, domain);
+    broadcastRefresh();
+    return result;
   });
 
   ipcMain.handle("devtent:openPath", async (_e, subpath: string) => {
@@ -509,6 +577,50 @@ export function registerIpcHandlers(): void {
     }
     await refreshRoot();
     return readLogTail(currentRoot, fileName, lines ?? 500);
+  });
+
+  ipcMain.handle(
+    "devtent:searchLogs",
+    async (_e, query: string, fileName?: string) => {
+      await refreshRoot();
+      return searchLogFiles(currentRoot, query, { fileName, maxResults: 200 });
+    }
+  );
+
+  ipcMain.handle(
+    "devtent:openLogInEditor",
+    async (_e, filePath: string, line?: number) => {
+      await refreshRoot();
+      return openFileInEditor(currentRoot, filePath, line);
+    }
+  );
+
+  ipcMain.handle("devtent:listNodeVersions", async () => {
+    await refreshRoot();
+    return listNodeVersions(currentRoot, getManifestsDir());
+  });
+
+  ipcMain.handle("devtent:installNodeVersion", async (_e, nodeVersion: string) => {
+    sendProgress(`Installing ${nodeVersion}…`);
+    const installPath = await installNodeVersion(
+      currentRoot,
+      getManifestsDir(),
+      nodeVersion,
+      sendProgress
+    );
+    broadcastRefresh();
+    return { nodeVersion, installPath };
+  });
+
+  ipcMain.handle("devtent:setActiveNodeVersion", async (_e, nodeVersion: string | null) => {
+    if (!nodeVersion) {
+      const profile = await clearActiveNodeVersion(currentRoot);
+      broadcastRefresh();
+      return profile;
+    }
+    const profile = await applyNodeVersionToActiveProfile(currentRoot, nodeVersion);
+    broadcastRefresh();
+    return profile;
   });
 
   ipcMain.handle("devtent:checkForUpdates", async (_e, options?: { respectSkip?: boolean }) => {

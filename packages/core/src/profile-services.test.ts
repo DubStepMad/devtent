@@ -29,6 +29,20 @@ describe("profile services", () => {
       database: "none",
     });
     assert.deepEqual(getProfileServiceIds(noDb), ["php-fpm", "nginx"]);
+
+    const withOptional = normalizeProfile({
+      name: "full",
+      webServer: "nginx",
+      database: "mysql",
+      services: ["redis", "mailpit"],
+    });
+    assert.deepEqual(getProfileServiceIds(withOptional), [
+      "php-fpm",
+      "nginx",
+      "mysql",
+      "redis",
+      "mailpit",
+    ]);
   });
 
   it("returns profile services for active profile", async () => {

@@ -304,6 +304,8 @@ export interface CreateProfileInput {
   phpVersion?: string;
   webServer?: Profile["webServer"];
   database?: Profile["database"];
+  services?: Profile["services"];
+  nodeVersion?: Profile["nodeVersion"];
 }
 
 export async function createProfile(root: string, input: CreateProfileInput): Promise<Profile> {
@@ -324,6 +326,7 @@ export async function createProfile(root: string, input: CreateProfileInput): Pr
     phpVersion: input.phpVersion ?? DEFAULT_PHP_VERSION,
     webServer: input.webServer ?? "nginx",
     database: input.database ?? "mysql",
+    services: input.services ?? [],
   });
   await saveProfile(root, profile);
   return profile;
@@ -334,6 +337,8 @@ export interface UpdateProfileInput {
   phpVersion?: string;
   webServer?: Profile["webServer"];
   database?: Profile["database"];
+  services?: Profile["services"];
+  nodeVersion?: Profile["nodeVersion"];
 }
 
 export async function updateProfile(

@@ -1,0 +1,8 @@
+name: node-18
+version: "18.20.8"
+description: Node.js 18 LTS for Windows
+platform: win32
+arch: x64
+url: https://nodejs.org/dist/v18.20.8/node-v18.20.8-win-x64.zip
+installPath: bin/node/node-18
+binary: node.exe

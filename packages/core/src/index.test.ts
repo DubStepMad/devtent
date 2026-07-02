@@ -90,7 +90,7 @@ describe("Virtual hosts", () => {
       const projects = await discoverProjects(path.join(tmp, "www"));
       assert.deepEqual(projects, ["myapp"]);
 
-      const { vhosts } = await generateVirtualHosts(tmp);
+      const { vhosts } = await generateVirtualHosts(tmp, { skipHostsSync: true });
       assert.equal(vhosts.length, 1);
       assert.equal(vhosts[0].domain, "myapp.test");
 
@@ -110,7 +110,7 @@ describe("Virtual hosts", () => {
       await writeFile(path.join(tmp, "www", "myapp", "artisan"), "", "utf-8");
       await writeFile(path.join(tmp, "www", "myapp", "public", "index.php"), "<?php", "utf-8");
 
-      const { vhosts } = await generateVirtualHosts(tmp);
+      const { vhosts } = await generateVirtualHosts(tmp, { skipHostsSync: true });
       assert.match(vhosts[0].root.replace(/\\/g, "/"), /\/www\/myapp\/public$/);
 
       const apacheConf = await readFile(path.join(tmp, "etc/apache/sites/myapp.conf"), "utf-8");

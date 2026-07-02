@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { prepareHostsSyncFiles } from "./hosts-elevate.js";
+import { prepareHostsSyncFiles, launchElevatedHostsSync, isHostsElevationDisabled } from "./hosts-elevate.js";
 
 describe("hosts elevation", () => {
   it("writes helper scripts for elevated hosts sync", async () => {
@@ -18,5 +18,11 @@ describe("hosts elevation", () => {
 
     const hostsNew = await readFile(path.join(tmp, "tmp", "devtent-hosts-new"), "utf-8");
     assert.equal(hostsNew, content);
+  });
+
+  it("does not launch wscript during automated test runs", async () => {
+    assert.equal(isHostsElevationDisabled(), true);
+    const launched = await launchElevatedHostsSync("C:\\fake\\devtent-sync-hosts.cmd");
+    assert.equal(launched, false);
   });
 });

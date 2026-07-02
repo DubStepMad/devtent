@@ -4,15 +4,14 @@ async function refresh() {
   if (!api) return;
 
   const state = await api.getState();
-  const services = await api.getServices();
-  const { active, profiles } = await api.listProfiles().catch(() => ({
-    active: "default",
-    profiles: [],
-  }));
+  const { active } = await api.listProfiles().catch(() => ({ active: "default" }));
+  const profileServices = await api.getProfileServices(active).catch(() => []);
+  const running = await api.getServices();
+  const runningMap = new Map(running.map((s) => [s.name, s]));
+  const profiles = (await api.listProfiles().catch(() => ({ profiles: [] }))).profiles ?? [];
 
-  const runningCount = services.filter((s) => s.running).length;
+  const runningCount = running.filter((s) => s.running).length;
   const statusPill = document.getElementById("global-status");
-  const statusDot = document.getElementById("status-dot");
   const statusText = document.getElementById("status-text");
 
   if (runningCount > 0) {
@@ -27,42 +26,36 @@ async function refresh() {
     state.virtualHosts?.length ?? 0
   );
 
-  const toggleList = document.getElementById("procfile-toggles");
-  toggleList.innerHTML = "";
-  const toggles = await api.getProcfileToggles().catch(() => []);
-  toggles.forEach((t) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<span class="toggle-label">${t.name}</span>`;
-    const btn = document.createElement("button");
-    btn.className = "toggle-switch" + (t.enabled ? " on" : "");
-    btn.type = "button";
-    btn.title = t.command;
-    btn.onclick = async () => {
-      await api.setProcfileToggle(t.id, !t.enabled);
-      refresh();
-    };
-    li.appendChild(btn);
-    toggleList.appendChild(li);
-  });
+  const profileNote = document.getElementById("profile-services-note");
+  if (profileNote) {
+    profileNote.textContent = profileServices.length
+      ? `Active profile: ${active} · ${profileServices.map((s) => s.name).join(", ")}`
+      : `Active profile: ${active}`;
+  }
 
   const svcList = document.getElementById("service-list");
   svcList.innerHTML = "";
-  if (!services.length) {
-    svcList.innerHTML = '<li class="empty">Toggle NGINX, MySQL, or PHP above after installing runtimes</li>';
+  if (!profileServices.length) {
+    svcList.innerHTML = '<li class="empty">No services in active profile — edit in Profiles</li>';
   } else {
-    services.forEach((svc) => {
+    profileServices.forEach((svc) => {
+      const isRunning = runningMap.get(svc.id)?.running;
       const li = document.createElement("li");
-      li.className = svc.running ? "running" : "";
+      li.className = isRunning ? "running" : "";
+      const disabled = !svc.runtimeInstalled ? "disabled" : "";
       li.innerHTML = `
         <span class="svc-dot"></span>
-        <span class="svc-name">${svc.name}</span>
-        <button class="svc-action">${svc.running ? "Stop" : "Start"}</button>`;
-      li.querySelector(".svc-action").onclick = async (e) => {
-        e.stopPropagation();
-        if (svc.running) await api.stopService(svc.name);
-        else await api.startService(svc.name);
-        refresh();
-      };
+        <span class="svc-name">${svc.name}${svc.runtimeInstalled ? "" : " (not installed)"}</span>
+        <button class="svc-action" ${disabled}>${isRunning ? "Stop" : "Start"}</button>`;
+      const btn = li.querySelector(".svc-action");
+      if (svc.runtimeInstalled) {
+        btn.onclick = async (e) => {
+          e.stopPropagation();
+          if (isRunning) await api.stopService(svc.id);
+          else await api.startService(svc.id);
+          refresh();
+        };
+      }
       svcList.appendChild(li);
     });
   }
@@ -72,8 +65,9 @@ async function refresh() {
   (state.virtualHosts ?? []).forEach((v) => {
     const li = document.createElement("li");
     const btn = document.createElement("button");
-    btn.textContent = v.domain;
-    btn.onclick = () => api.openExternal(`http://${v.domain}`);
+    const url = v.ssl ? `https://${v.domain}` : `http://${v.domain}`;
+    btn.textContent = v.ssl ? `${v.domain} 🔒` : v.domain;
+    btn.onclick = () => api.openExternal(url);
     li.appendChild(btn);
     siteList.appendChild(li);
   });
@@ -117,7 +111,8 @@ function bind() {
 
   document.getElementById("btn-www").onclick = () => api.openPath("www");
   document.getElementById("btn-dashboard").onclick = () => api.openDashboard();
-  document.getElementById("btn-settings").onclick = () => api.openDashboard();
+  document.getElementById("btn-services")?.addEventListener("click", () => api.openDashboard("services"));
+  document.getElementById("btn-settings").onclick = () => api.openDashboard("settings");
   document.getElementById("btn-terminal").onclick = () => api.openTerminal();
   document.getElementById("btn-logs").onclick = () => api.openDashboard("logs");
   document.getElementById("btn-quit").onclick = () => api.quit();
@@ -131,6 +126,7 @@ function bind() {
   };
 
   document.getElementById("btn-edit-procfile").onclick = async () => {
+    document.getElementById("advanced-section")?.classList.remove("hidden");
     const editor = document.getElementById("procfile-editor");
     editor.classList.toggle("hidden");
     if (!editor.classList.contains("hidden")) {

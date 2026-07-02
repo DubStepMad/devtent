@@ -30,6 +30,18 @@ The **dashboard** is your home base — projects, stack status, and getting star
 - **Import wizard** — copy projects, databases, and runtimes from an existing local environment
 - **Tray + dashboard** — quick panel for day-to-day work
 
+## Features (v1.1)
+
+- **SSL workflow** — Enable HTTPS per domain from the UI; Apache and Nginx vhosts regenerate automatically with `:443` blocks
+- **Environment health** — Dashboard panel surfaces missing runtimes, stopped services, backup status, and SSL gaps with quick-fix links
+- **MySQL restore** — Restore from saved backups in Settings or via `devtent mysql restore`
+- **Portability** — Export/import full environment bundles (projects, profiles, data, configs)
+- **Node version management** — Install and switch Node 18/20/21/22 per profile (UI + CLI)
+- **Enhanced log viewer** — Search, PHP file-location parsing, auto-refresh, and open-in-editor
+- **Profile optional services** — Toggle Redis and Mailpit per profile; Services tab reflects profile stack only
+- **Onboarding wizard** — Guided first-project setup after initial install
+- **Graceful quit** — Optional stop-all-services on app exit (Settings)
+
 ## Features (v1.0)
 
 - **Recommended stack** — On setup, install PHP 8.3, Nginx, MySQL 8.4, and mkcert in one flow; enable services and start them automatically.
@@ -58,7 +70,7 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 
 ### End users — Windows installer
 
-Download **DevTent Setup 1.0.0.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
+Download **DevTent Setup 1.1.0.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
 
 > **SmartScreen notice:** The installer is **unsigned** in v1.0. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
 
@@ -88,7 +100,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.0.0.exe`
+Output: `packages/desktop/release/DevTent Setup 1.1.0.exe`
 
 ### CLI (optional)
 
@@ -124,6 +136,12 @@ devtent stop [service...]        # Stop services (backs up MySQL first)
 devtent status                   # Show running services & URLs
 devtent mysql backup             # Manual mysqldump (MySQL must be running)
 devtent mysql list-backups       # List saved backups
+devtent mysql restore <id>       # Restore from a backup
+devtent open [view]              # Open desktop app (services, settings, …)
+devtent health                   # Environment health summary
+devtent export <dest>            # Export environment bundle
+devtent import-bundle <folder>   # Import export bundle
+devtent profile create <name> --redis --mailpit  # Optional profile services
 devtent profile list             # List profiles
 devtent profile use <name>       # Switch active profile
 devtent vhost sync               # Regenerate virtual hosts from www/
@@ -131,6 +149,9 @@ devtent ssl enable <domain>      # Generate mkcert certificate
 devtent quick-add list           # List installable runtimes
 devtent quick-add <name>         # Install from manifests/
 devtent quick-app <template>     # Scaffold a new project
+devtent node list                  # List installable Node versions
+devtent node install <version>     # Install Node (e.g. node-22)
+devtent node use <version>         # Set active Node for profile
 devtent migrate import --from <path>   # Import from existing environment folder
 ```
 

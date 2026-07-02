@@ -31,7 +31,16 @@ import {
   installRecommendedStack,
   backupMysql,
   listMysqlBackups,
+  restoreMysql,
+  exportEnvironment,
+  importEnvironmentBundle,
+  getEnvironmentHealth,
+  listNodeVersions,
+  installNodeVersion,
+  applyNodeVersionToActiveProfile,
 } from "@devtent/core";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
@@ -46,6 +55,33 @@ function resolveRoot(provided?: string): string {
 
 function log(msg: string): void {
   console.log(msg);
+}
+
+function parseProfileServices(opts: { redis?: boolean; mailpit?: boolean }) {
+  if (opts.redis === undefined && opts.mailpit === undefined) return undefined;
+  const services: ("redis" | "mailpit")[] = [];
+  if (opts.redis) services.push("redis");
+  if (opts.mailpit) services.push("mailpit");
+  return services;
+}
+
+function openDesktopApp(root: string, view?: string): void {
+  const candidates = [
+    path.join(root, "DevTent.exe"),
+    path.join(path.dirname(root), "DevTent.exe"),
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Programs", "DevTent", "DevTent.exe")
+      : "",
+  ].filter(Boolean);
+  const exe = candidates.find((p) => existsSync(p));
+  const args = view ? [`--open=${view}`] : [];
+  if (exe) {
+    spawn(exe, args, { detached: true, stdio: "ignore" }).unref();
+    log(`✓ Opened DevTent${view ? ` (${view})` : ""}`);
+    return;
+  }
+  log("DevTent.exe not found near your root folder.");
+  log("Install the desktop app, or run: npm start");
 }
 
 const require = createRequire(import.meta.url);
@@ -176,6 +212,8 @@ profileCmd
   .option("--php <version>", "PHP manifest id (e.g. php-8.4)", "php-8.3")
   .option("--web-server <server>", "nginx or apache", "nginx")
   .option("--database <db>", "mysql, postgresql, or none", "mysql")
+  .option("--redis", "Include Redis in profile services")
+  .option("--mailpit", "Include Mailpit in profile services")
   .option("-d, --description <text>", "Profile description")
   .action(
     async (
@@ -186,6 +224,8 @@ profileCmd
         webServer?: "nginx" | "apache";
         database?: "mysql" | "postgresql" | "none";
         description?: string;
+        redis?: boolean;
+        mailpit?: boolean;
       }
     ) => {
       const root = resolveRoot(opts.root);
@@ -195,6 +235,7 @@ profileCmd
         phpVersion: opts.php,
         webServer: opts.webServer,
         database: opts.database,
+        services: parseProfileServices(opts) ?? [],
       });
       log(`✓ Created profile: ${profile.name}`);
     }
@@ -207,6 +248,8 @@ profileCmd
   .option("--php <version>", "PHP manifest id (e.g. php-8.4)")
   .option("--web-server <server>", "nginx or apache")
   .option("--database <db>", "mysql, postgresql, or none")
+  .option("--redis", "Include Redis in profile services")
+  .option("--mailpit", "Include Mailpit in profile services")
   .option("-d, --description <text>", "Profile description")
   .action(
     async (
@@ -217,15 +260,22 @@ profileCmd
         webServer?: "nginx" | "apache";
         database?: "mysql" | "postgresql" | "none";
         description?: string;
+        redis?: boolean;
+        mailpit?: boolean;
       }
     ) => {
       const root = resolveRoot(opts.root);
-      const profile = await updateProfile(root, name, {
+      const patch = {
         description: opts.description,
         phpVersion: opts.php,
         webServer: opts.webServer,
         database: opts.database,
-      });
+      };
+      const services = parseProfileServices(opts);
+      if (services !== undefined) {
+        Object.assign(patch, { services });
+      }
+      const profile = await updateProfile(root, name, patch);
       log(`✓ Updated profile: ${profile.name}`);
     }
   );
@@ -373,14 +423,96 @@ program
   });
 
 program
+  .command("open [view]")
+  .description("Open the DevTent desktop app (optional view: services, settings, projects, …)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action((view: string | undefined, opts: { root?: string }) => {
+    openDesktopApp(resolveRoot(opts.root), view);
+  });
+
+program
+  .command("health")
+  .description("Show environment health summary")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const items = await getEnvironmentHealth(root);
+    for (const item of items) {
+      const prefix = item.severity === "ok" ? "✓" : item.severity === "warn" ? "!" : "✕";
+      log(`${prefix} ${item.title}${item.detail ? ` — ${item.detail}` : ""}`);
+    }
+  });
+
+program
+  .command("export <dest>")
+  .description("Export environment bundle (www, profiles, data, configs)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--include-bin", "Include bin/ runtimes (large)")
+  .action(async (dest: string, opts: { root?: string; includeBin?: boolean }) => {
+    const root = resolveRoot(opts.root);
+    const result = await exportEnvironment(root, path.resolve(dest), {
+      includeBin: opts.includeBin,
+    });
+    log(`✓ Exported to ${result.destPath}`);
+    log(`  Included: ${result.included.join(", ")}`);
+  });
+
+program
+  .command("import-bundle <bundle>")
+  .description("Import a DevTent export bundle")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (bundle: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const result = await importEnvironmentBundle(root, path.resolve(bundle));
+    log(`✓ Imported: ${result.imported.join(", ")}`);
+  });
+
+program
   .command("dashboard")
-  .description("Print dashboard URL (desktop app)")
-  .action(() => {
-    log("DevTent Desktop: npm run dev (from repo root)");
-    log("Or install the desktop app when releases are available.");
+  .description("Open the DevTent desktop dashboard")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action((opts: { root?: string }) => {
+    openDesktopApp(resolveRoot(opts.root));
   });
 
 const stackCmd = program.command("stack").description("Stack presets");
+
+const nodeCmd = program.command("node").description("Node.js version management");
+
+nodeCmd
+  .command("list")
+  .description("List installable Node versions")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const versions = await listNodeVersions(root, MANIFESTS_DIR);
+    for (const v of versions) {
+      const flags = [v.installed ? "installed" : "not installed", v.active ? "active" : ""]
+        .filter(Boolean)
+        .join(", ");
+      log(`  ${v.label.padEnd(16)} ${flags}`);
+    }
+  });
+
+nodeCmd
+  .command("install <version>")
+  .description("Install a Node version (e.g. node-22)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (version: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const installPath = await installNodeVersion(root, MANIFESTS_DIR, version, log);
+    log(`✓ Installed ${version} → ${installPath}`);
+  });
+
+nodeCmd
+  .command("use <version>")
+  .description("Set active Node version for the current profile")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (version: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const profile = await applyNodeVersionToActiveProfile(root, version);
+    log(`✓ Active profile "${profile.name}" now uses ${version}`);
+  });
 
 stackCmd
   .command("install")
@@ -415,6 +547,21 @@ mysqlCmd
       return;
     }
     log(`✓ Backup: ${backup.path}`);
+  });
+
+mysqlCmd
+  .command("restore <backupId>")
+  .description("Restore MySQL from a backup (MySQL must be running)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (backupId: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const result = await restoreMysql(root, backupId, log);
+    if (!result.success) {
+      log(result.message);
+      process.exitCode = 1;
+      return;
+    }
+    log(`✓ ${result.message}`);
   });
 
 mysqlCmd

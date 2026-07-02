@@ -32,6 +32,7 @@ const api = {
     phpVersion?: string;
     webServer?: "nginx" | "apache";
     database?: "mysql" | "postgresql" | "none";
+    services?: ("redis" | "mailpit")[];
   }) => ipcRenderer.invoke("devtent:createProfile", input),
   updateProfile: (
     name: string,
@@ -40,6 +41,7 @@ const api = {
       phpVersion?: string;
       webServer?: "nginx" | "apache";
       database?: "mysql" | "postgresql" | "none";
+      services?: ("redis" | "mailpit")[];
     }
   ) => ipcRenderer.invoke("devtent:updateProfile", name, patch),
   deleteProfile: (name: string) => ipcRenderer.invoke("devtent:deleteProfile", name),
@@ -48,6 +50,16 @@ const api = {
   installRecommendedStack: () => ipcRenderer.invoke("devtent:installRecommendedStack"),
   backupMysql: () => ipcRenderer.invoke("devtent:backupMysql"),
   listMysqlBackups: () => ipcRenderer.invoke("devtent:listMysqlBackups"),
+  restoreMysql: (backupId: string) => ipcRenderer.invoke("devtent:restoreMysql", backupId),
+  getEnvironmentHealth: () => ipcRenderer.invoke("devtent:getEnvironmentHealth"),
+  setStopServicesOnQuit: (enabled: boolean) =>
+    ipcRenderer.invoke("devtent:setStopServicesOnQuit", enabled),
+  pickExportFolder: () => ipcRenderer.invoke("devtent:pickExportFolder"),
+  pickImportBundle: () => ipcRenderer.invoke("devtent:pickImportBundle"),
+  exportEnvironment: (destPath: string, options?: { includeBin?: boolean }) =>
+    ipcRenderer.invoke("devtent:exportEnvironment", destPath, options),
+  importEnvironmentBundle: (bundlePath: string) =>
+    ipcRenderer.invoke("devtent:importEnvironmentBundle", bundlePath),
   listTemplates: () => ipcRenderer.invoke("devtent:listTemplates"),
   createProject: (template: string, name: string) =>
     ipcRenderer.invoke("devtent:createProject", template, name),
@@ -64,6 +76,15 @@ const api = {
   listLogs: () => ipcRenderer.invoke("devtent:listLogs"),
   readLogTail: (fileName: string, lines?: number) =>
     ipcRenderer.invoke("devtent:readLogTail", fileName, lines),
+  searchLogs: (query: string, fileName?: string) =>
+    ipcRenderer.invoke("devtent:searchLogs", query, fileName),
+  openLogInEditor: (filePath: string, line?: number) =>
+    ipcRenderer.invoke("devtent:openLogInEditor", filePath, line),
+  listNodeVersions: () => ipcRenderer.invoke("devtent:listNodeVersions"),
+  installNodeVersion: (nodeVersion: string) =>
+    ipcRenderer.invoke("devtent:installNodeVersion", nodeVersion),
+  setActiveNodeVersion: (nodeVersion: string | null) =>
+    ipcRenderer.invoke("devtent:setActiveNodeVersion", nodeVersion),
   checkForUpdates: (options?: { respectSkip?: boolean }) =>
     ipcRenderer.invoke("devtent:checkForUpdates", options),
   skipUpdateVersion: (version: string) => ipcRenderer.invoke("devtent:skipUpdateVersion", version),

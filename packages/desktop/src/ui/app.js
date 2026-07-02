@@ -9,6 +9,7 @@ const TITLES = {
   dashboard: "Dashboard",
   services: "Services",
   logs: "Logs",
+  node: "Node",
   projects: "Projects",
   "quick-add": "Quick Add",
   "quick-app": "Quick App",
@@ -16,13 +17,69 @@ const TITLES = {
   settings: "Settings",
 };
 
+function projectUrl(vhost) {
+  return `${vhost.ssl ? "https" : "http"}://${vhost.domain}`;
+}
+
+function markOnboardingStep(step, state) {
+  const el = document.getElementById(`onboarding-step-${step}`);
+  if (!el) return;
+  el.classList.remove("done", "active", "failed");
+  if (state) el.classList.add(state);
+}
+
+function showOnboarding(show) {
+  document.getElementById("onboarding-overlay")?.classList.toggle("hidden", !show);
+}
+
+async function runOnboarding() {
+  const btn = document.getElementById("btn-onboarding-run");
+  btn.disabled = true;
+  try {
+    markOnboardingStep(1, "active");
+    await withLoading(() => api.createProject("php", "demo"), "Creating demo project…");
+    markOnboardingStep(1, "done");
+
+    markOnboardingStep(2, "active");
+    handleHostsSyncResult(await api.syncVhosts());
+    markOnboardingStep(2, "done");
+
+    markOnboardingStep(3, "active");
+    handleHostsSyncResult(await api.elevateHostsSync());
+    markOnboardingStep(3, "done");
+
+    markOnboardingStep(4, "active");
+    const state = await api.getState();
+    const demo = state.virtualHosts?.find((v) => v.name === "demo");
+    if (demo) await api.openExternal(projectUrl(demo));
+    markOnboardingStep(4, "done");
+    showToast("Demo site ready at demo.test", "success");
+    showOnboarding(false);
+    localStorage.setItem("devtent-onboarding-done", "1");
+    await refreshAll();
+  } catch (err) {
+    showToast(err.message || String(err), "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function maybeShowOnboarding(state) {
+  if (localStorage.getItem("devtent-onboarding-done")) return;
+  if (!state?.virtualHosts?.length) {
+    showOnboarding(true);
+  }
+}
 let toastTimer = null;
 let setupActive = false;
 let lastSetupPercent = 0;
 let pendingUpdate = null;
 let updateInstalling = false;
 let logFollowTimer = null;
+let logListRefreshTimer = null;
+let logSearchTimer = null;
 let selectedLogFile = "";
+let lastLogFileSignature = "";
 
 /** Lowercase Windows paths for display (e.g. c:\devtent\www). */
 function formatPath(p) {
@@ -230,14 +287,130 @@ async function refreshDashboard(state) {
   list.innerHTML = "";
   if (!state.virtualHosts?.length) {
     list.innerHTML = '<li class="empty-hint">No projects yet</li>';
+  } else {
+    state.virtualHosts.slice(0, 5).forEach((v) => {
+      const li = document.createElement("li");
+      const url = projectUrl(v);
+      li.innerHTML = `<button class="link-btn" data-url="${url}">${url}${v.ssl ? " 🔒" : ""}</button>`;
+      li.querySelector("button").onclick = () => api.openExternal(url);
+      list.appendChild(li);
+    });
+  }
+
+  await refreshHealth();
+}
+
+async function refreshHealth() {
+  const list = document.getElementById("health-list");
+  if (!list || !api?.getEnvironmentHealth) return;
+  const items = await api.getEnvironmentHealth();
+  if (!items.length) {
+    list.innerHTML = "<li>No health data yet.</li>";
     return;
   }
-  state.virtualHosts.slice(0, 5).forEach((v) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<button class="link-btn" data-url="http://${v.domain}">${v.domain}</button>`;
-    li.querySelector("button").onclick = () => api.openExternal(`http://${v.domain}`);
-    list.appendChild(li);
+  list.innerHTML = items
+    .map((item) => {
+      const icon = item.severity === "ok" ? "✓" : item.severity === "warn" ? "!" : "✕";
+      const detail = item.detail ? `<span class="health-detail">${escapeHtml(item.detail)}</span>` : "";
+      const action = item.action
+        ? ` <button type="button" class="link-btn health-action" data-view="${item.action}">Fix</button>`
+        : "";
+      return `<li class="health-item health-${item.severity}"><span class="health-icon">${icon}</span><span class="health-title">${escapeHtml(item.title)}</span>${detail}${action}</li>`;
+    })
+    .join("");
+  list.querySelectorAll(".health-action").forEach((btn) => {
+    btn.onclick = () => {
+      showView(btn.dataset.view);
+      if (btn.dataset.view === "services") void refreshServices();
+      if (btn.dataset.view === "settings") void api.getRoot().then((r) => refreshSettings(r.root));
+    };
   });
+}
+
+function renderLogViewerContent(viewer, content, searchQuery = "") {
+  if (!viewer) return;
+  const q = searchQuery.trim().toLowerCase();
+  const lines = (content || "(empty)").split(/\r?\n/);
+  viewer.innerHTML = lines
+    .map((line, index) => {
+      const lineNum = index + 1;
+      let html = escapeHtml(line);
+      if (q && line.toLowerCase().includes(q)) {
+        const re = new RegExp(`(${escapeRegex(q)})`, "ig");
+        html = html.replace(re, '<mark class="log-highlight">$1</mark>');
+      }
+      const locMatch = line.match(
+        /([A-Za-z]:\\[^\s:(]+\.(?:php|js|ts|tsx|jsx|vue)|\/[^\s:(]+\.(?:php|js|ts|tsx|jsx|vue))(?:[:(](\d+)|\s+on\s+line\s+(\d+))/i
+      );
+      let openBtn = "";
+      if (locMatch) {
+        const filePath = locMatch[1];
+        const lineNo = Number(locMatch[2] || locMatch[3] || 1);
+        openBtn = `<button type="button" class="link-btn log-open-ide" data-file="${escapeHtml(filePath)}" data-line="${lineNo}">Open in editor</button>`;
+      }
+      return `<div class="log-line" data-line="${lineNum}"><span class="log-line-no">${lineNum}</span><span class="log-line-text">${html}</span>${openBtn}</div>`;
+    })
+    .join("");
+  viewer.querySelectorAll(".log-open-ide").forEach((btn) => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const result = await api.openLogInEditor(btn.dataset.file, Number(btn.dataset.line));
+      showToast(result.message, result.opened ? "success" : "error");
+    };
+  });
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function runLogSearch() {
+  const query = document.getElementById("log-search-input")?.value?.trim() ?? "";
+  const resultsEl = document.getElementById("log-search-results");
+  if (!resultsEl || !api?.searchLogs) return;
+
+  if (!query) {
+    resultsEl.classList.add("hidden");
+    resultsEl.innerHTML = "";
+    const viewer = document.getElementById("log-viewer");
+    if (viewer && selectedLogFile) {
+      const content = await api.readLogTail(selectedLogFile, 500);
+      renderLogViewerContent(viewer, content);
+    }
+    return;
+  }
+
+  const matches = await api.searchLogs(query, selectedLogFile || undefined);
+  if (!matches.length) {
+    resultsEl.classList.remove("hidden");
+    resultsEl.innerHTML = "<li class='empty-hint'>No matches found.</li>";
+    return;
+  }
+
+  resultsEl.classList.remove("hidden");
+  resultsEl.innerHTML = matches
+    .slice(0, 50)
+    .map(
+      (m) =>
+        `<li><button type="button" class="log-search-hit" data-file="${escapeHtml(m.fileName)}" data-line="${m.lineNumber}"><strong>${escapeHtml(m.fileName)}:${m.lineNumber}</strong> ${escapeHtml(m.line.slice(0, 120))}</button></li>`
+    )
+    .join("");
+
+  resultsEl.querySelectorAll(".log-search-hit").forEach((btn) => {
+    btn.onclick = async () => {
+      selectedLogFile = btn.dataset.file;
+      document.getElementById("log-file-select").value = selectedLogFile;
+      await refreshLogs(selectedLogFile);
+      const lineEl = document.querySelector(`.log-line[data-line="${btn.dataset.line}"]`);
+      lineEl?.scrollIntoView({ block: "center" });
+      lineEl?.classList.add("log-line-focus");
+      setTimeout(() => lineEl?.classList.remove("log-line-focus"), 2000);
+    };
+  });
+}
+
+function logFilesSignature(files) {
+  return files.map((f) => `${f.name}:${f.sizeBytes}:${f.modifiedAt}`).join("|");
 }
 
 async function refreshLogs(fileName = selectedLogFile) {
@@ -246,26 +419,47 @@ async function refreshLogs(fileName = selectedLogFile) {
   if (!select || !viewer || !api?.listLogs) return;
 
   const files = await api.listLogs();
+  const signature = logFilesSignature(files);
+  const listChanged = signature !== lastLogFileSignature;
+  lastLogFileSignature = signature;
+
   const current = select.value;
-  select.innerHTML =
-    '<option value="">Select a log file…</option>' +
-    files
-      .map(
-        (f) =>
-          `<option value="${escapeHtml(f.name)}">${escapeHtml(f.label ?? f.name)} (${Math.max(1, Math.round(f.sizeBytes / 1024))} KB)</option>`
-      )
-      .join("");
+  if (listChanged) {
+    select.innerHTML =
+      '<option value="">Select a log file…</option>' +
+      files
+        .map(
+          (f) =>
+            `<option value="${escapeHtml(f.name)}">${escapeHtml(f.label ?? f.name)} (${Math.max(1, Math.round(f.sizeBytes / 1024))} KB)</option>`
+        )
+        .join("");
+  }
 
   const target = fileName || current;
+  const searchQuery = document.getElementById("log-search-input")?.value ?? "";
   if (target && files.some((f) => f.name === target)) {
     select.value = target;
     selectedLogFile = target;
     const content = await api.readLogTail(target, 500);
-    viewer.textContent = content || "(empty)";
+    renderLogViewerContent(viewer, content, searchQuery);
     viewer.scrollTop = viewer.scrollHeight;
   } else if (!files.length) {
     viewer.textContent = "No log files yet — start a service to generate logs.";
   }
+}
+
+function stopLogListRefresh() {
+  if (logListRefreshTimer) {
+    clearInterval(logListRefreshTimer);
+    logListRefreshTimer = null;
+  }
+}
+
+function startLogListRefresh() {
+  stopLogListRefresh();
+  logListRefreshTimer = setInterval(() => {
+    void refreshLogs(selectedLogFile);
+  }, 2000);
 }
 
 function stopLogFollow() {
@@ -281,6 +475,60 @@ function startLogFollow() {
   logFollowTimer = setInterval(() => {
     void refreshLogs(selectedLogFile);
   }, 2000);
+}
+
+async function refreshNode() {
+  const tbody = document.getElementById("node-versions-list");
+  const empty = document.getElementById("node-empty");
+  if (!tbody || !api?.listNodeVersions) return;
+
+  const versions = await api.listNodeVersions();
+  tbody.innerHTML = "";
+  if (!versions.length) {
+    empty?.classList.remove("hidden");
+    return;
+  }
+  empty?.classList.add("hidden");
+
+  versions.forEach((v) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(v.label)}</td>
+      <td>${v.installed ? "Yes" : "—"}</td>
+      <td><input type="radio" name="active-node" value="${escapeHtml(v.id)}" ${v.active ? "checked" : ""} ${!v.installed ? "disabled" : ""}></td>
+      <td></td>`;
+    const actionCell = tr.querySelector("td:last-child");
+    if (v.installed) {
+      actionCell.textContent = "Installed";
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn sm primary";
+      btn.textContent = "Install";
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = "Installing…";
+        try {
+          await withLoading(() => api.installNodeVersion(v.id), `Installing ${v.label}…`);
+          showToast(`${v.label} installed`, "success");
+          await refreshNode();
+          await refreshManifests();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Install";
+          showToast(err.message || String(err), "error");
+        }
+      };
+      actionCell.appendChild(btn);
+    }
+    tr.querySelector('input[type="radio"]')?.addEventListener("change", async (e) => {
+      if (!e.target.checked) return;
+      await withLoading(() => api.setActiveNodeVersion(v.id), `Switching to ${v.label}…`);
+      showToast(`Active Node: ${v.label}`, "success");
+      await refreshNode();
+    });
+    tbody.appendChild(tr);
+  });
 }
 
 async function confirmAndSwitchProfile(targetName) {
@@ -440,20 +688,25 @@ async function refreshProjects() {
 
   state.virtualHosts.forEach((v) => {
     const li = document.createElement("li");
+    const url = projectUrl(v);
     li.innerHTML = `
       <div class="project-info">
-        <div class="project-name">${v.name}</div>
-        <div class="project-url">${v.domain}</div>
+        <div class="project-name">${v.name}${v.ssl ? " 🔒" : ""}</div>
+        <div class="project-url">${url}</div>
       </div>
       <div class="project-actions">
         <button class="btn sm primary btn-open">Open</button>
-        <button class="btn sm secondary btn-ssl">SSL</button>
+        <button class="btn sm secondary btn-ssl">${v.ssl ? "Renew SSL" : "SSL"}</button>
         <button class="btn sm secondary btn-folder">Folder</button>
       </div>`;
-    li.querySelector(".btn-open").onclick = () => api.openExternal(`http://${v.domain}`);
+    li.querySelector(".btn-open").onclick = () => api.openExternal(url);
     li.querySelector(".btn-ssl").onclick = async () => {
       const result = await withLoading(() => api.enableSsl(v.domain), "Generating certificate…");
       showToast(result.message, result.success ? "success" : "error");
+      if (result.success) {
+        await refreshProjects();
+        await refreshAll();
+      }
     };
     li.querySelector(".btn-folder").onclick = () => api.openPath(`www/${v.name}`);
     list.appendChild(li);
@@ -503,7 +756,40 @@ function formatProfileStack(profile) {
   if (profile.phpVersion) parts.push(profile.phpVersion.replace(/^php-/, "PHP "));
   if (profile.webServer) parts.push(profile.webServer);
   if (profile.database && profile.database !== "none") parts.push(profile.database);
+  for (const id of profile.services ?? []) {
+    parts.push(id);
+  }
   return parts.join(" · ") || "Stack not configured";
+}
+
+function syncProfileDatabaseToggle() {
+  const enabled = document.getElementById("profile-service-database")?.checked ?? true;
+  const typeSelect = document.getElementById("profile-database-type");
+  if (typeSelect) typeSelect.disabled = !enabled;
+}
+
+function readProfileServicesFromEditor() {
+  const databaseEnabled = document.getElementById("profile-service-database")?.checked ?? true;
+  const database = databaseEnabled
+    ? document.getElementById("profile-database-type")?.value || "mysql"
+    : "none";
+  const services = [];
+  if (document.getElementById("profile-service-redis")?.checked) services.push("redis");
+  if (document.getElementById("profile-service-mailpit")?.checked) services.push("mailpit");
+  return { database, services };
+}
+
+function applyProfileServicesToEditor(profile) {
+  const hasDatabase = !profile.database || profile.database !== "none";
+  const databaseToggle = document.getElementById("profile-service-database");
+  const databaseType = document.getElementById("profile-database-type");
+  if (databaseToggle) databaseToggle.checked = hasDatabase;
+  if (databaseType) databaseType.value = hasDatabase ? profile.database || "mysql" : "mysql";
+  const redisToggle = document.getElementById("profile-service-redis");
+  const mailpitToggle = document.getElementById("profile-service-mailpit");
+  if (redisToggle) redisToggle.checked = profile.services?.includes("redis") ?? false;
+  if (mailpitToggle) mailpitToggle.checked = profile.services?.includes("mailpit") ?? false;
+  syncProfileDatabaseToggle();
 }
 
 async function populatePhpVersionSelect(selected) {
@@ -546,7 +832,7 @@ async function showProfileEditor(mode, profile) {
     nameInput.disabled = false;
     document.getElementById("profile-description").value = "";
     document.getElementById("profile-web-server").value = "nginx";
-    document.getElementById("profile-database").value = "mysql";
+    applyProfileServicesToEditor({ database: "mysql", services: [] });
     await populatePhpVersionSelect("php-8.3");
     return;
   }
@@ -558,16 +844,18 @@ async function showProfileEditor(mode, profile) {
   nameInput.disabled = true;
   document.getElementById("profile-description").value = profile.description || "";
   document.getElementById("profile-web-server").value = profile.webServer || "nginx";
-  document.getElementById("profile-database").value = profile.database || "mysql";
+  applyProfileServicesToEditor(profile);
   await populatePhpVersionSelect(profile.phpVersion || "php-8.3");
 }
 
 async function saveProfileEditor() {
+  const { database, services } = readProfileServicesFromEditor();
   const payload = {
     description: document.getElementById("profile-description").value.trim(),
     phpVersion: document.getElementById("profile-php-version").value,
     webServer: document.getElementById("profile-web-server").value,
-    database: document.getElementById("profile-database").value,
+    database,
+    services,
   };
 
   if (profileEditorMode === "create") {
@@ -655,6 +943,9 @@ async function refreshProfiles() {
 async function refreshSettings(root) {
   document.getElementById("settings-root").textContent = formatPath(root);
   document.getElementById("statusbar-root").textContent = formatPath(root);
+  const rootStatus = await api.getRoot();
+  const stopOnQuit = document.getElementById("settings-stop-on-quit");
+  if (stopOnQuit) stopOnQuit.checked = rootStatus.stopServicesOnQuit !== false;
   await refreshMysqlBackups();
   await refreshAppRollback();
   await refreshAboutVersion();
@@ -692,9 +983,19 @@ async function refreshMysqlBackups() {
     .map((b) => {
       const when = new Date(b.createdAt).toLocaleString();
       const sizeKb = Math.max(1, Math.round(b.sizeBytes / 1024));
-      return `<li>${when} · ${b.reason} · ${sizeKb} KB</li>`;
+      return `<li class="backup-row">${when} · ${b.reason} · ${sizeKb} KB <button type="button" class="link-btn btn-restore-mysql" data-id="${escapeHtml(b.id)}">Restore</button></li>`;
     })
     .join("");
+  list.querySelectorAll(".btn-restore-mysql").forEach((btn) => {
+    btn.onclick = async () => {
+      if (!confirm(`Restore MySQL from backup ${btn.dataset.id}? This overwrites current database data.`)) return;
+      const result = await withLoading(
+        () => api.restoreMysql(btn.dataset.id),
+        "Restoring MySQL…"
+      );
+      showToast(result.message, result.success ? "success" : "error");
+    };
+  });
 }
 
 async function refreshAll() {
@@ -989,6 +1290,7 @@ async function boot() {
       await refreshTemplates();
       await refreshProfiles();
       await refreshProjects();
+      maybeShowOnboarding(await api.getState());
     } catch (err) {
       showSetupProgress(false);
       showToast(err.message || String(err), "error");
@@ -1006,9 +1308,12 @@ async function boot() {
       if (view === "logs") {
         await refreshLogs();
         startLogFollow();
+        startLogListRefresh();
       } else {
         stopLogFollow();
+        stopLogListRefresh();
       }
+      if (view === "node") await refreshNode();
       if (view === "projects") await refreshProjects();
       if (view === "quick-add") await refreshManifests();
       if (view === "quick-app") await refreshTemplates();
@@ -1115,9 +1420,17 @@ async function boot() {
     selectedLogFile = e.target.value;
     await refreshLogs(selectedLogFile);
     startLogFollow();
+    void runLogSearch();
   });
 
   document.getElementById("btn-log-refresh")?.addEventListener("click", () => refreshLogs());
+
+  document.getElementById("log-search-input")?.addEventListener("input", () => {
+    if (logSearchTimer) clearTimeout(logSearchTimer);
+    logSearchTimer = setTimeout(() => {
+      void runLogSearch();
+    }, 250);
+  });
 
   document.getElementById("log-follow")?.addEventListener("change", () => {
     if (document.getElementById("log-follow").checked) startLogFollow();
@@ -1211,6 +1524,48 @@ async function boot() {
     await refreshMysqlBackups();
   });
 
+  document.getElementById("btn-open-mysql-backups")?.addEventListener("click", () => {
+    api.openPath("data/backups/mysql");
+  });
+
+  document.getElementById("settings-stop-on-quit")?.addEventListener("change", async (e) => {
+    await api.setStopServicesOnQuit(e.target.checked);
+    showToast(e.target.checked ? "Services will stop on quit" : "Fast quit enabled", "success");
+  });
+
+  document.getElementById("btn-export-environment")?.addEventListener("click", async () => {
+    const dest = await api.pickExportFolder();
+    if (!dest) return;
+    const includeBin = confirm("Include bin/ runtimes? (Large — usually reinstall via Quick Add instead)");
+    const result = await withLoading(
+      () => api.exportEnvironment(dest, { includeBin }),
+      "Exporting environment…"
+    );
+    document.getElementById("portability-result").textContent = `Exported to ${formatPath(result.destPath)}: ${result.included.join(", ")}`;
+    showToast("Environment exported", "success");
+  });
+
+  document.getElementById("btn-import-environment")?.addEventListener("click", async () => {
+    const bundle = await api.pickImportBundle();
+    if (!bundle) return;
+    if (!confirm("Import will merge bundle contents into your DevTent folder. Continue?")) return;
+    const result = await withLoading(
+      () => api.importEnvironmentBundle(bundle),
+      "Importing bundle…"
+    );
+    document.getElementById("portability-result").textContent = `Imported: ${result.imported.join(", ")}`;
+    showToast("Environment imported", "success");
+    await refreshAll();
+  });
+
+  document.getElementById("btn-onboarding-run")?.addEventListener("click", () => {
+    void runOnboarding();
+  });
+  document.getElementById("btn-onboarding-skip")?.addEventListener("click", () => {
+    localStorage.setItem("devtent-onboarding-done", "1");
+    showOnboarding(false);
+  });
+
   document.getElementById("btn-new-profile")?.addEventListener("click", () => {
     void showProfileEditor("create");
   });
@@ -1218,6 +1573,7 @@ async function boot() {
     void saveProfileEditor();
   });
   document.getElementById("btn-cancel-profile")?.addEventListener("click", hideProfileEditor);
+  document.getElementById("profile-service-database")?.addEventListener("change", syncProfileDatabaseToggle);
 
   document.getElementById("btn-migrate-laragon-browse").onclick = async () => {
     const picked = await api.pickLaragonRoot();

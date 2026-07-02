@@ -11,6 +11,8 @@ export interface DevTentConfig {
 export interface SslConfig {
   enabled: boolean;
   mkcertPath: string;
+  /** Domains with generated mkcert certificates */
+  domains?: string[];
 }
 
 export interface PathsConfig {
@@ -33,6 +35,8 @@ export interface ServiceDefinition extends ServiceConfig {
   name: string;
 }
 
+export type ProfileOptionalService = "redis" | "mailpit";
+
 export interface Profile {
   name: string;
   description?: string;
@@ -42,6 +46,11 @@ export interface Profile {
   php?: string;
   webServer?: "nginx" | "apache";
   database?: "mysql" | "postgresql" | "none";
+  /** Optional add-on services included in this profile's Services tab */
+  services?: ProfileOptionalService[];
+  /** Quick Add manifest id, e.g. node-22 */
+  nodeVersion?: string;
+  /** CLI binary path — derived from nodeVersion when saving */
   node?: string;
   env?: Record<string, string>;
 }

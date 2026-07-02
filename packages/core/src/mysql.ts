@@ -160,6 +160,42 @@ export async function listMysqlBackups(root: string): Promise<MysqlBackupInfo[]>
   return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export async function restoreMysql(
+  root: string,
+  backupId: string,
+  onProgress?: (msg: string) => void
+): Promise<{ success: boolean; message: string }> {
+  const log = onProgress ?? (() => {});
+  const backups = await listMysqlBackups(root);
+  const backup = backups.find((b) => b.id === backupId);
+  if (!backup) {
+    return { success: false, message: `Backup "${backupId}" not found` };
+  }
+
+  const sqlPath = path.join(backup.path, "all-databases.sql");
+  if (!(await pathExists(sqlPath))) {
+    return { success: false, message: `SQL dump missing in backup ${backupId}` };
+  }
+
+  const mysql = await findMysqlBinary(root, "mysql.exe");
+  if (!mysql) {
+    return { success: false, message: "mysql.exe not found — install MySQL via Quick Add first" };
+  }
+
+  if (!isServiceRunning("mysql")) {
+    return { success: false, message: "MySQL must be running to restore a backup" };
+  }
+
+  log(`Restoring MySQL from ${backup.id}…`);
+  const cmd =
+    process.platform === "win32"
+      ? `type "${sqlPath}" | "${mysql}" -uroot`
+      : `"${mysql}" -uroot < "${sqlPath}"`;
+  await runCommand(root, cmd);
+  log("MySQL restore completed");
+  return { success: true, message: `Restored MySQL from backup ${backup.id}` };
+}
+
 export async function pruneMysqlBackups(root: string, keepDays = BACKUP_RETENTION_DAYS): Promise<void> {
   const backups = await listMysqlBackups(root);
   const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;

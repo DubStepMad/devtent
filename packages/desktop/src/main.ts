@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 
 const isE2eSmoke = process.argv.includes("--e2e-smoke");
 const wantsQuit = process.argv.includes("--quit");
+const openViewArg = process.argv.find((a) => a.startsWith("--open="))?.slice("--open=".length);
 
 function shouldBlockForInstallLock(): boolean {
   return !isE2eSmoke && !wantsQuit && isInstallInProgressSync(getInstallRootEarly());
@@ -29,6 +30,7 @@ initAppLogger();
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+let gracefulShutdownDone = false;
 
 // Exit before Electron boots when the NSIS installer holds the lock file.
 if (shouldBlockForInstallLock()) {
@@ -135,6 +137,9 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
     }
     applyWindowMode(isSetup ? "setup" : "dashboard");
     mainWindow?.show();
+    if (openViewArg && !isSetup) {
+      mainWindow?.webContents.send("devtent:navigate", openViewArg);
+    }
   });
   mainWindow.on("closed", () => {
     registerMainWindow(null);
@@ -227,12 +232,11 @@ app.on("window-all-closed", () => {
   if (isQuitting) app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   isQuitting = true;
   destroyTray();
   const installerPath = takePendingInstallerPath();
   if (installerPath && process.platform === "win32") {
-    // Wait for this process to exit before starting Setup — avoids DevTent + Setup running together.
     const launcher = path.join(tmpdir(), `devtent-run-installer-${process.pid}.cmd`);
     writeFileSync(
       launcher,
@@ -240,9 +244,28 @@ app.on("before-quit", () => {
       "utf-8"
     );
     spawn("cmd.exe", ["/c", launcher], { detached: true, stdio: "ignore" }).unref();
+    process.exit(0);
+    return;
   }
-  // Exit immediately so the NSIS installer can replace files (do not await service stop).
-  process.exit(0);
+
+  if (gracefulShutdownDone) return;
+
+  event.preventDefault();
+  void (async () => {
+    try {
+      const { loadSettings } = await import("./paths.js");
+      const settings = await loadSettings();
+      const root = getCurrentRoot();
+      if (settings.stopServicesOnQuit !== false && root && (await isInitialized(root))) {
+        await stopAll(root);
+      }
+    } catch {
+      // Non-fatal — still exit
+    } finally {
+      gracefulShutdownDone = true;
+      process.exit(0);
+    }
+  })();
 });
 
 app.on("activate", () => {

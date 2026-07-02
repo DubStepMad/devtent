@@ -12,6 +12,16 @@ export interface ElevatedHostsSyncLaunch {
   batchFile: string;
 }
 
+/** Skip UAC / wscript during unit tests and CI — avoids popup spam and missing temp VBS files. */
+export function isHostsElevationDisabled(): boolean {
+  if (process.env.DEVTENT_SKIP_HOSTS_ELEVATION === "1") return true;
+  if (process.env.NODE_ENV === "test") return true;
+  if (process.env.npm_lifecycle_event === "test") return true;
+  if (process.argv.includes("--test")) return true;
+  if (process.execArgv.some((arg) => arg === "--test" || arg.startsWith("--test-"))) return true;
+  return false;
+}
+
 export async function prepareHostsSyncFiles(
   root: string,
   newContent: string
@@ -53,6 +63,7 @@ export async function prepareHostsSyncFiles(
 /** Launch UAC via Shell.Application — more reliable from Electron than hidden PowerShell. */
 export async function launchElevatedHostsSync(batchFile: string): Promise<boolean> {
   if (process.platform !== "win32") return false;
+  if (isHostsElevationDisabled()) return false;
 
   const vbsPath = path.join(path.dirname(batchFile), "devtent-elevate-hosts.vbs");
   const escapedBatch = batchFile.replace(/"/g, '""');

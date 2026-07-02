@@ -2,6 +2,36 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.1.0] - 2026-07-02
+
+Feature release: SSL workflow, health dashboard, portability, Node management, enhanced logs, and profile-driven optional services.
+
+### Added
+
+- **SSL workflow** — Enable HTTPS per domain from the UI; regenerates Nginx/Apache vhosts and restarts the web server; dashboard links use `https://` when a cert exists
+- **Environment health dashboard** — Surfaces missing runtimes, stopped services, MySQL backup status, hosts sync, and SSL gaps with quick-fix actions
+- **MySQL restore** — Restore from saved backups in Settings and via `devtent mysql restore <id>`
+- **Portability** — Export/import environment bundles (www, profiles, data, configs) from Settings and CLI (`devtent export`, `devtent import-bundle`)
+- **Node version management** — Install and switch Node 18/20/21/22 per profile; new **Node** sidebar tab; CLI `devtent node list|install|use`
+- **Enhanced log viewer** — Search, PHP file-location parsing, auto-refresh, and open-in-editor from the Logs tab
+- **Profile optional services** — Toggle Redis and Mailpit per profile; Services tab and tray show only the active profile's stack
+- **Onboarding wizard** — Post-setup guided flow to create a demo project, sync vhosts, and open in browser
+- **Graceful quit** — Settings toggle to stop all services when the app exits
+- **CLI parity** — `devtent open`, `health`, `export`, `import-bundle`; profile `--redis` / `--mailpit`
+- Quick Add manifests for Node 18, 20, and 21
+- Tests for SSL, vhosts, portability, log viewer, and hosts elevation guard
+
+### Changed
+
+- Tray quick panel lists profile services instead of raw Procfile toggles
+- Profile Procfile sync uses replace mode for optional services (no Redis/Mailpit leftovers after profile edit)
+- Apache `httpd.conf` bumped to **v4** — loads `mod_ssl`, `mod_socache_shmcb`, and `Listen 443` for HTTPS vhosts
+
+### Fixed
+
+- **Apache SSL** — `SSLEngine` invalid command when using Apache with SSL vhosts (missing mod_ssl)
+- **Test/build spam** — Windows Script Host popups during `npm test` from missing temp `devtent-elevate-hosts.vbs` files; elevation is skipped in automated test runs
+
 ## [1.0.2] - 2026-07-01
 
 ### Fixed
@@ -82,6 +112,7 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.1.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.0
 [1.0.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.2
 [1.0.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.1
 [1.0.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.0

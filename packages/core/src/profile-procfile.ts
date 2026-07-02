@@ -32,6 +32,22 @@ function applyStackExclusions(entries: ProcfileEntry[]): ProcfileEntry[] {
   return entries;
 }
 
+async function buildProfileOptionalEntries(
+  root: string,
+  profile: ReturnType<typeof normalizeProfile>,
+  presets: Awaited<ReturnType<typeof getServicePresets>>
+): Promise<ProcfileEntry[]> {
+  const next: ProcfileEntry[] = [];
+  for (const id of profile.services ?? []) {
+    if (!OPTIONAL_SERVICE_IDS.has(id)) continue;
+    const preset = presets.find((p) => p.id === id);
+    if (preset && (await isPresetInstalled(root, preset.command))) {
+      next.push({ name: id, command: preset.command });
+    }
+  }
+  return next;
+}
+
 async function buildProfileStackEntries(
   root: string,
   profile: ReturnType<typeof normalizeProfile>,
@@ -90,7 +106,7 @@ export async function syncProfileProcfileFromProfile(
     return;
   }
 
-  const optional = entries.filter((e) => OPTIONAL_SERVICE_IDS.has(e.name));
+  const optional = await buildProfileOptionalEntries(root, profile, presets);
   const stack = await buildProfileStackEntries(root, profile, presets);
   const next: ProcfileEntry[] = [...optional, ...stack];
 

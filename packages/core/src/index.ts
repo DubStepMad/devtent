@@ -68,6 +68,25 @@ export {
 export type { PhpRuntimePaths } from "./profile-runtime.js";
 
 export {
+  applyNodeVersionToActiveProfile,
+  clearActiveNodeVersion,
+  installNodeVersion,
+  listNodeVersions,
+  resolveNodePaths,
+  isNodeVersionInstalled,
+  getNodeDisplayLabel,
+  nodeVersionFromLegacyPath,
+} from "./node-runtime.js";
+export type { NodeRuntimePaths, NodeVersionInfo } from "./node-runtime.js";
+
+export {
+  searchLogFiles,
+  parseLogLineLocations,
+  listLogFilesWithMeta,
+} from "./log-viewer.js";
+export type { LogSearchMatch, LogFileLocation } from "./log-viewer.js";
+
+export {
   loadTemplate,
   listTemplates,
   createFromTemplate,
@@ -77,7 +96,10 @@ export {
 export {
   enableSsl,
   installMkcertCa,
+  hasSslCertificate,
+  sslCertPaths,
 } from "./ssl.js";
+export type { SslResult } from "./ssl.js";
 
 export {
   getPathEntries,
@@ -111,6 +133,7 @@ export {
   requestElevatedHostsSync,
   getElevatedHostsSyncMessage,
   getElevatedHostsSyncFailureMessage,
+  isHostsElevationDisabled,
 } from "./hosts-elevate.js";
 
 export { syncProfileProcfileFromProfile } from "./profile-procfile.js";
@@ -127,6 +150,7 @@ export {
   isMysqlDataInitialized,
   initializeMysql,
   backupMysql,
+  restoreMysql,
   listMysqlBackups,
   pruneMysqlBackups,
   maybeDailyMysqlBackup,
@@ -134,6 +158,19 @@ export {
   BACKUP_RETENTION_DAYS,
 } from "./mysql.js";
 export type { MysqlBackupInfo } from "./mysql.js";
+
+export { getEnvironmentHealth } from "./health.js";
+export type { HealthItem, HealthSeverity } from "./health.js";
+
+export {
+  exportEnvironment,
+  importEnvironmentBundle,
+} from "./portability.js";
+export type {
+  ExportEnvironmentOptions,
+  ExportEnvironmentResult,
+  ImportEnvironmentResult,
+} from "./portability.js";
 
 export {
   installRecommendedStack,

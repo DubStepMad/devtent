@@ -1,6 +1,7 @@
 import path from "node:path";
 import { pathExists, resolvePath } from "./config.js";
 import type { Profile, QuickAddManifest } from "./types.js";
+import { nodeVersionFromLegacyPath, resolveNodePaths } from "./node-runtime.js";
 
 export const DEFAULT_PHP_VERSION = "php-8.3";
 
@@ -35,11 +36,16 @@ export function normalizeProfile(profile: Profile): Profile {
   const phpVersion =
     profile.phpVersion ?? phpVersionFromLegacyPath(profile.php) ?? DEFAULT_PHP_VERSION;
   const paths = resolvePhpPaths(phpVersion);
+  const resolvedNodeVersion =
+    profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
+  const nodePaths = resolvedNodeVersion ? resolveNodePaths(resolvedNodeVersion) : null;
 
   return {
     ...profile,
     phpVersion,
     php: paths.cli,
+    nodeVersion: resolvedNodeVersion,
+    node: nodePaths?.cli ?? profile.node,
     env: {
       ...profile.env,
       PHPRC: paths.phpRc,

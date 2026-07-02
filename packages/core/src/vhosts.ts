@@ -2,7 +2,8 @@ import { readFile, writeFile, readdir, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { VirtualHost } from "./types.js";
-import { apachePhpHandlerBlock } from "./apache-support.js";
+import { apachePhpHandlerBlock, ensureApacheConfig } from "./apache-support.js";
+import { hasSslCertificate } from "./ssl.js";
 import { requestElevatedHostsSync, prepareHostsSyncFiles, getElevatedHostsSyncMessage, getElevatedHostsSyncFailureMessage } from "./hosts-elevate.js";
 
 export interface HostsSyncResult {
@@ -102,11 +103,12 @@ export async function listVirtualHosts(root: string): Promise<VirtualHost[]> {
 
   for (const name of projects) {
     const projectDir = path.join(wwwRoot, name);
+    const domain = `${name}.${config.tld}`;
     vhosts.push({
       name,
-      domain: `${name}.${config.tld}`,
+      domain,
       root: await resolveProjectWebRoot(projectDir),
-      ssl: config.ssl.enabled,
+      ssl: await hasSslCertificate(root, domain),
     });
   }
 
@@ -121,6 +123,10 @@ export async function generateVirtualHosts(
 
   await mkdir(resolvePath(root, "etc/nginx/sites"), { recursive: true });
   await mkdir(resolvePath(root, "etc/apache/sites"), { recursive: true });
+
+  if (vhosts.some((v) => v.ssl)) {
+    await ensureApacheConfig(root);
+  }
 
   for (const vhost of vhosts) {
     await writeNginxSite(root, vhost);
@@ -177,6 +183,25 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
   const sitePath = path.join(root, "etc/apache/sites", `${vhost.name}.conf`);
   const rootPath = vhost.root.replace(/\\/g, "/");
 
+  const sslBlock = vhost.ssl
+    ? `
+<VirtualHost *:443>
+  ServerName ${vhost.domain}
+  DocumentRoot "${rootPath}"
+  SSLEngine on
+  SSLCertificateFile "etc/ssl/${vhost.domain}.pem"
+  SSLCertificateKeyFile "etc/ssl/${vhost.domain}-key.pem"
+  <Directory "${rootPath}">
+    Options -Indexes +FollowSymLinks
+    AllowOverride All
+    Require all granted
+  </Directory>
+  ${apachePhpHandlerBlock()}
+  ErrorLog "logs/${vhost.name}-ssl-error.log"
+  CustomLog "logs/${vhost.name}-ssl-access.log" common
+</VirtualHost>`
+    : "";
+
   const content = `# DevTent auto-generated — ${vhost.domain}
 <VirtualHost *:80>
   ServerName ${vhost.domain}
@@ -189,7 +214,7 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
   ${apachePhpHandlerBlock()}
   ErrorLog "logs/${vhost.name}-error.log"
   CustomLog "logs/${vhost.name}-access.log" common
-</VirtualHost>
+</VirtualHost>${sslBlock}
 `;
   await writeFile(sitePath, content, "utf-8");
 }

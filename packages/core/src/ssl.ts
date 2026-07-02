@@ -11,14 +11,26 @@ export interface SslResult {
   message: string;
 }
 
+export function sslCertPaths(root: string, domain: string): { certPath: string; keyPath: string } {
+  const sslDir = resolvePath(root, "etc/ssl");
+  return {
+    certPath: path.join(sslDir, `${domain}.pem`),
+    keyPath: path.join(sslDir, `${domain}-key.pem`),
+  };
+}
+
+export async function hasSslCertificate(root: string, domain: string): Promise<boolean> {
+  const { certPath, keyPath } = sslCertPaths(root, domain);
+  return (await pathExists(certPath)) && (await pathExists(keyPath));
+}
+
 export async function enableSsl(root: string, domain: string): Promise<SslResult> {
   const config = await loadConfig(root);
   const sslDir = resolvePath(root, "etc/ssl");
   await mkdir(sslDir, { recursive: true });
 
   const mkcertPath = resolvePath(root, config.ssl.mkcertPath);
-  const certPath = path.join(sslDir, `${domain}.pem`);
-  const keyPath = path.join(sslDir, `${domain}-key.pem`);
+  const { certPath, keyPath } = sslCertPaths(root, domain);
 
   if (!(await pathExists(mkcertPath))) {
     return {
@@ -32,16 +44,30 @@ export async function enableSsl(root: string, domain: string): Promise<SslResult
 
   await runMkcert(mkcertPath, sslDir, domain);
 
+  if (!config.ssl.domains) config.ssl.domains = [];
+  if (!config.ssl.domains.includes(domain)) {
+    config.ssl.domains.push(domain);
+  }
   config.ssl.enabled = true;
   const { saveConfig } = await import("./config.js");
   await saveConfig(root, config);
+
+  const { generateVirtualHosts } = await import("./vhosts.js");
+  await generateVirtualHosts(root, { skipHostsSync: true });
+
+  const { restartService, isServiceRunning } = await import("./services.js");
+  if (isServiceRunning("nginx")) {
+    await restartService(root, "nginx");
+  } else if (isServiceRunning("apache")) {
+    await restartService(root, "apache");
+  }
 
   return {
     domain,
     certPath,
     keyPath,
     success: true,
-    message: `SSL enabled for ${domain}. Certificate: ${certPath}`,
+    message: `SSL enabled for ${domain}. Open https://${domain}/ in your browser.`,
   };
 }
 

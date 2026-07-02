@@ -196,7 +196,12 @@ a,
   margin-bottom: 6px;
 }
 
-.section-head {
+.section-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  line-height: 1.35;
+}
   display: flex;
   justify-content: space-between;
   align-items: center;

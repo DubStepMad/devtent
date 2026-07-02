@@ -13,6 +13,8 @@ export interface DesktopSettings {
   skipUpdateVersion?: string;
   lastUpdateCheckAt?: number;
   trayPopupPosition?: { x: number; y: number };
+  /** Stop services and backup MySQL before quitting. Default true. */
+  stopServicesOnQuit?: boolean;
 }
 
 /** Portable default: folder containing DevTent.exe when packaged; {drive}:\\devtent in dev. */

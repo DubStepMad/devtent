@@ -68,4 +68,29 @@ describe("profile-procfile", () => {
     assert.ok(names.includes("mysql"));
     assert.ok(names.includes("php-fpm"));
   });
+
+  it("replace mode uses profile optional services instead of procfile leftovers", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-profile-"));
+
+    await initDevTent(tmp, () => {});
+    await touch(tmp, "bin/nginx/nginx.exe");
+    await touch(tmp, "bin/php/php-8.3/php-cgi.exe");
+    await touch(tmp, "bin/redis/redis-server.exe");
+    await touch(tmp, "bin/mailpit/mailpit.exe");
+
+    await saveProfile(tmp, {
+      name: "redis-only",
+      phpVersion: "php-8.3",
+      webServer: "nginx",
+      database: "none",
+      services: ["redis"],
+    });
+
+    await switchProfile(tmp, "redis-only");
+
+    const names = (await parseProcfile(tmp)).map((e) => e.name).sort();
+    assert.deepEqual(names, ["nginx", "php-fpm", "redis"]);
+    assert.ok(!names.includes("mailpit"));
+    assert.ok(!names.includes("mysql"));
+  });
 });

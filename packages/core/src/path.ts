@@ -1,10 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
+import { normalizeProfile } from "./profile-runtime.js";
+import { resolveNodePaths } from "./node-runtime.js";
 
 export async function getPathEntries(root: string): Promise<string[]> {
   const config = await loadConfig(root);
-  const profile = await loadProfile(root, config.activeProfile);
+  const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
   const entries: string[] = [];
 
   entries.push(resolvePath(root, config.paths.bin));
@@ -12,7 +14,10 @@ export async function getPathEntries(root: string): Promise<string[]> {
   if (profile.php) {
     entries.push(resolvePath(root, path.dirname(profile.php)));
   }
-  if (profile.node) {
+  if (profile.nodeVersion) {
+    const nodePaths = resolveNodePaths(profile.nodeVersion);
+    entries.push(resolvePath(root, path.dirname(nodePaths.cli)));
+  } else if (profile.node) {
     entries.push(resolvePath(root, path.dirname(profile.node)));
   }
 

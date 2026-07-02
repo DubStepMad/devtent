@@ -525,6 +525,117 @@ code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-
 
 #profile-editor .field-label { margin-top: 0.35rem; }
 
+.profile-services-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+  max-width: 420px;
+}
+
+.profile-services-fieldset .field-label {
+  padding: 0 0.35rem;
+  margin-bottom: 0;
+}
+
+.profile-services-fieldset .field-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.profile-service-row,
+.profile-service-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.profile-service-toggle {
+  cursor: pointer;
+}
+
+.profile-service-label {
+  min-width: 5.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.profile-service-row .text-input,
+.profile-service-toggle .text-input {
+  flex: 1;
+  margin-bottom: 0;
+  max-width: none;
+}
+
+.profile-service-toggle input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.profile-service-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.health-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.health-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.health-item:last-child {
+  border-bottom: none;
+}
+
+.health-icon {
+  width: 1rem;
+  font-weight: 700;
+}
+
+.health-ok .health-icon { color: #22c55e; }
+.health-warn .health-icon { color: #eab308; }
+.health-error .health-icon { color: #ef4444; }
+
+.health-detail {
+  flex: 1 1 100%;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding-left: 1.65rem;
+}
+
+.onboarding-steps {
+  margin: 1rem 0;
+  padding-left: 1.25rem;
+}
+
+.onboarding-steps li {
+  margin: 0.35rem 0;
+  color: var(--muted);
+}
+
+.onboarding-steps li.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.onboarding-steps li.done {
+  color: #22c55e;
+}
+
+.onboarding-dialog {
+  max-width: 420px;
+}
+
 .form-row { margin-bottom: 1rem; }
 .form-row label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
 .form-row input, .form-row select {
@@ -615,6 +726,110 @@ code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-top: 0.75rem;
+}
+
+.log-viewer-interactive {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow: auto;
+}
+
+.log-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.1rem 0;
+  align-items: baseline;
+}
+
+.log-line-focus {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.log-line-no {
+  color: var(--muted);
+  min-width: 2.5rem;
+  text-align: right;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-line-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-highlight {
+  background: rgba(234, 179, 8, 0.35);
+  color: inherit;
+  padding: 0 0.1rem;
+}
+
+.log-search-input {
+  max-width: 220px;
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.log-search-results {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.log-search-results li {
+  border-bottom: 1px solid var(--border);
+}
+
+.log-search-results li:last-child {
+  border-bottom: none;
+}
+
+.log-search-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.log-search-hit:hover {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.log-open-ide {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  margin-left: 0.35rem;
+}
+
+.node-versions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.node-versions-table th,
+.node-versions-table td {
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.node-versions-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
 }
 
 .update-status-line {
