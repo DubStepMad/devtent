@@ -2,6 +2,17 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.1.2] - 2026-07-04
+
+### Added
+
+- **Start with Windows** — Settings → General checkbox to launch DevTent at login (tray only, no dashboard window on boot)
+- **Auto-start services** — Settings → General checkbox to start the active profile stack when DevTent opens
+
+### Changed
+
+- **Settings page** — reorganized into General, Folders, Backups, Transfer, and Updates sections with side navigation
+
 ## [1.1.1] - 2026-07-04
 
 Security patch addressing GitHub CodeQL findings.
@@ -123,6 +134,7 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.1.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.1
 [1.1.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.0
 [1.0.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.2

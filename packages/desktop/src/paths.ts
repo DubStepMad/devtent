@@ -15,6 +15,10 @@ export interface DesktopSettings {
   trayPopupPosition?: { x: number; y: number };
   /** Stop services and backup MySQL before quitting. Default true. */
   stopServicesOnQuit?: boolean;
+  /** Launch DevTent when Windows starts (tray only). Default false. */
+  launchAtLogin?: boolean;
+  /** Start profile services when DevTent opens. Default false. */
+  autoStartServices?: boolean;
 }
 
 /** Portable default: folder containing DevTent.exe when packaged; {drive}:\\devtent in dev. */

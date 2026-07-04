@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow } from "electron";
+import { ipcMain, dialog, shell, BrowserWindow, app } from "electron";
 import path from "node:path";
 import {
   initDevTent,
@@ -92,6 +92,12 @@ import {
 } from "./update-backup.js";
 import { completeStandaloneHostsElevation } from "./hosts-elevation.js";
 import { openFileInEditor } from "./open-in-editor.js";
+import {
+  applyLaunchAtLoginSetting,
+  readStartupPreferences,
+  setAutoStartServices,
+  setLaunchAtLogin,
+} from "./startup-settings.js";
 
 let currentRoot = "";
 let openDashboardHandler: (() => void) | null = null;
@@ -164,6 +170,8 @@ export function registerIpcHandlers(): void {
       setupCompletedForRoot: setupCompletedForRoot(settings, currentRoot),
       hasExistingData: await hasExistingEnvironment(currentRoot),
       stopServicesOnQuit: settings.stopServicesOnQuit !== false,
+      ...readStartupPreferences(settings),
+      launchAtLoginAvailable: app.isPackaged,
     };
   });
 
@@ -237,6 +245,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("devtent:setStopServicesOnQuit", async (_e, enabled: boolean) => {
     await saveSettings({ stopServicesOnQuit: enabled });
     return { stopServicesOnQuit: enabled };
+  });
+
+  ipcMain.handle("devtent:setLaunchAtLogin", async (_e, enabled: boolean) => {
+    if (enabled && !app.isPackaged) {
+      throw new Error("Start with Windows is available in the installed DevTent app.");
+    }
+    return setLaunchAtLogin(enabled);
+  });
+
+  ipcMain.handle("devtent:setAutoStartServices", async (_e, enabled: boolean) => {
+    return setAutoStartServices(enabled);
   });
 
   ipcMain.handle("devtent:pickExportFolder", async () => {

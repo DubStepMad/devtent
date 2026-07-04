@@ -946,9 +946,39 @@ async function refreshSettings(root) {
   const rootStatus = await api.getRoot();
   const stopOnQuit = document.getElementById("settings-stop-on-quit");
   if (stopOnQuit) stopOnQuit.checked = rootStatus.stopServicesOnQuit !== false;
+
+  const launchAtLogin = document.getElementById("settings-launch-at-login");
+  const launchWrap = document.getElementById("settings-launch-at-login-wrap");
+  const launchHint = document.getElementById("settings-launch-at-login-hint");
+  if (launchAtLogin) {
+    launchAtLogin.checked = rootStatus.launchAtLogin === true;
+    const available = rootStatus.launchAtLoginAvailable === true;
+    launchAtLogin.disabled = !available;
+    launchWrap?.classList.toggle("disabled", !available);
+    if (launchHint) {
+      launchHint.textContent = available
+        ? "Opens to the system tray only — no dashboard window on boot."
+        : "Available in the installed DevTent app (not when running from source with npm start).";
+    }
+  }
+
+  const autoStart = document.getElementById("settings-auto-start-services");
+  if (autoStart) autoStart.checked = rootStatus.autoStartServices === true;
+
   await refreshMysqlBackups();
   await refreshAppRollback();
   await refreshAboutVersion();
+}
+
+function showSettingsSection(section) {
+  document.querySelectorAll(".settings-nav-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.settingsSection === section);
+  });
+  document.querySelectorAll(".settings-section").forEach((el) => {
+    const match = el.dataset.settingsSection === section;
+    el.classList.toggle("hidden", !match);
+    el.classList.toggle("active", match);
+  });
 }
 
 async function refreshAppRollback() {
@@ -1323,6 +1353,7 @@ async function boot() {
       }
       if (view === "settings") {
         const { root } = await api.getRoot();
+        showSettingsSection("general");
         await refreshSettings(root);
       }
     };
@@ -1528,9 +1559,36 @@ async function boot() {
     api.openPath("data/backups/mysql");
   });
 
+  document.querySelectorAll(".settings-nav-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showSettingsSection(btn.dataset.settingsSection);
+    });
+  });
+
   document.getElementById("settings-stop-on-quit")?.addEventListener("change", async (e) => {
     await api.setStopServicesOnQuit(e.target.checked);
     showToast(e.target.checked ? "Services will stop on quit" : "Fast quit enabled", "success");
+  });
+
+  document.getElementById("settings-launch-at-login")?.addEventListener("change", async (e) => {
+    try {
+      await api.setLaunchAtLogin(e.target.checked);
+      showToast(
+        e.target.checked ? "DevTent will start with Windows" : "Start with Windows disabled",
+        "success"
+      );
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("settings-auto-start-services")?.addEventListener("change", async (e) => {
+    await api.setAutoStartServices(e.target.checked);
+    showToast(
+      e.target.checked ? "Services will auto-start when DevTent opens" : "Auto-start disabled",
+      "success"
+    );
   });
 
   document.getElementById("btn-export-environment")?.addEventListener("click", async () => {

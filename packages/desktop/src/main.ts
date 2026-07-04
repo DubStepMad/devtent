@@ -6,6 +6,8 @@ import { stopAll, maybeDailyMysqlBackup } from "@devtent/core";
 import { __dirname } from "./dir.js";
 import { setupTray, hideTrayPopup, setTrayRunning, getIconPath, destroyTray } from "./tray.js";
 import { ensureEnvironmentReady } from "./startup-environment.js";
+import { syncLaunchAtLoginFromSettings } from "./startup-settings.js";
+import { maybeAutoStartServices } from "./auto-start-services.js";
 import { isInitialized } from "./paths.js";
 import { checkForUpdates, shouldRunBackgroundCheck } from "./update-checker.js";
 import { applyWindowMode, registerMainWindow } from "./window-layout.js";
@@ -189,6 +191,13 @@ app.whenReady().then(async () => {
   const startup = await ensureEnvironmentReady(root);
   if (startup === "needs-wizard") {
     createWindow({ setup: true });
+  } else {
+    await syncLaunchAtLoginFromSettings();
+    try {
+      await maybeAutoStartServices(getCurrentRoot());
+    } catch (err) {
+      console.error("Auto-start services failed:", err);
+    }
   }
 
   const runScheduledBackup = async () => {

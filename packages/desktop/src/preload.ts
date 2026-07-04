@@ -54,6 +54,9 @@ const api = {
   getEnvironmentHealth: () => ipcRenderer.invoke("devtent:getEnvironmentHealth"),
   setStopServicesOnQuit: (enabled: boolean) =>
     ipcRenderer.invoke("devtent:setStopServicesOnQuit", enabled),
+  setLaunchAtLogin: (enabled: boolean) => ipcRenderer.invoke("devtent:setLaunchAtLogin", enabled),
+  setAutoStartServices: (enabled: boolean) =>
+    ipcRenderer.invoke("devtent:setAutoStartServices", enabled),
   pickExportFolder: () => ipcRenderer.invoke("devtent:pickExportFolder"),
   pickImportBundle: () => ipcRenderer.invoke("devtent:pickImportBundle"),
   exportEnvironment: (destPath: string, options?: { includeBin?: boolean }) =>

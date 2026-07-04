@@ -397,6 +397,88 @@ a,
 .panel-desc.mono { font-family: Consolas, monospace; font-size: 0.82rem; word-break: break-all; }
 .muted-panel { background: transparent; border-style: dashed; }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: sticky;
+  top: 0;
+}
+
+.settings-nav-item {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.settings-nav-item.active {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.settings-content .panel:last-child {
+  margin-bottom: 0;
+}
+
+.settings-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  line-height: 1.45;
+}
+
+.settings-check input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.settings-check.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-hint {
+  margin-top: -0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.settings-hint:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+  }
+}
+
 .steps { padding-left: 1.25rem; color: var(--muted); line-height: 1.8; font-size: 0.9rem; }
 .steps strong { color: var(--text); }
 code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }

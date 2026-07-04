@@ -251,83 +251,123 @@
         </section>
 
         <section id="view-settings" class="view-panel hidden">
-          <div class="panel">
-            <h3>DevTent root</h3>
-            <p class="panel-desc mono" id="settings-root"></p>
-            <div class="toolbar">
-              <button class="btn secondary" id="btn-open-root">Open folder</button>
-              <button class="btn secondary" id="btn-open-terminal">Open terminal</button>
-              <button class="btn secondary" id="btn-change-root">Change location…</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h3>Quick links</h3>
-            <div class="toolbar">
-              <button class="btn secondary" id="btn-open-www-settings">www/</button>
-              <button class="btn secondary" id="btn-open-logs">logs/</button>
-              <button class="btn secondary" id="btn-open-bin">bin/</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h3>MySQL backups</h3>
-            <p class="panel-desc">Automatic backups run daily while DevTent is open, and before MySQL stops. Backups are kept for 7 days in <code>data/backups/mysql/</code>.</p>
-            <div class="toolbar">
-              <button class="btn secondary" id="btn-backup-mysql">Backup now</button>
-              <button class="btn secondary" id="btn-open-mysql-backups">Open backups folder</button>
-            </div>
-            <ul id="mysql-backups-list" class="backup-list panel-desc"></ul>
-          </div>
-          <div class="panel">
-            <h3>Export / import</h3>
-            <p class="panel-desc">Export your projects, profiles, configs, and database data to move DevTent to another folder or machine. Runtimes in <code>bin/</code> are excluded by default (reinstall via Quick Add).</p>
-            <div class="toolbar">
-              <button class="btn secondary" id="btn-export-environment">Export environment…</button>
-              <button class="btn secondary" id="btn-import-environment">Import bundle…</button>
-            </div>
-            <p id="portability-result" class="panel-desc"></p>
-          </div>
-          <div class="panel">
-            <h3>Quit behavior</h3>
-            <label class="migrate-check">
-              <input type="checkbox" id="settings-stop-on-quit" checked>
-              Stop services and backup MySQL before quitting
-            </label>
-            <p class="panel-desc">Disable for faster quit. Updates always use fast exit so the installer can replace files.</p>
-          </div>
-          <div class="panel">
-            <h3>Import environment</h3>
-            <p class="panel-desc">The only place to import from Laragon or another local environment. Copies projects from <code>www/</code>, php.ini files, databases, and runtimes. Never runs during install or first-run setup — use this panel when you choose to import.</p>
-            <label class="field-label">Environment folder</label>
-            <div class="form-row inline">
-              <input type="text" id="migrate-laragon-path" placeholder="c:\path\to\environment" readonly style="flex:1">
-              <button class="btn secondary" id="btn-migrate-laragon-detect">Detect</button>
-              <button class="btn secondary" id="btn-migrate-laragon-browse">Browse…</button>
-            </div>
-            <p id="migrate-laragon-preview" class="panel-desc"></p>
-            <div id="migrate-laragon-projects" class="migrate-project-picker hidden">
-              <label class="field-label">Projects to import</label>
-              <div id="migrate-laragon-project-list" class="migrate-project-list"></div>
-              <div class="migrate-project-actions">
-                <button type="button" class="link-btn" data-action="all" data-target="migrate-laragon-project-list">Select all</button>
-                <button type="button" class="link-btn" data-action="none" data-target="migrate-laragon-project-list">Select none</button>
+          <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Settings sections">
+              <button type="button" class="settings-nav-item active" data-settings-section="general">General</button>
+              <button type="button" class="settings-nav-item" data-settings-section="folders">Folders</button>
+              <button type="button" class="settings-nav-item" data-settings-section="backups">Backups</button>
+              <button type="button" class="settings-nav-item" data-settings-section="transfer">Transfer</button>
+              <button type="button" class="settings-nav-item" data-settings-section="updates">Updates</button>
+            </nav>
+
+            <div class="settings-content">
+              <div class="settings-section active" data-settings-section="general">
+                <div class="panel">
+                  <h3>Startup</h3>
+                  <p class="panel-desc">Control how DevTent behaves when you sign in to Windows and when the app opens.</p>
+                  <label class="settings-check" id="settings-launch-at-login-wrap">
+                    <input type="checkbox" id="settings-launch-at-login">
+                    <span>Start DevTent when Windows starts</span>
+                  </label>
+                  <p class="panel-desc settings-hint" id="settings-launch-at-login-hint">Opens to the system tray only — no dashboard window on boot.</p>
+                  <label class="settings-check">
+                    <input type="checkbox" id="settings-auto-start-services">
+                    <span>Auto-start services when DevTent opens</span>
+                  </label>
+                  <p class="panel-desc settings-hint">Starts your active profile stack (PHP, web server, database, etc.) after DevTent launches.</p>
+                </div>
+                <div class="panel">
+                  <h3>Quit</h3>
+                  <label class="settings-check">
+                    <input type="checkbox" id="settings-stop-on-quit" checked>
+                    <span>Stop services and backup MySQL before quitting</span>
+                  </label>
+                  <p class="panel-desc settings-hint">Disable for faster quit. Updates always use fast exit so the installer can replace files.</p>
+                </div>
+              </div>
+
+              <div class="settings-section hidden" data-settings-section="folders">
+                <div class="panel">
+                  <h3>DevTent root</h3>
+                  <p class="panel-desc mono" id="settings-root"></p>
+                  <div class="toolbar">
+                    <button class="btn secondary" id="btn-open-root">Open folder</button>
+                    <button class="btn secondary" id="btn-open-terminal">Open terminal</button>
+                    <button class="btn secondary" id="btn-change-root">Change location…</button>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>Quick links</h3>
+                  <div class="toolbar">
+                    <button class="btn secondary" id="btn-open-www-settings">www/</button>
+                    <button class="btn secondary" id="btn-open-logs">logs/</button>
+                    <button class="btn secondary" id="btn-open-bin">bin/</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-section hidden" data-settings-section="backups">
+                <div class="panel">
+                  <h3>MySQL backups</h3>
+                  <p class="panel-desc">Automatic backups run daily while DevTent is open, and before MySQL stops. Backups are kept for 7 days in <code>data/backups/mysql/</code>.</p>
+                  <div class="toolbar">
+                    <button class="btn secondary" id="btn-backup-mysql">Backup now</button>
+                    <button class="btn secondary" id="btn-open-mysql-backups">Open backups folder</button>
+                  </div>
+                  <ul id="mysql-backups-list" class="backup-list panel-desc"></ul>
+                </div>
+              </div>
+
+              <div class="settings-section hidden" data-settings-section="transfer">
+                <div class="panel">
+                  <h3>Export / import bundle</h3>
+                  <p class="panel-desc">Export your projects, profiles, configs, and database data to move DevTent to another folder or machine. Runtimes in <code>bin/</code> are excluded by default (reinstall via Quick Add).</p>
+                  <div class="toolbar">
+                    <button class="btn secondary" id="btn-export-environment">Export environment…</button>
+                    <button class="btn secondary" id="btn-import-environment">Import bundle…</button>
+                  </div>
+                  <p id="portability-result" class="panel-desc"></p>
+                </div>
+                <div class="panel">
+                  <h3>Import environment</h3>
+                  <p class="panel-desc">Copy projects from <code>www/</code>, php.ini files, databases, and runtimes from Laragon or another local environment. Never runs during install or first-run setup.</p>
+                  <label class="field-label">Environment folder</label>
+                  <div class="form-row inline">
+                    <input type="text" id="migrate-laragon-path" placeholder="c:\path\to\environment" readonly style="flex:1">
+                    <button class="btn secondary" id="btn-migrate-laragon-detect">Detect</button>
+                    <button class="btn secondary" id="btn-migrate-laragon-browse">Browse…</button>
+                  </div>
+                  <p id="migrate-laragon-preview" class="panel-desc"></p>
+                  <div id="migrate-laragon-projects" class="migrate-project-picker hidden">
+                    <label class="field-label">Projects to import</label>
+                    <div id="migrate-laragon-project-list" class="migrate-project-list"></div>
+                    <div class="migrate-project-actions">
+                      <button type="button" class="link-btn" data-action="all" data-target="migrate-laragon-project-list">Select all</button>
+                      <button type="button" class="link-btn" data-action="none" data-target="migrate-laragon-project-list">Select none</button>
+                    </div>
+                  </div>
+                  <button class="btn primary" id="btn-migrate-laragon">Import environment</button>
+                  <p id="migrate-laragon-result" class="panel-desc"></p>
+                </div>
+              </div>
+
+              <div class="settings-section hidden" data-settings-section="updates">
+                <div class="panel">
+                  <h3>About</h3>
+                  <p class="panel-desc" id="about-version">DevTent — free, open-source local dev environment.<br>Licensed under DTCL v1.0. Free forever. Not for sale.</p>
+                  <p class="panel-desc update-status-line" id="update-status-line"></p>
+                  <div class="about-actions">
+                    <button class="btn secondary" id="btn-check-updates">Check for updates</button>
+                    <button class="btn secondary" id="btn-github">GitHub</button>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>Update rollback</h3>
+                  <p class="panel-desc" id="rollback-status">Before each in-app update, DevTent saves a copy of the current app. Restore it here if an update causes problems.</p>
+                  <button class="btn secondary" id="btn-rollback-app" disabled>Restore previous version</button>
+                </div>
               </div>
             </div>
-            <button class="btn primary" id="btn-migrate-laragon">Import environment</button>
-            <p id="migrate-laragon-result" class="panel-desc"></p>
-          </div>
-          <div class="panel">
-            <h3>About</h3>
-            <p class="panel-desc" id="about-version">DevTent — free, open-source local dev environment.<br>Licensed under DTCL v1.0. Free forever. Not for sale.</p>
-            <p class="panel-desc update-status-line" id="update-status-line"></p>
-            <div class="about-actions">
-              <button class="btn secondary" id="btn-check-updates">Check for updates</button>
-              <button class="btn secondary" id="btn-github">GitHub</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h3>Update rollback</h3>
-            <p class="panel-desc" id="rollback-status">Before each in-app update, DevTent saves a copy of the current app. Restore it here if an update causes problems.</p>
-            <button class="btn secondary" id="btn-rollback-app" disabled>Restore previous version</button>
           </div>
         </section>
       </div>
