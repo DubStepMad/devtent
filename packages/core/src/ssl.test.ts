@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { hasSslCertificate, sslCertPaths } from "./ssl.js";
+import { hasSslCertificate, sslCertPaths, validateSslDomain } from "./ssl.js";
 
 describe("ssl", () => {
+  it("rejects invalid domain names", () => {
+    assert.throws(() => validateSslDomain("demo.test; rm -rf /"), /Invalid domain/);
+    assert.throws(() => validateSslDomain(""), /Invalid domain/);
+    assert.doesNotThrow(() => validateSslDomain("demo.test"));
+  });
+
   it("detects certificate files per domain", async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-ssl-"));
     const sslDir = path.join(tmp, "etc", "ssl");

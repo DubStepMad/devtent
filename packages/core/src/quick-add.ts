@@ -328,13 +328,19 @@ async function extractZip(zipPath: string, dest: string, log: (msg: string) => v
   if (process.platform === "win32") {
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(
-        "powershell",
+        "powershell.exe",
         [
           "-NoProfile",
+          "-NonInteractive",
           "-Command",
-          `Expand-Archive -Path '${zipPath}' -DestinationPath '${dest}' -Force`,
+          "Expand-Archive",
+          "-LiteralPath",
+          zipPath,
+          "-DestinationPath",
+          dest,
+          "-Force",
         ],
-        { shell: true }
+        { shell: false }
       );
       proc.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`Extract failed: ${code}`))));
       proc.on("error", reject);

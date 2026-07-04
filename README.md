@@ -76,7 +76,7 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 
 ### End users — Windows installer
 
-Download **DevTent Setup 1.1.0.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
+Download **DevTent Setup 1.1.1.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
 
 > **SmartScreen notice:** The installer is **unsigned** in v1.0. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
 
@@ -106,7 +106,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.1.0.exe`
+Output: `packages/desktop/release/DevTent Setup 1.1.1.exe`
 
 ### CLI (optional)
 

@@ -17,11 +17,26 @@ export interface LogFileLocation {
   raw: string;
 }
 
+const MAX_PARSE_LINE_LENGTH = 8192;
+const SOURCE_EXT = "(?:php|js|ts|tsx|jsx|vue|py|rb|go|java)";
+/** Bounded path chars — avoids ReDoS from [^\s:]+ on slash-heavy input. */
+const PATH_CHARS = String.raw`[A-Za-z0-9_./\\-]{1,512}`;
+const LINE_NUM = String.raw`\d{1,9}`;
+
 const LOCATION_PATTERNS: RegExp[] = [
-  /\(([^()]+\.(?:php|js|ts|tsx|jsx|vue|py|rb|go|java)):(\d+)\)/gi,
-  /in\s+([A-Za-z]:\\[^\s:]+\.(?:php|js|ts|tsx|jsx|vue)|\/[^\s:]+\.(?:php|js|ts|tsx|jsx|vue))\s+on\s+line\s+(\d+)/gi,
-  /([A-Za-z]:\\[^\s:(]+\.(?:php|js|ts|tsx|jsx|vue)|\/[^\s:(]+\.(?:php|js|ts|tsx|jsx|vue))\((\d+)\)/gi,
-  /([A-Za-z]:\\[^\s:]+\.(?:php|js|ts|tsx|jsx|vue)|\/[^\s:]+\.(?:php|js|ts|tsx|jsx|vue)):(\d+)/g,
+  new RegExp(String.raw`\(([^()]+\.${SOURCE_EXT}):(${LINE_NUM})\)`, "gi"),
+  new RegExp(
+    String.raw`\bin\s+((?:[A-Za-z]:\\${PATH_CHARS}|\/${PATH_CHARS})\.${SOURCE_EXT})\s+on\s+line\s+(${LINE_NUM})`,
+    "gi"
+  ),
+  new RegExp(
+    String.raw`((?:[A-Za-z]:\\${PATH_CHARS}|\/${PATH_CHARS})\.${SOURCE_EXT})\((${LINE_NUM})\)`,
+    "gi"
+  ),
+  new RegExp(
+    String.raw`((?:[A-Za-z]:\\${PATH_CHARS}|\/${PATH_CHARS})\.${SOURCE_EXT}):(${LINE_NUM})`,
+    "g"
+  ),
 ];
 
 function resolveLogFilePath(root: string, fileName: string): string {
@@ -84,6 +99,8 @@ export async function searchLogFiles(
 }
 
 export function parseLogLineLocations(line: string, root?: string): LogFileLocation[] {
+  if (line.length > MAX_PARSE_LINE_LENGTH) return [];
+
   const found: LogFileLocation[] = [];
   const seen = new Set<string>();
 

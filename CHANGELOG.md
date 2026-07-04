@@ -2,6 +2,17 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.1.1] - 2026-07-04
+
+Security patch addressing GitHub CodeQL findings.
+
+### Security
+
+- **Log viewer** — replace ambiguous path regexes and cap parse line length to mitigate ReDoS (CodeQL `js/polynomial-redos`)
+- **SSL / mkcert** — validate domain names before spawning mkcert; run without shell interpolation (CodeQL `js/shell-command-constructed-from-input`)
+- **Quick Add** — extract ZIP archives via PowerShell argument list instead of interpolated command strings
+- **CI workflow** — add explicit `permissions: contents: read` (CodeQL `actions/missing-workflow-permissions`)
+
 ## [1.1.0] - 2026-07-02
 
 Feature release: SSL workflow, health dashboard, portability, Node management, enhanced logs, and profile-driven optional services.
@@ -112,6 +123,7 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.1.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.1
 [1.1.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.0
 [1.0.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.2
 [1.0.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.0.1

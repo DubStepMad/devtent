@@ -3,6 +3,20 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 
+/** Hostname-style domains only — blocks shell metacharacters in mkcert args. */
+export function validateSslDomain(domain: string): void {
+  if (domain.length > 253) {
+    throw new Error("Domain name is too long");
+  }
+  if (
+    !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+      domain
+    )
+  ) {
+    throw new Error(`Invalid domain name: ${domain}`);
+  }
+}
+
 export interface SslResult {
   domain: string;
   certPath: string;
@@ -25,6 +39,7 @@ export async function hasSslCertificate(root: string, domain: string): Promise<b
 }
 
 export async function enableSsl(root: string, domain: string): Promise<SslResult> {
+  validateSslDomain(domain);
   const config = await loadConfig(root);
   const sslDir = resolvePath(root, "etc/ssl");
   await mkdir(sslDir, { recursive: true });
@@ -72,11 +87,15 @@ export async function enableSsl(root: string, domain: string): Promise<SslResult
 }
 
 function runMkcert(mkcertPath: string, sslDir: string, domain: string): Promise<void> {
+  validateSslDomain(domain);
+  const certFile = path.join(sslDir, `${domain}.pem`);
+  const keyFile = path.join(sslDir, `${domain}-key.pem`);
+
   return new Promise((resolve, reject) => {
     const proc = spawn(
       mkcertPath,
-      ["-cert-file", path.join(sslDir, `${domain}.pem`), "-key-file", path.join(sslDir, `${domain}-key.pem`), domain],
-      { shell: true, stdio: "inherit" }
+      ["-cert-file", certFile, "-key-file", keyFile, domain],
+      { stdio: "inherit" }
     );
     proc.on("close", (code) => {
       if (code === 0) resolve();
@@ -95,7 +114,7 @@ export async function installMkcertCa(root: string): Promise<string> {
   }
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(mkcertPath, ["-install"], { shell: true, stdio: "inherit" });
+    const proc = spawn(mkcertPath, ["-install"], { stdio: "inherit" });
     proc.on("close", (code) => {
       if (code === 0) resolve("mkcert CA installed — browsers will trust local certificates");
       else reject(new Error(`mkcert -install failed with code ${code}`));

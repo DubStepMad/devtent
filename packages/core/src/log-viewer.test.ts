@@ -16,6 +16,16 @@ describe("log viewer", () => {
     assert.equal(locations[0].line, 42);
   });
 
+  it("ignores overlong lines to avoid regex DoS", () => {
+    const line = "/" + "a".repeat(9000) + ".php:1";
+    assert.equal(parseLogLineLocations(line).length, 0);
+  });
+
+  it("ignores slash-heavy lines without a source extension", () => {
+    const line = "/" + "/".repeat(500);
+    assert.equal(parseLogLineLocations(line).length, 0);
+  });
+
   it("searches log files for a query", async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-log-search-"));
     await initDevTent(tmp, () => {});
