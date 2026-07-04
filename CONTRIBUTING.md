@@ -93,7 +93,7 @@ Issue templates apply the first four labels automatically. Maintainers add the r
 
 ## Code of conduct
 
-Be respectful. This project exists to lower barriers for new developers. Gatekeeping has no place here.
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Be respectful — DevTent exists to lower barriers for developers. Gatekeeping has no place here.
 
 ## Questions?
 
