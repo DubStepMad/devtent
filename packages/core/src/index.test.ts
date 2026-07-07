@@ -92,10 +92,10 @@ describe("Virtual hosts", () => {
 
       const { vhosts } = await generateVirtualHosts(tmp, { skipHostsSync: true });
       assert.equal(vhosts.length, 1);
-      assert.equal(vhosts[0].domain, "myapp.test");
+      assert.equal(vhosts[0].domain, "myapp.localhost");
 
       const nginxConf = await readFile(path.join(tmp, "etc/nginx/sites/myapp.conf"), "utf-8");
-      assert.match(nginxConf, /server_name myapp\.test/);
+      assert.match(nginxConf, /server_name myapp\.localhost/);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -115,7 +115,7 @@ describe("Virtual hosts", () => {
 
       const apacheConf = await readFile(path.join(tmp, "etc/apache/sites/myapp.conf"), "utf-8");
       assert.match(apacheConf, /DocumentRoot ".*\/public"/);
-      assert.match(apacheConf, /proxy:fcgi:\/\/127\.0\.0\.1:9000\//);
+      assert.match(apacheConf, /proxy:fcgi:\/\/127\.0\.0\.1:9083\//);
       assert.match(apacheConf, /ProxyFCGISetEnvIf/);
 
       const nginxConf = await readFile(path.join(tmp, "etc/nginx/sites/myapp.conf"), "utf-8");

@@ -1,0 +1,8 @@
+name: mariadb-11.4
+version: "11.4.2"
+description: MariaDB 11.4 for Windows
+platform: win32
+arch: x64
+url: https://archive.mariadb.org/mariadb-11.4.2/winx64-packages/mariadb-11.4.2-winx64.zip
+installPath: bin/mariadb
+binary: bin/mysqld.exe

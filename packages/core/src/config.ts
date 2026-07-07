@@ -7,6 +7,7 @@ import type { DevTentConfig, Profile, ServiceDefinition } from "./types.js";
 import { DEFAULT_PHP_VERSION, normalizeProfile } from "./profile-runtime.js";
 import { ensureApacheConfig } from "./apache-support.js";
 import { hasExistingEnvironment } from "./environment.js";
+import { normalizeTld, ZERO_ADMIN_TLD } from "./domain.js";
 
 export const CONFIG_FILENAME = "devtent.toml";
 export const DEFAULT_PROFILE = "default";
@@ -53,7 +54,7 @@ export function getDefaultConfig(root: string): DevTentConfig {
     version: 1,
     root,
     activeProfile: DEFAULT_PROFILE,
-    tld: "test",
+    tld: ZERO_ADMIN_TLD,
     ssl: { enabled: false, mkcertPath: "bin/mkcert/mkcert.exe" },
     paths: {
       www: "www",
@@ -105,6 +106,14 @@ export async function saveConfig(root: string, config: DevTentConfig): Promise<v
   const configPath = path.join(root, CONFIG_FILENAME);
   await writeFile(configPath, stringifyToml(config as unknown as Record<string, unknown>), "utf-8");
   await writeActiveProfileMarker(root, config.activeProfile);
+}
+
+export async function setDevTentTld(root: string, tld: string): Promise<string> {
+  const normalized = normalizeTld(tld);
+  const config = await loadConfig(root);
+  config.tld = normalized;
+  await saveConfig(root, config);
+  return normalized;
 }
 
 async function writeActiveProfileMarker(root: string, profileName: string): Promise<void> {
@@ -339,6 +348,7 @@ export interface UpdateProfileInput {
   database?: Profile["database"];
   services?: Profile["services"];
   nodeVersion?: Profile["nodeVersion"];
+  useExternalNode?: Profile["useExternalNode"];
 }
 
 export async function updateProfile(

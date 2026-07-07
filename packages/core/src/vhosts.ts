@@ -4,6 +4,9 @@ import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { VirtualHost } from "./types.js";
 import { apachePhpHandlerBlock, ensureApacheConfig } from "./apache-support.js";
 import { hasSslCertificate } from "./ssl.js";
+import { resolvePhpCgiPort, resolvePhpVersionForVhost } from "./php-ports.js";
+import { syncPhpCgiProcfile } from "./php-cgi-sync.js";
+import { tldRequiresHostsFile } from "./domain.js";
 import { requestElevatedHostsSync, prepareHostsSyncFiles, getElevatedHostsSyncMessage, getElevatedHostsSyncFailureMessage } from "./hosts-elevate.js";
 
 export interface HostsSyncResult {
@@ -64,55 +67,17 @@ function hostsContentMatches(a: string, b: string): boolean {
   return normalizeHostsContent(a) === normalizeHostsContent(b);
 }
 
+import { discoverAllVirtualHosts, discoverProjectNames, resolveProjectWebRoot } from "./sites.js";
+
 export async function discoverProjects(wwwRoot: string): Promise<string[]> {
-  if (!(await pathExists(wwwRoot))) return [];
-
-  const entries = await readdir(wwwRoot, { withFileTypes: true });
-  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  return discoverProjectNames(wwwRoot);
 }
 
-async function isDirectory(dirPath: string): Promise<boolean> {
-  try {
-    return (await stat(dirPath)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/** Laragon-style web root: Laravel/Symfony public/ (or web/) when present. */
-export async function resolveProjectWebRoot(projectDir: string): Promise<string> {
-  const publicDir = path.join(projectDir, "public");
-  if (await isDirectory(publicDir)) {
-    return publicDir;
-  }
-
-  const webDir = path.join(projectDir, "web");
-  if ((await isDirectory(webDir)) && (await pathExists(path.join(webDir, "index.php")))) {
-    return webDir;
-  }
-
-  return projectDir;
-}
+export { resolveProjectWebRoot };
 
 /** List projects under www/ as virtual hosts without writing configs or syncing hosts. */
 export async function listVirtualHosts(root: string): Promise<VirtualHost[]> {
-  const config = await loadConfig(root);
-  const wwwRoot = resolvePath(root, config.paths.www);
-  const projects = await discoverProjects(wwwRoot);
-  const vhosts: VirtualHost[] = [];
-
-  for (const name of projects) {
-    const projectDir = path.join(wwwRoot, name);
-    const domain = `${name}.${config.tld}`;
-    vhosts.push({
-      name,
-      domain,
-      root: await resolveProjectWebRoot(projectDir),
-      ssl: await hasSslCertificate(root, domain),
-    });
-  }
-
-  return vhosts;
+  return discoverAllVirtualHosts(root);
 }
 
 export async function generateVirtualHosts(
@@ -133,12 +98,17 @@ export async function generateVirtualHosts(
     await writeApacheSite(root, vhost);
   }
 
-  const hosts = options?.skipHostsSync
-    ? { updated: false, requiresAdmin: false }
-    : await syncHostsFile(vhosts, {
-        root,
-        deferElevation: options?.deferHostsElevation,
-      });
+  await syncPhpCgiProcfile(root);
+
+  const config = await loadConfig(root);
+  const needsHostsFile = tldRequiresHostsFile(config.tld);
+  const hosts =
+    options?.skipHostsSync || !needsHostsFile
+      ? { updated: false, requiresAdmin: false, hostsCurrent: !needsHostsFile }
+      : await syncHostsFile(vhosts, {
+          root,
+          deferElevation: options?.deferHostsElevation,
+        });
 
   return { vhosts, hosts };
 }
@@ -146,6 +116,8 @@ export async function generateVirtualHosts(
 async function writeNginxSite(root: string, vhost: VirtualHost): Promise<void> {
   const sitePath = path.join(root, "etc/nginx/sites", `${vhost.name}.conf`);
   const rootPath = vhost.root.replace(/\\/g, "/");
+  const phpVersion = resolvePhpVersionForVhost(vhost.phpVersion);
+  const cgiPort = resolvePhpCgiPort(phpVersion);
 
   const sslBlock = vhost.ssl
     ? `
@@ -166,7 +138,7 @@ server {
   }
 
   location ~ \\.php$ {
-    fastcgi_pass 127.0.0.1:9000;
+    fastcgi_pass 127.0.0.1:${cgiPort};
     fastcgi_index index.php;
     fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
     include fastcgi_params;
@@ -182,6 +154,9 @@ server {
 async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> {
   const sitePath = path.join(root, "etc/apache/sites", `${vhost.name}.conf`);
   const rootPath = vhost.root.replace(/\\/g, "/");
+  const phpVersion = resolvePhpVersionForVhost(vhost.phpVersion);
+  const cgiPort = resolvePhpCgiPort(phpVersion);
+  const phpHandler = apachePhpHandlerBlock(cgiPort);
 
   const sslBlock = vhost.ssl
     ? `
@@ -196,7 +171,7 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
     AllowOverride All
     Require all granted
   </Directory>
-  ${apachePhpHandlerBlock()}
+  ${phpHandler}
   ErrorLog "logs/${vhost.name}-ssl-error.log"
   CustomLog "logs/${vhost.name}-ssl-access.log" common
 </VirtualHost>`
@@ -211,7 +186,7 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
     AllowOverride All
     Require all granted
   </Directory>
-  ${apachePhpHandlerBlock()}
+  ${phpHandler}
   ErrorLog "logs/${vhost.name}-error.log"
   CustomLog "logs/${vhost.name}-access.log" common
 </VirtualHost>${sslBlock}

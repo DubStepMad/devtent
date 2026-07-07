@@ -2,7 +2,12 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { parse as parseYaml } from "yaml";
-import { resolvePath, pathExists } from "./config.js";
+import { resolvePath, pathExists, loadConfig } from "./config.js";
+import { formatSiteDomain } from "./domain.js";
+import {
+  installLaravelQueryCapture,
+  isLaravelProject,
+} from "./laravel-query-capture.js";
 import type { QuickAppTemplate } from "./types.js";
 
 export async function loadTemplate(templatesDir: string, name: string): Promise<QuickAppTemplate> {
@@ -69,9 +74,18 @@ export async function createFromTemplate(
     }
   }
 
+  if (templateName === "laravel" && (await isLaravelProject(projectPath))) {
+    const capture = await installLaravelQueryCapture(projectPath);
+    if (capture.installed) {
+      log(capture.alreadyInstalled ? "  Laravel query capture already enabled" : "  ✓ Laravel query capture enabled");
+    }
+  }
+
+  const config = await loadConfig(root);
+  const domain = formatSiteDomain(projectName, config.tld);
   log(`✓ Project created at www/${projectName}`);
   log(`  Run: devtent vhost sync`);
-  log(`  URL: http://${projectName}.test`);
+  log(`  URL: http://${domain}`);
 
   return projectPath;
 }

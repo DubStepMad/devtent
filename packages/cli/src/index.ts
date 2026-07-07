@@ -38,6 +38,20 @@ import {
   listNodeVersions,
   installNodeVersion,
   applyNodeVersionToActiveProfile,
+  listParkedPaths,
+  listLinkedSites,
+  addParkedPath,
+  removeParkedPath,
+  linkSite,
+  unlinkSite,
+  setSitePhpVersion,
+  runDoctor,
+  buildLaravelEnvSnippet,
+  startShare,
+  stopShare,
+  listActiveShares,
+  readDumpEvents,
+  clearDumpEvents,
 } from "@devtent/core";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -506,12 +520,14 @@ nodeCmd
 
 nodeCmd
   .command("use <version>")
-  .description("Set active Node version for the current profile")
+  .description("Set active Node (e.g. node-22, or 'external' for nvm/fnm/system)")
   .option("-r, --root <path>", "DevTent root directory")
   .action(async (version: string, opts: { root?: string }) => {
     const root = resolveRoot(opts.root);
     const profile = await applyNodeVersionToActiveProfile(root, version);
-    log(`✓ Active profile "${profile.name}" now uses ${version}`);
+    const label =
+      version === "external" ? "external Node (your version manager)" : version;
+    log(`✓ Active profile "${profile.name}" now uses ${label}`);
   });
 
 stackCmd
@@ -632,5 +648,210 @@ migrateCmd
     "Comma-separated www/ folder names to import (default: all)"
   )
   .action(runMigrateImport);
+
+const sitesCmd = program.command("sites").description("Park folders and link external projects (Yerd-style)");
+
+sitesCmd
+  .command("list")
+  .description("List www, parked, and linked sites")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const state = await getState(root);
+    for (const v of state.virtualHosts) {
+      const tag = v.source === "parked" ? "parked" : v.source === "linked" ? "linked" : "www";
+      log(`  [${tag}] ${v.domain} → ${v.root}`);
+    }
+    log("");
+    log(`Parked roots: ${(await listParkedPaths(root)).join(", ") || "(none)"}`);
+    const linked = await listLinkedSites(root);
+    if (linked.length) {
+      for (const s of linked) {
+        log(`  linked ${s.name} → ${s.path}`);
+      }
+    }
+  });
+
+sitesCmd
+  .command("park <folder>")
+  .description("Park a folder — each subfolder becomes a .test site")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (folder: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    await addParkedPath(root, folder);
+    const { vhosts } = await generateVirtualHosts(root);
+    log(`✓ Parked ${path.resolve(folder)} — ${vhosts.length} site(s) total`);
+  });
+
+sitesCmd
+  .command("unpark <folder>")
+  .description("Stop parking a folder")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (folder: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    await removeParkedPath(root, folder);
+    await generateVirtualHosts(root);
+    log(`✓ Removed parked folder ${path.resolve(folder)}`);
+  });
+
+sitesCmd
+  .command("link <projectPath>")
+  .description("Link an external project as name.test")
+  .option("-n, --name <name>", "Site name (default: folder basename)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (projectPath: string, opts: { root?: string; name?: string }) => {
+    const root = resolveRoot(opts.root);
+    await linkSite(root, projectPath, opts.name);
+    const { vhosts } = await generateVirtualHosts(root);
+    const name = opts.name ?? path.basename(path.resolve(projectPath));
+    log(`✓ Linked ${name}.test → ${path.resolve(projectPath)} (${vhosts.length} site(s) total)`);
+  });
+
+sitesCmd
+  .command("unlink <name>")
+  .description("Remove a linked site")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (name: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    await unlinkSite(root, name);
+    await generateVirtualHosts(root);
+    log(`✓ Unlinked ${name}`);
+  });
+
+sitesCmd
+  .command("php <name> [version]")
+  .description("Set per-site PHP (e.g. php-8.4), or omit version to show current")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (name: string, version: string | undefined, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    if (!version) {
+      const state = await getState(root);
+      const site = state.virtualHosts.find((v) => v.name === name);
+      if (!site) {
+        log(`Site not found: ${name}`);
+        process.exitCode = 1;
+        return;
+      }
+      log(`${name} → ${site.phpVersion ?? "profile default"}`);
+      return;
+    }
+    const phpVersion = version === "default" ? null : version;
+    await setSitePhpVersion(root, name, phpVersion);
+    await generateVirtualHosts(root);
+    log(`✓ ${name} → ${phpVersion ?? "profile default"}`);
+  });
+
+const shareCmd = program.command("share").description("Public tunnel for a local site (cloudflared)");
+
+shareCmd
+  .command("list")
+  .description("List active share tunnels")
+  .action(() => {
+    const sessions = listActiveShares();
+    if (!sessions.length) {
+      log("No active shares.");
+      return;
+    }
+    for (const s of sessions) {
+      log(`  ${s.siteName} → ${s.publicUrl}`);
+    }
+  });
+
+shareCmd
+  .command("stop <site>")
+  .description("Stop sharing a site")
+  .action(async (site: string) => {
+    await stopShare(site);
+    log(`✓ Stopped sharing ${site}`);
+  });
+
+shareCmd
+  .command("<site>")
+  .description("Share site publicly (Ctrl+C to stop)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (site: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const session = await startShare(root, MANIFESTS_DIR, site, log);
+    log("");
+    log(`✓ Public URL: ${session.publicUrl}`);
+    log("  Tunnel running — press Ctrl+C to stop");
+
+    await new Promise<void>((resolve) => {
+      const onExit = () => {
+        void stopShare(site).finally(resolve);
+      };
+      process.on("SIGINT", onExit);
+      process.on("SIGTERM", onExit);
+    });
+  });
+
+const dumpsCmd = program.command("dumps").description("Laravel / PHP dump stream");
+
+dumpsCmd
+  .command("list")
+  .description("Show recent dump events")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("-n, --tail <count>", "Number of events", "50")
+  .action(async (opts: { root?: string; tail?: string }) => {
+    const root = resolveRoot(opts.root);
+    const events = await readDumpEvents(root, { tail: Number(opts.tail ?? 50) });
+    if (!events.length) {
+      log("No dumps yet — call dump() in PHP or open the Dumps tab.");
+      return;
+    }
+    for (const ev of events) {
+      const when = new Date((ev.ts ?? 0) * 1000).toISOString();
+      log(`[${when}] ${ev.type}${ev.file ? ` ${ev.file}:${ev.line ?? ""}` : ""}`);
+      log(ev.message);
+      if (ev.context) log(`  ${ev.context}`);
+      log("");
+    }
+  });
+
+dumpsCmd
+  .command("clear")
+  .description("Clear dump log")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    await clearDumpEvents(root);
+    log("✓ Dumps cleared");
+  });
+
+program
+  .command("doctor")
+  .description("Diagnose environment issues (like Yerd doctor)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--fix", "Apply safe automatic repairs")
+  .option("--start", "Start services after repair (with --fix)")
+  .action(async (opts: { root?: string; fix?: boolean; start?: boolean }) => {
+    const root = resolveRoot(opts.root);
+    const report = await runDoctor(root, {
+      repair: opts.fix,
+      startServices: opts.start,
+    });
+    if (report.repaired.length) {
+      log("Repairs applied:");
+      for (const line of report.repaired) log(`  ✓ ${line}`);
+      log("");
+    }
+    for (const f of report.findings) {
+      const icon = f.severity === "ok" || f.severity === "fixed" ? "✓" : f.severity === "warn" ? "⚠" : "✗";
+      log(`${icon} ${f.title}${f.detail ? ` — ${f.detail}` : ""}`);
+    }
+  });
+
+const laravelCmd = program.command("laravel").description("Laravel helpers");
+
+laravelCmd
+  .command("env <site>")
+  .description("Print .env snippet for DB, mail, and APP_URL")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (site: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const snippet = await buildLaravelEnvSnippet(root, site);
+    log(`# Paste into .env for ${snippet.domain}`);
+    log(snippet.envBlock);
+  });
 
 program.parse();

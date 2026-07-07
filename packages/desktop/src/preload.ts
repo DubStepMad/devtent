@@ -52,6 +52,27 @@ const api = {
   listMysqlBackups: () => ipcRenderer.invoke("devtent:listMysqlBackups"),
   restoreMysql: (backupId: string) => ipcRenderer.invoke("devtent:restoreMysql", backupId),
   getEnvironmentHealth: () => ipcRenderer.invoke("devtent:getEnvironmentHealth"),
+  runDoctor: (options?: { repair?: boolean; startServices?: boolean }) =>
+    ipcRenderer.invoke("devtent:runDoctor", options),
+  getLaravelEnv: (siteName: string) => ipcRenderer.invoke("devtent:getLaravelEnv", siteName),
+  listSitesConfig: () => ipcRenderer.invoke("devtent:listSitesConfig"),
+  parkFolder: (folderPath: string) => ipcRenderer.invoke("devtent:parkFolder", folderPath),
+  unparkFolder: (folderPath: string) => ipcRenderer.invoke("devtent:unparkFolder", folderPath),
+  linkProject: (projectPath: string, name?: string) =>
+    ipcRenderer.invoke("devtent:linkProject", projectPath, name),
+  unlinkProject: (name: string) => ipcRenderer.invoke("devtent:unlinkProject", name),
+  openProjectPath: (projectPath: string) => ipcRenderer.invoke("devtent:openProjectPath", projectPath),
+  setSitePhpVersion: (siteName: string, phpVersion: string | null) =>
+    ipcRenderer.invoke("devtent:setSitePhpVersion", siteName, phpVersion),
+  getLaravelCaptureSnippet: () => ipcRenderer.invoke("devtent:getLaravelCaptureSnippet"),
+  listDumps: (tail?: number) => ipcRenderer.invoke("devtent:listDumps", tail),
+  clearDumps: () => ipcRenderer.invoke("devtent:clearDumps"),
+  startShare: (siteName: string) => ipcRenderer.invoke("devtent:startShare", siteName),
+  stopShare: (siteName: string) => ipcRenderer.invoke("devtent:stopShare", siteName),
+  listShares: () => ipcRenderer.invoke("devtent:listShares"),
+  setTld: (tld: string) => ipcRenderer.invoke("devtent:setTld", tld),
+  installLaravelQueryCapture: (siteName: string) =>
+    ipcRenderer.invoke("devtent:installLaravelQueryCapture", siteName),
   setStopServicesOnQuit: (enabled: boolean) =>
     ipcRenderer.invoke("devtent:setStopServicesOnQuit", enabled),
   setLaunchAtLogin: (enabled: boolean) => ipcRenderer.invoke("devtent:setLaunchAtLogin", enabled),
@@ -103,6 +124,12 @@ const api = {
   listAppBackups: () => ipcRenderer.invoke("devtent:listAppBackups"),
   rollbackApp: () => ipcRenderer.invoke("devtent:rollbackApp"),
   openTerminal: () => ipcRenderer.invoke("devtent:openTerminal"),
+  listTooling: () => ipcRenderer.invoke("devtent:listTooling"),
+  getPathEntries: () => ipcRenderer.invoke("devtent:getPathEntries"),
+  installTool: (toolId: string) => ipcRenderer.invoke("devtent:installTool", toolId),
+  updateTool: (toolId: string) => ipcRenderer.invoke("devtent:updateTool", toolId),
+  removeTool: (toolId: string, options?: { nodeVersion?: string }) =>
+    ipcRenderer.invoke("devtent:removeTool", toolId, options),
   quit: () => ipcRenderer.invoke("devtent:quit"),
   openDashboard: (view?: string) => ipcRenderer.invoke("devtent:openDashboard", view),
   closeQuickPanel: () => ipcRenderer.invoke("devtent:closeQuickPanel"),

@@ -54,6 +54,31 @@ import {
   installNodeVersion,
   applyNodeVersionToActiveProfile,
   clearActiveNodeVersion,
+  listParkedPaths,
+  listLinkedSites,
+  addParkedPath,
+  removeParkedPath,
+  linkSite,
+  unlinkSite,
+  setSitePhpVersion,
+  runDoctor,
+  buildLaravelEnvSnippet,
+  laravelCaptureProviderSnippet,
+  listVirtualHosts,
+  listTooling,
+  installTool,
+  updateTool,
+  removeTool,
+  getPathEntries,
+  readDumpEvents,
+  clearDumpEvents,
+  startShare,
+  stopShare,
+  listActiveShares,
+  loadConfig,
+  setDevTentTld,
+  installLaravelQueryCapture,
+  tldRequiresHostsFile,
 } from "@devtent/core";
 import type { ProcfileEntry, ProcfileToggle } from "@devtent/core";
 import {
@@ -163,7 +188,7 @@ export function registerIpcHandlers(): void {
     await refreshRoot();
     const settings = await loadSettings();
     const initialized = await isInitialized(currentRoot);
-    return {
+    const base = {
       root: currentRoot,
       initialized,
       setupCompleted: settings.setupCompleted ?? false,
@@ -172,6 +197,13 @@ export function registerIpcHandlers(): void {
       stopServicesOnQuit: settings.stopServicesOnQuit !== false,
       ...readStartupPreferences(settings),
       launchAtLoginAvailable: app.isPackaged,
+    };
+    if (!initialized) return base;
+    const config = await loadConfig(currentRoot);
+    return {
+      ...base,
+      tld: config.tld,
+      zeroAdminDomains: !tldRequiresHostsFile(config.tld),
     };
   });
 
@@ -296,6 +328,122 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("devtent:getEnvironmentHealth", async () => {
     return getEnvironmentHealth(currentRoot);
+  });
+
+  ipcMain.handle("devtent:runDoctor", async (_e, options?: { repair?: boolean; startServices?: boolean }) => {
+    const report = await runDoctor(currentRoot, options);
+    if (options?.repair) {
+      broadcastRefresh();
+      await afterServiceChange();
+    }
+    return report;
+  });
+
+  ipcMain.handle("devtent:getLaravelEnv", async (_e, siteName: string) => {
+    return buildLaravelEnvSnippet(currentRoot, siteName);
+  });
+
+  ipcMain.handle("devtent:listSitesConfig", async () => {
+    return {
+      parked: await listParkedPaths(currentRoot),
+      linked: await listLinkedSites(currentRoot),
+    };
+  });
+
+  ipcMain.handle("devtent:parkFolder", async (_e, folderPath: string) => {
+    await addParkedPath(currentRoot, folderPath);
+    const result = await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:unparkFolder", async (_e, folderPath: string) => {
+    await removeParkedPath(currentRoot, folderPath);
+    const result = await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:linkProject", async (_e, projectPath: string, name?: string) => {
+    await linkSite(currentRoot, projectPath, name);
+    const result = await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:unlinkProject", async (_e, name: string) => {
+    await unlinkSite(currentRoot, name);
+    const result = await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:openProjectPath", async (_e, projectPath: string) => {
+    const vhosts = await listVirtualHosts(currentRoot);
+    const allowed = vhosts.some((v) => v.projectPath && path.resolve(v.projectPath) === path.resolve(projectPath));
+    if (!allowed) {
+      throw new Error("Path is not a registered DevTent site");
+    }
+    await openFolderInShell(projectPath);
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:setSitePhpVersion", async (_e, siteName: string, phpVersion: string | null) => {
+    await setSitePhpVersion(currentRoot, siteName, phpVersion);
+    const result = await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return result;
+  });
+
+  ipcMain.handle("devtent:getLaravelCaptureSnippet", async () => {
+    return laravelCaptureProviderSnippet();
+  });
+
+  ipcMain.handle("devtent:listDumps", async (_e, tail?: number) => {
+    return readDumpEvents(currentRoot, { tail: tail ?? 200 });
+  });
+
+  ipcMain.handle("devtent:clearDumps", async () => {
+    await clearDumpEvents(currentRoot);
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:startShare", async (_e, siteName: string) => {
+    sendProgress(`Sharing ${siteName}…`);
+    const session = await startShare(currentRoot, getManifestsDir(), siteName, sendProgress);
+    return session;
+  });
+
+  ipcMain.handle("devtent:stopShare", async (_e, siteName: string) => {
+    await stopShare(siteName);
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:listShares", async () => {
+    await refreshRoot();
+    const vhosts = await listVirtualHosts(currentRoot);
+    return listActiveShares(
+      currentRoot,
+      vhosts.map((v) => ({ name: v.name, domain: v.domain }))
+    );
+  });
+
+  ipcMain.handle("devtent:setTld", async (_e, tld: string) => {
+    await refreshRoot();
+    const normalized = await setDevTentTld(currentRoot, tld);
+    await generateVirtualHosts(currentRoot);
+    broadcastRefresh();
+    return { tld: normalized, zeroAdminDomains: !tldRequiresHostsFile(normalized) };
+  });
+
+  ipcMain.handle("devtent:installLaravelQueryCapture", async (_e, siteName: string) => {
+    await refreshRoot();
+    const vhosts = await listVirtualHosts(currentRoot);
+    const vhost = vhosts.find((v) => v.name === siteName);
+    if (!vhost) throw new Error(`Site not found: ${siteName}`);
+    const projectPath =
+      vhost.projectPath ?? path.join(currentRoot, "www", vhost.name);
+    return installLaravelQueryCapture(projectPath);
   });
 
   ipcMain.handle("devtent:init", async (_e, root?: string) => {
@@ -569,6 +717,44 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("devtent:listTooling", async () => {
+    await refreshRoot();
+    return listTooling(currentRoot, getManifestsDir());
+  });
+
+  ipcMain.handle("devtent:getPathEntries", async () => {
+    await refreshRoot();
+    return getPathEntries(currentRoot);
+  });
+
+  ipcMain.handle("devtent:installTool", async (_e, toolId: string) => {
+    sendProgress(`Installing ${toolId}…`);
+    await installTool(currentRoot, getManifestsDir(), toolId as import("@devtent/core").ToolingId, sendProgress);
+    broadcastRefresh();
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:updateTool", async (_e, toolId: string) => {
+    sendProgress(`Updating ${toolId}…`);
+    await updateTool(currentRoot, getManifestsDir(), toolId as import("@devtent/core").ToolingId, sendProgress);
+    broadcastRefresh();
+    return { ok: true };
+  });
+
+  ipcMain.handle(
+    "devtent:removeTool",
+    async (_e, toolId: string, options?: { nodeVersion?: string }) => {
+      await removeTool(
+        currentRoot,
+        getManifestsDir(),
+        toolId as import("@devtent/core").ToolingId,
+        options
+      );
+      broadcastRefresh();
+      return { ok: true };
+    }
+  );
+
   ipcMain.handle("devtent:quit", async () => {
     if (requestQuitHandler) {
       requestQuitHandler();
@@ -610,7 +796,11 @@ export function registerIpcHandlers(): void {
     "devtent:openLogInEditor",
     async (_e, filePath: string, line?: number) => {
       await refreshRoot();
-      return openFileInEditor(currentRoot, filePath, line);
+      const vhosts = await listVirtualHosts(currentRoot);
+      const extraRoots = vhosts
+        .map((v) => v.projectPath ?? path.join(currentRoot, "www", v.name))
+        .filter(Boolean);
+      return openFileInEditor(currentRoot, filePath, line, extraRoots);
     }
   );
 
@@ -627,6 +817,12 @@ export function registerIpcHandlers(): void {
       nodeVersion,
       sendProgress
     );
+    const { loadConfig, loadProfile } = await import("@devtent/core");
+    const config = await loadConfig(currentRoot);
+    const profile = await loadProfile(currentRoot, config.activeProfile);
+    if (!profile.nodeVersion && !profile.useExternalNode) {
+      await applyNodeVersionToActiveProfile(currentRoot, nodeVersion);
+    }
     broadcastRefresh();
     return { nodeVersion, installPath };
   });

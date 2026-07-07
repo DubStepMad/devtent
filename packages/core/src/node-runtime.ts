@@ -55,7 +55,7 @@ export async function listNodeVersions(
 ): Promise<NodeVersionInfo[]> {
   const config = await loadConfig(root);
   const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
-  const activeId = profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
+  const activeId = profile.useExternalNode ? undefined : profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
 
   const manifests = (await listManifests(manifestsDir)).filter((m) => m.name.startsWith("node-"));
   const versions: NodeVersionInfo[] = [];
@@ -75,29 +75,15 @@ export async function listNodeVersions(
   return versions.sort((a, b) => b.id.localeCompare(a.id));
 }
 
-export async function applyNodeVersionToActiveProfile(
-  root: string,
-  nodeVersion: string
-): Promise<import("./types.js").Profile> {
-  if (!(await isNodeVersionInstalled(root, nodeVersion))) {
-    throw new Error(`Node ${nodeVersion} is not installed — install it from Quick Add or the Node panel first`);
-  }
-  const config = await loadConfig(root);
-  return updateProfile(root, config.activeProfile, { nodeVersion });
-}
-
-export async function clearActiveNodeVersion(root: string): Promise<import("./types.js").Profile> {
-  const config = await loadConfig(root);
-  const current = await loadProfile(root, config.activeProfile);
-  const profile = normalizeProfile({
-    ...current,
-    nodeVersion: undefined,
-    node: undefined,
-    name: config.activeProfile,
-  });
-  await saveProfile(root, profile);
-  return profile;
-}
+export {
+  applyExternalNodeToActiveProfile,
+  applyNodeVersionToActiveProfile,
+  clearActiveNodeVersion,
+  detectExternalNode,
+  EXTERNAL_NODE_ID,
+  isExternalNodeActive,
+} from "./external-node.js";
+export type { ExternalNodeInfo } from "./external-node.js";
 
 export async function installNodeVersion(
   root: string,

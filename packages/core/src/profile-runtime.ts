@@ -2,6 +2,7 @@ import path from "node:path";
 import { pathExists, resolvePath } from "./config.js";
 import type { Profile, QuickAddManifest } from "./types.js";
 import { nodeVersionFromLegacyPath, resolveNodePaths } from "./node-runtime.js";
+import { resolvePhpCgiPort } from "./php-ports.js";
 
 export const DEFAULT_PHP_VERSION = "php-8.3";
 
@@ -10,6 +11,7 @@ export interface PhpRuntimePaths {
   cli: string;
   cgi: string;
   phpRc: string;
+  cgiPort: number;
   procfileCommand: string;
 }
 
@@ -23,12 +25,14 @@ export function phpVersionFromLegacyPath(phpPath?: string): string | undefined {
 export function resolvePhpPaths(phpVersion: string): PhpRuntimePaths {
   const base = `bin/php/${phpVersion}`;
   const cgi = `${base}/php-cgi.exe`;
+  const cgiPort = resolvePhpCgiPort(phpVersion);
   return {
     phpVersion,
     cli: `${base}/php.exe`,
     cgi,
     phpRc: base,
-    procfileCommand: `${cgi} -b 127.0.0.1:9000`,
+    cgiPort,
+    procfileCommand: `${cgi} -b 127.0.0.1:${cgiPort}`,
   };
 }
 
@@ -36,6 +40,21 @@ export function normalizeProfile(profile: Profile): Profile {
   const phpVersion =
     profile.phpVersion ?? phpVersionFromLegacyPath(profile.php) ?? DEFAULT_PHP_VERSION;
   const paths = resolvePhpPaths(phpVersion);
+
+  if (profile.useExternalNode && !profile.nodeVersion) {
+    return {
+      ...profile,
+      phpVersion,
+      php: paths.cli,
+      nodeVersion: undefined,
+      node: undefined,
+      env: {
+        ...profile.env,
+        PHPRC: paths.phpRc,
+      },
+    };
+  }
+
   const resolvedNodeVersion =
     profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
   const nodePaths = resolvedNodeVersion ? resolveNodePaths(resolvedNodeVersion) : null;

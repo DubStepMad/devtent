@@ -1,0 +1,6 @@
+name: symfony
+description: Symfony skeleton — PHP framework starter
+commands:
+  - composer create-project symfony/skeleton "{path}" --no-git
+postCreate:
+  - cd "{path}" && php bin/console about

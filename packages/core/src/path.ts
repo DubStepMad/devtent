@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
 import { normalizeProfile } from "./profile-runtime.js";
 import { resolveNodePaths } from "./node-runtime.js";
+import { detectExternalNode } from "./external-node.js";
 
 export async function getPathEntries(root: string): Promise<string[]> {
   const config = await loadConfig(root);
@@ -14,7 +15,12 @@ export async function getPathEntries(root: string): Promise<string[]> {
   if (profile.php) {
     entries.push(resolvePath(root, path.dirname(profile.php)));
   }
-  if (profile.nodeVersion) {
+  if (profile.useExternalNode) {
+    const external = await detectExternalNode(root);
+    if (external) {
+      entries.push(path.dirname(external.path));
+    }
+  } else if (profile.nodeVersion) {
     const nodePaths = resolveNodePaths(profile.nodeVersion);
     entries.push(resolvePath(root, path.dirname(nodePaths.cli)));
   } else if (profile.node) {
@@ -24,6 +30,16 @@ export async function getPathEntries(root: string): Promise<string[]> {
   const composerPath = resolvePath(root, "bin/composer");
   if (await pathExists(composerPath)) {
     entries.push(composerPath);
+  }
+
+  const bunPath = resolvePath(root, "bin/bun");
+  if (await pathExists(bunPath)) {
+    entries.push(bunPath);
+  }
+
+  const composerGlobalBin = path.join(root, "data", "composer-home", "vendor", "bin");
+  if (await pathExists(composerGlobalBin)) {
+    entries.push(composerGlobalBin);
   }
 
   return [...new Set(entries)];

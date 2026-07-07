@@ -75,6 +75,11 @@ export async function getServicePresetsForProfile(
       command: "bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini --console",
     },
     {
+      id: "mariadb",
+      name: "MariaDB",
+      command: "bin/mariadb/bin/mysqld.exe --defaults-file=etc/mariadb/my.ini --console",
+    },
+    {
       id: "postgresql",
       name: "PostgreSQL",
       command: 'bin/postgresql/bin/postgres.exe -D data/postgresql -p 5432',
@@ -98,22 +103,8 @@ export async function getServicePresetsForProfile(
 }
 
 export async function syncPhpProcfileFromProfile(root: string): Promise<void> {
-  const entries = await parseProcfile(root);
-  if (!entries.some((e) => e.name === "php-fpm")) return;
-
-  const presets = await getServicePresets(root);
-  const phpPreset = presets.find((p) => p.id === "php-fpm");
-  if (!phpPreset) return;
-
-  const filtered = entries.filter((e) => e.name !== "php-fpm");
-  filtered.push({ name: "php-fpm", command: phpPreset.command });
-
-  const content =
-    filtered.length > 0
-      ? filtered.map((e) => `${e.name}: ${e.command}`).join("\n") + "\n"
-      : "# DevTent Procfile — enable services from the tray panel\n";
-
-  await writeProcfileRaw(root, content);
+  const { syncPhpCgiProcfile } = await import("./php-cgi-sync.js");
+  await syncPhpCgiProcfile(root);
 }
 
 export async function getProcfileToggles(root: string): Promise<ProcfileToggle[]> {
@@ -163,9 +154,11 @@ export async function setProcfileToggle(
     } else if (id === "apache") {
       filtered = filtered.filter((e) => e.name !== "nginx");
     } else if (id === "mysql") {
-      filtered = filtered.filter((e) => e.name !== "postgresql");
+      filtered = filtered.filter((e) => e.name !== "postgresql" && e.name !== "mariadb");
+    } else if (id === "mariadb") {
+      filtered = filtered.filter((e) => e.name !== "postgresql" && e.name !== "mysql");
     } else if (id === "postgresql") {
-      filtered = filtered.filter((e) => e.name !== "mysql");
+      filtered = filtered.filter((e) => e.name !== "mysql" && e.name !== "mariadb");
     }
     filtered.push({ name: id, command: preset.command });
   }

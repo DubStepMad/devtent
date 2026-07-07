@@ -21,28 +21,62 @@ function resolveEditorCommand(): string | null {
   return "cursor";
 }
 
+function isUnderRoot(fullPath: string, root: string): boolean {
+  const normalizedRoot = path.resolve(root);
+  const relative = path.relative(normalizedRoot, path.resolve(fullPath));
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+export function resolveEditorFilePath(
+  root: string,
+  filePath: string,
+  extraRoots: string[] = []
+): string {
+  const roots = [path.resolve(root), ...extraRoots.map((r) => path.resolve(r))];
+
+  if (path.isAbsolute(filePath) && existsSync(filePath)) {
+    if (roots.some((r) => isUnderRoot(filePath, r))) {
+      return path.resolve(filePath);
+    }
+  }
+
+  for (const base of roots) {
+    const direct = path.isAbsolute(filePath)
+      ? path.resolve(filePath)
+      : path.resolve(base, filePath);
+    if (existsSync(direct) && isUnderRoot(direct, base)) {
+      return direct;
+    }
+
+    const basename = path.basename(filePath);
+    const shallow = path.resolve(base, basename);
+    if (existsSync(shallow) && isUnderRoot(shallow, base)) {
+      return shallow;
+    }
+  }
+
+  try {
+    return resolveRootSubpath(root, filePath);
+  } catch {
+    throw new Error(`File not found: ${filePath}`);
+  }
+}
+
 export async function openFileInEditor(
   root: string,
   filePath: string,
-  line?: number
+  line?: number,
+  extraRoots: string[] = []
 ): Promise<{ opened: boolean; message: string }> {
-  let fullPath = filePath;
-  if (!path.isAbsolute(filePath)) {
-    try {
-      fullPath = resolveRootSubpath(root, filePath);
-    } catch {
-      fullPath = path.join(root, filePath);
-    }
+  let fullPath: string;
+  try {
+    fullPath = resolveEditorFilePath(root, filePath, extraRoots);
+  } catch (err) {
+    return { opened: false, message: err instanceof Error ? err.message : String(err) };
   }
 
   if (!existsSync(fullPath)) {
     return { opened: false, message: `File not found: ${fullPath}` };
-  }
-
-  const normalizedRoot = path.resolve(root);
-  const relative = path.relative(normalizedRoot, path.resolve(fullPath));
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    return { opened: false, message: "Can only open files inside the DevTent folder" };
   }
 
   const editor = resolveEditorCommand();

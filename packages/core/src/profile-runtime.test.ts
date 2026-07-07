@@ -16,7 +16,7 @@ describe("profile runtime", () => {
     const paths = resolvePhpPaths("php-8.4");
     assert.equal(paths.cli, "bin/php/php-8.4/php.exe");
     assert.equal(paths.cgi, "bin/php/php-8.4/php-cgi.exe");
-    assert.match(paths.procfileCommand, /php-cgi\.exe -b 127\.0\.0\.1:9000/);
+    assert.match(paths.procfileCommand, /php-cgi\.exe -b 127\.0\.0\.1:9084/);
   });
 
   it("infers phpVersion from legacy profile paths", () => {

@@ -35,7 +35,7 @@ describe("profile-procfile", () => {
     const entries = await parseProcfile(tmp);
     const names = entries.map((e) => e.name).sort();
 
-    assert.deepEqual(names, ["apache", "php-fpm", "postgresql"]);
+    assert.deepEqual(names, ["apache", "php-cgi-8.3", "postgresql"]);
   });
 
   it("merge mode keeps existing procfile entries on update", async () => {
@@ -66,7 +66,7 @@ describe("profile-procfile", () => {
     assert.ok(names.includes("mailpit"));
     assert.ok(names.includes("nginx"));
     assert.ok(names.includes("mysql"));
-    assert.ok(names.includes("php-fpm"));
+    assert.ok(names.includes("php-cgi-8.3"));
   });
 
   it("replace mode uses profile optional services instead of procfile leftovers", async () => {
@@ -89,7 +89,7 @@ describe("profile-procfile", () => {
     await switchProfile(tmp, "redis-only");
 
     const names = (await parseProcfile(tmp)).map((e) => e.name).sort();
-    assert.deepEqual(names, ["nginx", "php-fpm", "redis"]);
+    assert.deepEqual(names, ["nginx", "php-cgi-8.3", "redis"]);
     assert.ok(!names.includes("mailpit"));
     assert.ok(!names.includes("mysql"));
   });

@@ -16,9 +16,9 @@ export function needsApacheProcfileRepair(command: string): boolean {
 const CONFIG_MARKER = "# DevTent apache config v4";
 
 /** Windows php-cgi needs GENERIC backend + explicit SCRIPT_FILENAME (drive letters break ProxyPassMatch). */
-export function apachePhpHandlerBlock(): string {
+export function apachePhpHandlerBlock(port = 9000): string {
   return `<FilesMatch "\\.php$">
-    SetHandler "proxy:fcgi://127.0.0.1:9000/"
+    SetHandler "proxy:fcgi://127.0.0.1:${port}/"
     ProxyFCGIBackendType GENERIC
     ProxyFCGISetEnvIf "true" SCRIPT_FILENAME "%{reqenv:DOCUMENT_ROOT}%{reqenv:SCRIPT_NAME}"
   </FilesMatch>`;

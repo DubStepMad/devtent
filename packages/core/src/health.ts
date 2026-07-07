@@ -5,6 +5,7 @@ import { getServiceStatuses, isServiceRunning } from "./services.js";
 import { listVirtualHosts } from "./vhosts.js";
 import { listMysqlBackups, MYSQL_BACKUP_DIR } from "./mysql.js";
 import { hasSslCertificate } from "./ssl.js";
+import { tldRequiresHostsFile } from "./domain.js";
 
 export type HealthSeverity = "ok" | "warn" | "error";
 
@@ -58,6 +59,14 @@ export async function getEnvironmentHealth(root: string): Promise<HealthItem[]> 
   }
 
   const vhosts = await listVirtualHosts(root);
+  if (!tldRequiresHostsFile(config.tld)) {
+    items.push({
+      id: "zero-admin-domains",
+      severity: "ok",
+      title: `Using .${config.tld} domains (no hosts file admin needed)`,
+      detail: "Browsers resolve *.localhost to 127.0.0.1 automatically",
+    });
+  }
   if (!vhosts.length) {
     items.push({
       id: "no-projects",

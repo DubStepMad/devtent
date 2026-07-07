@@ -9,13 +9,119 @@ const TITLES = {
   dashboard: "Dashboard",
   services: "Services",
   logs: "Logs",
-  node: "Node",
+  dumps: "Dumps",
+  tooling: "Tooling",
   projects: "Projects",
   "quick-add": "Quick Add",
   "quick-app": "Quick App",
   profiles: "Profiles",
   settings: "Settings",
 };
+
+const SUBTITLES = {
+  dashboard: "Stack health and quick actions",
+  services: "Start, stop, and monitor your stack",
+  logs: "Service output and search",
+  dumps: "Live PHP dumps and Laravel queries",
+  tooling: "Composer, Node, Bun, and PATH",
+  projects: "Sites, SSL, park, and link",
+  "quick-add": "Install stack components",
+  "quick-app": "Scaffold a new project",
+  profiles: "Named stacks and presets",
+  settings: "Paths, updates, and preferences",
+};
+
+const TOOL_ICONS = {
+  composer: "C",
+  node: "N",
+  bun: "B",
+  laravel: "L",
+};
+
+let currentDumpFilter = "all";
+
+const QUICK_ADD_HIDDEN = new Set(["composer", "bun", "cloudflared"]);
+
+const QUICK_ADD_GROUPS = [
+  { label: "PHP runtimes", match: (name) => name.startsWith("php-") },
+  { label: "Web servers", match: (name) => name === "nginx" || name.startsWith("apache") },
+  {
+    label: "Databases",
+    match: (name) =>
+      name.startsWith("mysql") || name.startsWith("mariadb") || name.startsWith("postgresql"),
+  },
+  { label: "Cache, mail & SSL", match: (name) => ["redis", "mailpit", "mkcert"].includes(name) },
+  { label: "Other tools", match: () => true },
+];
+
+function listQuickAddManifests(manifests) {
+  return manifests.filter(
+    (m) => !QUICK_ADD_HIDDEN.has(m.name) && !m.name.startsWith("node-")
+  );
+}
+
+function groupQuickAddManifests(manifests) {
+  const filtered = listQuickAddManifests(manifests);
+  const used = new Set();
+  const groups = [];
+  for (const group of QUICK_ADD_GROUPS) {
+    const items = filtered.filter((m) => !used.has(m.name) && group.match(m.name));
+    items.forEach((m) => used.add(m.name));
+    if (items.length) groups.push({ label: group.label, items });
+  }
+  return groups;
+}
+
+async function updateDomainHints(rootStatus) {
+  const tld = rootStatus?.tld || "localhost";
+  const zeroAdmin = rootStatus?.zeroAdminDomains === true;
+  const domainHint = document.getElementById("projects-domain-hint");
+  if (domainHint) domainHint.textContent = `*.${tld}`;
+  document.querySelectorAll(".parked-tld-hint").forEach((el) => {
+    el.textContent = tld;
+  });
+  const hostsBtn = document.getElementById("btn-update-hosts");
+  if (hostsBtn) hostsBtn.classList.toggle("hidden", zeroAdmin);
+  const hostsHint = document.getElementById("hosts-helper-hint");
+  if (hostsHint && zeroAdmin) {
+    hostsHint.textContent =
+      "Using .localhost domains — browsers resolve these without editing the hosts file.";
+    hostsHint.classList.remove("hidden");
+  }
+}
+
+function attachManifestInstallButton(card, m) {
+  const btn = card.querySelector(".btn-install");
+  if (!btn || m.installed) return;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = "Installing…";
+    try {
+      await withLoading(() => api.installManifest(m.name), `Installing ${m.name}…`);
+      showToast(`${m.name} installed`, "success");
+      await refreshManifests();
+      await refreshServices();
+      await refreshProfiles();
+      await refreshAll();
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "Install";
+    }
+  };
+}
+
+function renderManifestCard(m) {
+  const card = document.createElement("div");
+  card.className = `manifest-card${m.installed ? " installed" : ""}`;
+  const btnLabel = m.installed ? "Installed" : "Install";
+  card.innerHTML = `
+    <h4>${escapeHtml(m.name)}</h4>
+    <span class="version">v${escapeHtml(m.version)}</span>
+    <p>${escapeHtml(m.description || "")}</p>
+    <button class="btn primary btn-install" ${m.installed ? "disabled" : ""}>${btnLabel}</button>`;
+  attachManifestInstallButton(card, m);
+  return card;
+}
 
 function projectUrl(vhost) {
   return `${vhost.ssl ? "https" : "http"}://${vhost.domain}`;
@@ -239,6 +345,8 @@ function showView(name) {
   document.querySelectorAll(".view-panel").forEach((p) => p.classList.add("hidden"));
   document.getElementById(`view-${name}`)?.classList.remove("hidden");
   document.getElementById("page-title").textContent = TITLES[name] || name;
+  const subtitle = document.getElementById("page-subtitle");
+  if (subtitle) subtitle.textContent = SUBTITLES[name] || "";
   document.querySelectorAll(".nav-item").forEach((n) => {
     n.classList.toggle("active", n.dataset.view === name);
   });
@@ -477,29 +585,166 @@ function startLogFollow() {
   }, 2000);
 }
 
-async function refreshNode() {
+let dumpsFollowTimer = null;
+
+function renderDumpsEmptyState(title, desc) {
+  return `<div class="empty-state">
+    <div class="empty-state-icon">◇</div>
+    <p class="empty-state-title">${escapeHtml(title)}</p>
+    <p class="empty-state-desc">${desc}</p>
+  </div>`;
+}
+
+function dumpTypeBadge(type) {
+  return `<span class="dump-type-badge dump-type-${escapeHtml(type)}">${escapeHtml(type)}</span>`;
+}
+
+async function refreshDumps() {
+  const viewer = document.getElementById("dumps-viewer");
+  if (!viewer || !api?.listDumps) return;
+  const events = await api.listDumps(300);
+  const filtered =
+    currentDumpFilter === "all"
+      ? events
+      : events.filter((ev) => ev.type === currentDumpFilter);
+
+  if (!events.length) {
+    viewer.innerHTML = renderDumpsEmptyState(
+      "No dumps yet",
+      "Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly."
+    );
+    return;
+  }
+  if (!filtered.length) {
+    viewer.innerHTML = renderDumpsEmptyState(
+      "No matching dumps",
+      `Nothing with type <code>${escapeHtml(currentDumpFilter)}</code> in the latest batch. Try another filter or refresh.`
+    );
+    return;
+  }
+
+  viewer.innerHTML = filtered
+    .map((ev) => {
+      const when = new Date((ev.ts ?? 0) * 1000).toLocaleTimeString();
+      const loc = ev.file
+        ? ` <button type="button" class="link-btn dump-open-ide" data-file="${escapeHtml(ev.file)}" data-line="${ev.line ?? ""}">${escapeHtml(ev.file)}:${ev.line ?? ""}</button>`
+        : "";
+      const ctx = ev.context ? `\n${escapeHtml(ev.context)}` : "";
+      return `<div class="dump-entry dump-${escapeHtml(ev.type)}">
+        <div class="dump-entry-head">
+          <span class="dump-meta">${escapeHtml(when)}</span>
+          ${dumpTypeBadge(ev.type)}
+          ${loc}
+        </div>
+        <pre class="dump-body">${escapeHtml(ev.message)}${ctx}</pre>
+      </div>`;
+    })
+    .join("");
+
+  viewer.querySelectorAll(".dump-open-ide").forEach((btn) => {
+    btn.onclick = async () => {
+      const line = Number(btn.dataset.line);
+      const result = await api.openLogInEditor(btn.dataset.file, Number.isFinite(line) ? line : undefined);
+      if (!result.opened) showToast(result.message || "Could not open file", "error");
+    };
+  });
+
+  if (document.getElementById("dumps-follow")?.checked) {
+    viewer.scrollTop = viewer.scrollHeight;
+  }
+}
+
+function startDumpsFollow() {
+  stopDumpsFollow();
+  if (!document.getElementById("dumps-follow")?.checked) return;
+  dumpsFollowTimer = setInterval(() => void refreshDumps(), 1500);
+}
+
+function stopDumpsFollow() {
+  if (dumpsFollowTimer) {
+    clearInterval(dumpsFollowTimer);
+    dumpsFollowTimer = null;
+  }
+}
+
+async function refreshNodeVersions(nodeVersions, externalNode) {
   const tbody = document.getElementById("node-versions-list");
   const empty = document.getElementById("node-empty");
-  if (!tbody || !api?.listNodeVersions) return;
+  if (!tbody) return;
 
-  const versions = await api.listNodeVersions();
+  const versions = nodeVersions ?? (await api.listNodeVersions());
+  const overview = externalNode !== undefined ? { externalNode } : await api.listTooling();
+  const external = overview.externalNode;
+
   tbody.innerHTML = "";
-  if (!versions.length) {
+  if (!versions.length && !external?.available) {
     empty?.classList.remove("hidden");
     return;
   }
   empty?.classList.add("hidden");
 
+  if (external?.available) {
+    const tr = document.createElement("tr");
+    if (external.active) tr.classList.add("row-active");
+    tr.innerHTML = `
+      <td>
+        <div class="node-version-label">${escapeHtml(external.label)}</div>
+        <div class="tooling-managed-by-you">${escapeHtml(external.manager)}</div>
+      </td>
+      <td><span class="status-pill status-pill-external">External</span></td>
+      <td>${external.active ? '<span class="active-badge">Active</span>' : '<span class="tooling-muted">—</span>'}</td>
+      <td class="tooling-actions-cell"></td>`;
+    const actionCell = tr.querySelector(".tooling-actions-cell");
+    if (external.active) {
+      const span = document.createElement("span");
+      span.className = "tooling-muted";
+      span.textContent = "In use";
+      actionCell.appendChild(span);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn sm primary";
+      btn.textContent = "Use external";
+      btn.onclick = async () => {
+        await withLoading(() => api.setActiveNodeVersion("external"), "Switching to external Node…");
+        showToast(`Using ${external.label}`, "success");
+        await refreshTooling();
+      };
+      actionCell.appendChild(btn);
+    }
+    tbody.appendChild(tr);
+  }
+
   versions.forEach((v) => {
     const tr = document.createElement("tr");
+    if (v.active) tr.classList.add("row-active");
+    const statusClass = v.installed ? "status-pill-installed" : "status-pill-missing";
+    const statusLabel = v.installed ? "Installed" : "Not installed";
     tr.innerHTML = `
-      <td>${escapeHtml(v.label)}</td>
-      <td>${v.installed ? "Yes" : "—"}</td>
-      <td><input type="radio" name="active-node" value="${escapeHtml(v.id)}" ${v.active ? "checked" : ""} ${!v.installed ? "disabled" : ""}></td>
-      <td></td>`;
-    const actionCell = tr.querySelector("td:last-child");
+      <td><div class="node-version-label">${escapeHtml(v.label)}</div></td>
+      <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+      <td>${v.active ? '<span class="active-badge">Active</span>' : v.installed ? '<span class="tooling-muted">—</span>' : '<span class="tooling-muted">—</span>'}</td>
+      <td class="tooling-actions-cell"></td>`;
+    const actionCell = tr.querySelector(".tooling-actions-cell");
     if (v.installed) {
-      actionCell.textContent = "Installed";
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn sm danger secondary";
+      removeBtn.textContent = "Remove";
+      removeBtn.onclick = async () => {
+        if (!confirm(`Remove ${v.label} from DevTent?`)) return;
+        try {
+          await withLoading(
+            () => api.removeTool("node", { nodeVersion: v.id }),
+            `Removing ${v.label}…`
+          );
+          showToast(`${v.label} removed`, "success");
+          await refreshTooling();
+        } catch (err) {
+          showToast(err.message || String(err), "error");
+        }
+      };
+      actionCell.appendChild(removeBtn);
     } else {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -511,8 +756,7 @@ async function refreshNode() {
         try {
           await withLoading(() => api.installNodeVersion(v.id), `Installing ${v.label}…`);
           showToast(`${v.label} installed`, "success");
-          await refreshNode();
-          await refreshManifests();
+          await refreshTooling();
         } catch (err) {
           btn.disabled = false;
           btn.textContent = "Install";
@@ -521,14 +765,182 @@ async function refreshNode() {
       };
       actionCell.appendChild(btn);
     }
-    tr.querySelector('input[type="radio"]')?.addEventListener("change", async (e) => {
-      if (!e.target.checked) return;
-      await withLoading(() => api.setActiveNodeVersion(v.id), `Switching to ${v.label}…`);
-      showToast(`Active Node: ${v.label}`, "success");
-      await refreshNode();
-    });
+    if (v.installed && !v.active) {
+      const useBtn = document.createElement("button");
+      useBtn.type = "button";
+      useBtn.className = "btn sm secondary";
+      useBtn.textContent = "Use";
+      useBtn.onclick = async () => {
+        await withLoading(() => api.setActiveNodeVersion(v.id), `Switching to ${v.label}…`);
+        showToast(`Active Node: ${v.label}`, "success");
+        await refreshTooling();
+      };
+      actionCell.prepend(useBtn);
+    }
     tbody.appendChild(tr);
   });
+}
+
+function toolingStatusClass(source) {
+  if (source === "managed") return "tooling-status-managed";
+  if (source === "external") return "tooling-status-external";
+  return "tooling-status-missing";
+}
+
+function renderToolingActions(tool, cell) {
+  cell.innerHTML = "";
+  if (tool.source === "external") {
+    const wrap = document.createElement("div");
+    wrap.className = "tooling-action-group";
+    if (tool.isExternalActive) {
+      const span = document.createElement("span");
+      span.className = "tooling-managed-by-you";
+      span.textContent = "Active — your Node manager";
+      wrap.appendChild(span);
+    } else if (tool.canUseExternal) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn sm primary";
+      btn.textContent = "Use external";
+      btn.onclick = async () => {
+        await withLoading(() => api.setActiveNodeVersion("external"), "Using external Node…");
+        showToast("External Node selected for this profile", "success");
+        await refreshTooling();
+      };
+      wrap.appendChild(btn);
+    } else {
+      const span = document.createElement("span");
+      span.className = "tooling-managed-by-you";
+      span.textContent = "Managed by you";
+      wrap.appendChild(span);
+    }
+    cell.appendChild(wrap);
+    return;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "tooling-action-group";
+
+  if (tool.canInstall) {
+    const installBtn = document.createElement("button");
+    installBtn.type = "button";
+    installBtn.className = "btn sm primary";
+    installBtn.textContent = tool.id === "node" ? "Install latest" : "Install";
+    installBtn.onclick = async () => {
+      installBtn.disabled = true;
+      installBtn.textContent = "Installing…";
+      try {
+        await withLoading(() => api.installTool(tool.id), `Installing ${tool.name}…`);
+        showToast(`${tool.name} installed`, "success");
+        await refreshTooling();
+      } catch (err) {
+        installBtn.disabled = false;
+        installBtn.textContent = tool.id === "node" ? "Install latest" : "Install";
+        showToast(err.message || String(err), "error");
+      }
+    };
+    wrap.appendChild(installBtn);
+  }
+
+  if (tool.canUpdate) {
+    const updateBtn = document.createElement("button");
+    updateBtn.type = "button";
+    updateBtn.className = "btn sm secondary";
+    updateBtn.textContent = "Update";
+    updateBtn.onclick = async () => {
+      updateBtn.disabled = true;
+      try {
+        await withLoading(() => api.updateTool(tool.id), `Updating ${tool.name}…`);
+        showToast(`${tool.name} updated`, "success");
+        await refreshTooling();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      } finally {
+        updateBtn.disabled = false;
+      }
+    };
+    wrap.appendChild(updateBtn);
+  }
+
+  if (tool.canRemove) {
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "btn sm danger secondary";
+    removeBtn.textContent = "Remove";
+    removeBtn.onclick = async () => {
+      if (!confirm(`Remove ${tool.name} from DevTent?`)) return;
+      try {
+        await withLoading(() => api.removeTool(tool.id), `Removing ${tool.name}…`);
+        showToast(`${tool.name} removed`, "success");
+        await refreshTooling();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    wrap.appendChild(removeBtn);
+  }
+
+  if (!wrap.children.length) {
+    const span = document.createElement("span");
+    span.className = "tooling-muted";
+    span.textContent = "—";
+    wrap.appendChild(span);
+  }
+
+  cell.appendChild(wrap);
+}
+
+async function refreshTooling() {
+  if (!api?.listTooling) return;
+  const overview = await api.listTooling();
+  const cards = document.getElementById("tooling-cards");
+  const pathList = document.getElementById("tooling-path-list");
+  if (!cards) return;
+
+  cards.innerHTML = "";
+  overview.tools.forEach((tool) => {
+    const card = document.createElement("article");
+    card.className = `tool-card${tool.source === "managed" ? " tool-card-ready" : ""}`;
+    const binaries = tool.binaries.map((b) => `<code>${escapeHtml(b)}</code>`).join(", ");
+    const icon = TOOL_ICONS[tool.id] || tool.name.charAt(0).toUpperCase();
+
+    card.innerHTML = `
+      <div class="tool-card-head">
+        <span class="tool-card-icon" aria-hidden="true">${escapeHtml(icon)}</span>
+        <div class="tool-card-titles">
+          <h4 class="tool-card-name">${escapeHtml(tool.name)}</h4>
+          <p class="tool-card-desc">${escapeHtml(tool.description)}</p>
+        </div>
+        <span class="tooling-status ${toolingStatusClass(tool.source)}">${escapeHtml(tool.statusLabel)}</span>
+      </div>
+      <div class="tool-card-binaries">${binaries}</div>
+      <div class="tool-card-actions"></div>`;
+
+    renderToolingActions(tool, card.querySelector(".tool-card-actions"));
+    cards.appendChild(card);
+  });
+
+  if (pathList) {
+    pathList.innerHTML = "";
+    overview.pathEntries.forEach((entry) => {
+      const li = document.createElement("li");
+      li.className = "mono";
+      li.textContent = formatPath(entry);
+      pathList.appendChild(li);
+    });
+    if (!overview.pathEntries.length) {
+      const li = document.createElement("li");
+      li.className = "empty-hint";
+      li.textContent = "Install PHP and tooling to populate PATH entries.";
+      pathList.appendChild(li);
+    }
+  }
+
+  await refreshNodeVersions(overview.nodeVersions, overview.externalNode);
+}
+
+async function refreshNode() {
+  await refreshTooling();
 }
 
 async function confirmAndSwitchProfile(targetName) {
@@ -674,32 +1086,168 @@ async function refreshServices() {
   });
 }
 
+function sourceLabel(source) {
+  if (source === "parked") return "parked";
+  if (source === "linked") return "linked";
+  return "www";
+}
+
+async function refreshSitesConfig() {
+  if (!api?.listSitesConfig) return;
+  const { parked, linked } = await api.listSitesConfig();
+  const parkedList = document.getElementById("parked-list");
+  const linkedList = document.getElementById("linked-list");
+  if (parkedList) {
+    parkedList.innerHTML = parked.length
+      ? parked
+          .map(
+            (p) =>
+              `<li><span class="mono">${escapeHtml(formatPath(p))}</span><button type="button" class="link-btn btn-unpark" data-path="${escapeHtml(p)}">Remove</button></li>`
+          )
+          .join("")
+      : "<li class='empty-hint'>No parked folders</li>";
+    parkedList.querySelectorAll(".btn-unpark").forEach((btn) => {
+      btn.onclick = async () => {
+        await withLoading(() => api.unparkFolder(btn.dataset.path), "Updating sites…");
+        showToast("Parked folder removed", "success");
+        await refreshProjects();
+      };
+    });
+  }
+  if (linkedList) {
+    linkedList.innerHTML = linked.length
+      ? linked
+          .map(
+            (s) =>
+              `<li><span><strong>${escapeHtml(s.name)}</strong> <span class="mono">${escapeHtml(formatPath(s.path))}</span></span><button type="button" class="link-btn btn-unlink" data-name="${escapeHtml(s.name)}">Unlink</button></li>`
+          )
+          .join("")
+      : "<li class='empty-hint'>No linked projects</li>";
+    linkedList.querySelectorAll(".btn-unlink").forEach((btn) => {
+      btn.onclick = async () => {
+        await withLoading(() => api.unlinkProject(btn.dataset.name), "Updating sites…");
+        showToast("Project unlinked", "success");
+        await refreshProjects();
+      };
+    });
+  }
+}
+
 async function refreshProjects() {
   const state = await api.getState();
+  const rootStatus = await api.getRoot();
+  await updateDomainHints(rootStatus);
+  const shares = api.listShares ? await api.listShares().catch(() => []) : [];
+  const shareMap = new Map(shares.map((s) => [s.siteName, s]));
   const list = document.getElementById("projects-list");
   const empty = document.getElementById("projects-empty");
   list.innerHTML = "";
 
   if (!state.virtualHosts?.length) {
     empty.classList.remove("hidden");
+    await refreshSitesConfig();
     return;
   }
   empty.classList.add("hidden");
 
-  state.virtualHosts.forEach((v) => {
+  const phpVersions = (await api.listManifests())
+    .filter((m) => m.name.startsWith("php-"))
+    .map((m) => m.name);
+
+  for (const v of state.virtualHosts) {
     const li = document.createElement("li");
+    li.className = "project-card";
     const url = projectUrl(v);
+    const activeShare = shareMap.get(v.name);
+    const phpOptions = phpVersions
+      .map(
+        (id) =>
+          `<option value="${escapeHtml(id)}" ${v.phpVersion === id ? "selected" : ""}>${escapeHtml(id.replace(/^php-/, "PHP "))}</option>`
+      )
+      .join("");
     li.innerHTML = `
       <div class="project-info">
-        <div class="project-name">${v.name}${v.ssl ? " 🔒" : ""}</div>
-        <div class="project-url">${url}</div>
+        <div class="project-name-row">
+          <span class="site-source-badge">${sourceLabel(v.source)}</span>
+          <span class="project-name">${escapeHtml(v.name)}</span>
+          ${v.ssl ? '<span class="ssl-badge" title="HTTPS enabled">🔒</span>' : ""}
+          ${activeShare ? '<span class="share-active-badge">Shared</span>' : ""}
+        </div>
+        <a href="#" class="project-url project-url-link">${escapeHtml(url)}</a>
+        ${
+          activeShare
+            ? `<div class="project-share-url"><button type="button" class="link-btn btn-copy-share">${escapeHtml(activeShare.publicUrl)}</button></div>`
+            : ""
+        }
+        <label class="project-php-label">PHP version
+          <select class="text-input project-php-select" aria-label="PHP version for ${escapeHtml(v.name)}">
+            ${phpOptions}
+          </select>
+        </label>
       </div>
       <div class="project-actions">
-        <button class="btn sm primary btn-open">Open</button>
-        <button class="btn sm secondary btn-ssl">${v.ssl ? "Renew SSL" : "SSL"}</button>
-        <button class="btn sm secondary btn-folder">Folder</button>
+        <div class="project-actions-primary">
+          <button class="btn sm primary btn-open">Open site</button>
+          <button class="btn sm secondary btn-folder">Folder</button>
+        </div>
+        <div class="project-actions-secondary">
+          <button class="btn sm ${activeShare ? "danger" : "secondary"} btn-share">${activeShare ? "Stop share" : "Share public URL"}</button>
+          <button class="btn sm secondary btn-laravel-env">Laravel .env</button>
+          <button class="btn sm secondary btn-ssl">${v.ssl ? "Renew SSL" : "Enable SSL"}</button>
+        </div>
       </div>`;
     li.querySelector(".btn-open").onclick = () => api.openExternal(url);
+    li.querySelector(".project-url-link")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      api.openExternal(url);
+    });
+    li.querySelector(".btn-share").onclick = async () => {
+      try {
+        if (activeShare) {
+          await withLoading(() => api.stopShare(v.name), `Stopping share for ${v.name}…`);
+          showToast(`Stopped public share for ${v.name}`, "success");
+          await refreshProjects();
+          return;
+        }
+        const session = await withLoading(() => api.startShare(v.name), `Sharing ${v.name}…`);
+        showToast(`Public URL copied — ${session.publicUrl}`, "success", 10000);
+        try {
+          await navigator.clipboard.writeText(session.publicUrl);
+        } catch {
+          // ignore
+        }
+        await refreshProjects();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    li.querySelector(".btn-copy-share")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!activeShare?.publicUrl) return;
+      try {
+        await navigator.clipboard.writeText(activeShare.publicUrl);
+        showToast("Public URL copied", "success");
+      } catch {
+        showToast(activeShare.publicUrl, "success", 8000);
+      }
+      api.openExternal(activeShare.publicUrl);
+    });
+    li.querySelector(".project-php-select")?.addEventListener("change", async (e) => {
+      const version = e.target.value;
+      await withLoading(() => api.setSitePhpVersion(v.name, version), `Setting PHP for ${v.name}…`);
+      showToast(`${v.name} → ${version}`, "success");
+      await refreshProjects();
+      await refreshServices();
+    });
+    li.querySelector(".btn-laravel-env").onclick = async () => {
+      try {
+        const snippet = await api.getLaravelEnv(v.name);
+        await navigator.clipboard.writeText(snippet.envBlock);
+        showToast(`Copied Laravel .env snippet for ${snippet.domain}`, "success");
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
     li.querySelector(".btn-ssl").onclick = async () => {
       const result = await withLoading(() => api.enableSsl(v.domain), "Generating certificate…");
       showToast(result.message, result.success ? "success" : "error");
@@ -708,9 +1256,16 @@ async function refreshProjects() {
         await refreshAll();
       }
     };
-    li.querySelector(".btn-folder").onclick = () => api.openPath(`www/${v.name}`);
+    li.querySelector(".btn-folder").onclick = () => {
+      if (v.projectPath && v.source !== "www") {
+        api.openProjectPath(v.projectPath);
+      } else {
+        api.openPath(`www/${v.name}`);
+      }
+    };
     list.appendChild(li);
-  });
+  }
+  await refreshSitesConfig();
 }
 
 async function refreshManifests() {
@@ -718,35 +1273,16 @@ async function refreshManifests() {
   const grid = document.getElementById("manifests-grid");
   grid.innerHTML = "";
 
-  manifests.forEach((m) => {
-    const card = document.createElement("div");
-    card.className = `manifest-card${m.installed ? " installed" : ""}`;
-    const btnLabel = m.installed ? "Installed" : "Install";
-    card.innerHTML = `
-      <h4>${m.name}</h4>
-      <span class="version">v${m.version}</span>
-      <p>${m.description || ""}</p>
-      <button class="btn primary btn-install" ${m.installed ? "disabled" : ""}>${btnLabel}</button>`;
-    const btn = card.querySelector(".btn-install");
-    if (!m.installed) {
-      btn.onclick = async () => {
-        btn.disabled = true;
-        btn.textContent = "Installing…";
-        try {
-          await withLoading(() => api.installManifest(m.name), `Installing ${m.name}…`);
-          showToast(`${m.name} installed`, "success");
-          await refreshManifests();
-          await refreshServices();
-          await refreshProfiles();
-          await refreshAll();
-        } catch {
-          btn.disabled = false;
-          btn.textContent = "Install";
-        }
-      };
-    }
-    grid.appendChild(card);
-  });
+  for (const group of groupQuickAddManifests(manifests)) {
+    const section = document.createElement("section");
+    section.className = "quick-add-group panel";
+    section.innerHTML = `<h3 class="panel-title">${escapeHtml(group.label)}</h3>`;
+    const cards = document.createElement("div");
+    cards.className = "card-grid";
+    group.items.forEach((m) => cards.appendChild(renderManifestCard(m)));
+    section.appendChild(cards);
+    grid.appendChild(section);
+  }
 }
 
 let profileEditorMode = null;
@@ -964,6 +1500,20 @@ async function refreshSettings(root) {
 
   const autoStart = document.getElementById("settings-auto-start-services");
   if (autoStart) autoStart.checked = rootStatus.autoStartServices === true;
+
+  const tldSelect = document.getElementById("settings-tld");
+  const tldHint = document.getElementById("settings-tld-hint");
+  if (tldSelect) {
+    const tld = rootStatus.tld || "localhost";
+    tldSelect.value = tld === "test" ? "test" : "localhost";
+    if (tldHint) {
+      tldHint.textContent =
+        rootStatus.zeroAdminDomains === true
+          ? "Sites use *.localhost — no hosts file changes needed."
+          : "Sites use *.test — click Update hosts (Admin) on Projects after adding sites.";
+    }
+  }
+  await updateDomainHints(rootStatus);
 
   await refreshMysqlBackups();
   await refreshAppRollback();
@@ -1201,12 +1751,13 @@ async function boot() {
   api.onUpdateDownloadProgress(({ percent, message }) => setUpdateProgress(percent, message));
   api.onNavigate?.((view) => {
     showView(view);
-    document.querySelectorAll(".nav-item").forEach((n) => {
-      n.classList.toggle("active", n.dataset.view === view);
-    });
-    document.getElementById("page-title").textContent = TITLES[view] || view;
-    if (view === "logs") void refreshLogs().then(startLogFollow);
-    else stopLogFollow();
+    if (view === "tooling") void refreshTooling();
+    else if (view === "dumps") void refreshDumps().then(startDumpsFollow);
+    else if (view === "logs") void refreshLogs().then(startLogFollow);
+    else {
+      stopDumpsFollow();
+      stopLogFollow();
+    }
   });
 
   const defaultRoot = await api.getDefaultRoot();
@@ -1343,7 +1894,13 @@ async function boot() {
         stopLogFollow();
         stopLogListRefresh();
       }
-      if (view === "node") await refreshNode();
+      if (view === "tooling") await refreshTooling();
+      if (view === "dumps") {
+        await refreshDumps();
+        startDumpsFollow();
+      } else {
+        stopDumpsFollow();
+      }
       if (view === "projects") await refreshProjects();
       if (view === "quick-add") await refreshManifests();
       if (view === "quick-app") await refreshTemplates();
@@ -1440,10 +1997,6 @@ async function boot() {
   document.getElementById("btn-open-www-settings").onclick = () => api.openPath("www");
   document.getElementById("btn-open-logs").onclick = () => {
     showView("logs");
-    document.querySelectorAll(".nav-item").forEach((n) => {
-      n.classList.toggle("active", n.dataset.view === "logs");
-    });
-    document.getElementById("page-title").textContent = TITLES.logs;
     void refreshLogs().then(startLogFollow);
   };
 
@@ -1472,6 +2025,25 @@ async function boot() {
 
   document.getElementById("btn-open-bin").onclick = () => api.openPath("bin");
   document.getElementById("btn-open-terminal").onclick = () => api.openTerminal();
+  document.getElementById("btn-tooling-terminal")?.addEventListener("click", () => api.openTerminal());
+  document.getElementById("btn-dumps-refresh")?.addEventListener("click", () => refreshDumps());
+  document.getElementById("btn-dumps-clear")?.addEventListener("click", async () => {
+    await api.clearDumps();
+    await refreshDumps();
+  });
+  document.querySelectorAll("[data-dump-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      currentDumpFilter = chip.dataset.dumpFilter || "all";
+      document.querySelectorAll("[data-dump-filter]").forEach((c) => {
+        c.classList.toggle("active", c.dataset.dumpFilter === currentDumpFilter);
+      });
+      void refreshDumps();
+    });
+  });
+  document.getElementById("dumps-follow")?.addEventListener("change", () => {
+    if (document.getElementById("dumps-follow")?.checked) startDumpsFollow();
+    else stopDumpsFollow();
+  });
   document.getElementById("btn-github").onclick = () => api.openExternal(GITHUB_REPO_URL);
 
   document.getElementById("btn-check-updates")?.addEventListener("click", async () => {
@@ -1563,6 +2135,73 @@ async function boot() {
     btn.addEventListener("click", () => {
       showSettingsSection(btn.dataset.settingsSection);
     });
+  });
+
+  document.getElementById("btn-park-folder")?.addEventListener("click", async () => {
+    const folder = await api.pickLaragonRoot();
+    if (!folder) return;
+    await withLoading(() => api.parkFolder(folder), "Parking folder…");
+    handleHostsSyncResult(await api.syncVhosts());
+    showToast("Folder parked — subprojects are now live", "success");
+    await refreshProjects();
+  });
+
+  document.getElementById("btn-link-project")?.addEventListener("click", async () => {
+    const projectPath = await api.pickLaragonRoot();
+    if (!projectPath) return;
+    const defaultName = projectPath.split(/[/\\]/).filter(Boolean).pop() ?? "site";
+    const name = prompt("Site name (used for name.test):", defaultName);
+    if (!name) return;
+    await withLoading(() => api.linkProject(projectPath, name), "Linking project…");
+    handleHostsSyncResult(await api.syncVhosts());
+    showToast(`Linked ${name}.test`, "success");
+    await refreshProjects();
+  });
+
+  document.getElementById("btn-run-doctor")?.addEventListener("click", async () => {
+    const fix = confirm("Run DevTent doctor with automatic repairs?\n\nThis syncs Procfile, regenerates vhosts, and verifies configs.");
+    const report = await withLoading(
+      () => api.runDoctor({ repair: fix, startServices: false }),
+      "Running doctor…"
+    );
+    const el = document.getElementById("doctor-result");
+    if (el) {
+      const lines = [];
+      if (report.repaired?.length) lines.push(`Fixed: ${report.repaired.join("; ")}`);
+      const issues = (report.findings ?? []).filter((f) => f.severity === "warn" || f.severity === "error");
+      if (issues.length) lines.push(`${issues.length} issue(s) remaining`);
+      else lines.push("No issues found");
+      el.textContent = lines.join(" · ");
+      el.classList.remove("hidden");
+    }
+    showToast("Doctor finished", "success");
+    await refreshHealth();
+    await refreshAll();
+  });
+
+  document.querySelectorAll("[data-external]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      api.openExternal(el.dataset.external);
+    });
+  });
+
+  document.getElementById("settings-tld")?.addEventListener("change", async (e) => {
+    const tld = e.target.value;
+    try {
+      const result = await withLoading(() => api.setTld(tld), `Switching to .${tld}…`);
+      showToast(
+        result.zeroAdminDomains
+          ? `Sites now use .${result.tld} — no hosts file admin needed`
+          : `Sites now use .${result.tld} — sync virtual hosts and update hosts`,
+        "success",
+        8000
+      );
+      await refreshAll();
+      await refreshProjects();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
   });
 
   document.getElementById("settings-stop-on-quit")?.addEventListener("change", async (e) => {

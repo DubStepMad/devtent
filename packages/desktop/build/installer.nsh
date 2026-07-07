@@ -137,13 +137,13 @@ FunctionEnd
 
 !macro customWelcomePage
   !define MUI_WELCOMEPAGE_TITLE "Install ${PRODUCT_NAME}"
-  !define MUI_WELCOMEPAGE_TEXT "Install ${PRODUCT_NAME} to one portable folder.$\r$\n$\r$\nDefault location: {drive}:\devtent (e.g. c:\devtent). Projects, runtimes, and databases all live in that folder.$\r$\n$\r$\nQuit DevTent from the system tray before installing. The installer will try to close it automatically.$\r$\n$\r$\nSmartScreen (unsigned): More info, then Run again."
+  !define MUI_WELCOMEPAGE_TEXT "Install ${PRODUCT_NAME} to one portable folder.$\r$\n$\r$\nDefault location: {drive}:\devtent (e.g. c:\devtent). Projects, runtimes, and databases all live in that folder.$\r$\n$\r$\nQuit DevTent from the system tray before installing. The installer will try to close it automatically.$\r$\n$\r$\nThis build is open source and unsigned. If Windows SmartScreen appears, choose More info, then Run anyway — the app is safe; signing certificates are expensive for indie projects."
   !insertmacro MUI_PAGE_WELCOME
 !macroend
 
 !macro customFinishPage
   !define MUI_FINISHPAGE_TITLE "Installation Complete"
-  !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is installed.$\r$\n$\r$\nLaunch from the Start Menu or desktop shortcut.$\r$\n$\r$\nSmartScreen on first launch: More info, then Run anyway."
+  !define MUI_FINISHPAGE_TEXT "${PRODUCT_NAME} is installed.$\r$\n$\r$\nLaunch from the Start Menu or desktop shortcut. Sites use *.localhost by default — no hosts file admin needed.$\r$\n$\r$\nIf SmartScreen warns on first launch: More info, then Run anyway. You can verify releases on GitHub (DubStepMad/devtent)."
   !insertmacro MUI_PAGE_FINISH
 !macroend
 

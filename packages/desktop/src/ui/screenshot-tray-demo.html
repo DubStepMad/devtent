@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevTent Tray</title>
+  <link rel="stylesheet" href="tray-popup.css">
+</head>
+<body>
+  <div class="popup" id="popup">
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <img src="app-icon.png" width="28" height="28" alt="">
+        </div>
+        <div>
+          <h1>DevTent</h1>
+          <span class="tagline">Free · Open · Not for sale</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-pill running" id="global-status">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">4 running</span>
+        </div>
+        <button type="button" class="popup-close" title="Close panel" aria-label="Close panel">×</button>
+      </div>
+    </header>
+
+    <div class="popup-body">
+      <section class="section">
+        <h2 class="section-title">Quick Access</h2>
+        <button class="row-btn" type="button">
+          <span class="row-icon">🌐</span>
+          <span class="row-label">Sites</span>
+          <span class="row-meta">3</span>
+          <span class="chevron">›</span>
+        </button>
+        <button class="row-btn" type="button">
+          <span class="row-icon">📁</span>
+          <span class="row-label">Open www/</span>
+          <span class="chevron">›</span>
+        </button>
+        <button class="row-btn" type="button">
+          <span class="row-icon">📊</span>
+          <span class="row-label">Full Dashboard</span>
+          <span class="chevron">›</span>
+        </button>
+      </section>
+
+      <hr class="divider">
+
+      <section class="section">
+        <div class="section-head">
+          <h2 class="section-title">Profile services</h2>
+          <button class="text-btn" type="button">⏸ Stop</button>
+        </div>
+        <p class="section-note">Active profile: default · Nginx, PHP 8.3 (CGI), MySQL, Redis, Mailpit</p>
+        <ul class="service-list" id="service-list">
+          <li class="running"><span class="svc-dot"></span><span class="svc-name">Nginx</span><button class="svc-action" type="button">Stop</button></li>
+          <li class="running"><span class="svc-dot"></span><span class="svc-name">PHP 8.3 (CGI)</span><button class="svc-action" type="button">Stop</button></li>
+          <li class="running"><span class="svc-dot"></span><span class="svc-name">MySQL</span><button class="svc-action" type="button">Stop</button></li>
+          <li class="running"><span class="svc-dot"></span><span class="svc-name">Redis</span><button class="svc-action" type="button">Stop</button></li>
+          <li><span class="svc-dot"></span><span class="svc-name">Mailpit</span><button class="svc-action" type="button">Start</button></li>
+        </ul>
+        <button class="row-btn accent" type="button">
+          <span class="row-icon">▶</span>
+          <span class="row-label">Start all services</span>
+        </button>
+      </section>
+
+      <hr class="divider">
+
+      <section class="section">
+        <h2 class="section-title">Profile</h2>
+        <ul class="profile-list" id="profile-list">
+          <li class="active">default · PHP 8.3 · PHP 8.3 · Nginx · MySQL · redis · mailpit</li>
+          <li>laravel · PHP 8.4 · PHP 8.4 · Nginx · MySQL · redis · mailpit</li>
+          <li>legacy · PHP 8.2 · PHP 8.2 · Apache · MySQL</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="popup-footer">
+      <button class="footer-btn" type="button" title="Terminal">⌨</button>
+      <button class="footer-btn" type="button" title="Logs">📋</button>
+      <button class="footer-btn" type="button" title="Settings">⚙</button>
+      <button class="footer-btn danger" type="button" title="Quit">⏻</button>
+    </footer>
+  </div>
+</body>
+</html>

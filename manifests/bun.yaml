@@ -1,0 +1,9 @@
+name: bun
+version: "1.2.19"
+description: Bun — fast JavaScript runtime and package manager (bun, bunx)
+platform: win32
+arch: x64
+url: https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-windows-x64.zip
+installPath: bin/bun
+binary: bun.exe
+archiveSubdir: bun-windows-x64

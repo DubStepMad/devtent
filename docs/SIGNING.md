@@ -23,11 +23,24 @@ npm run dist
 
 `packages/desktop/package.json` has `signAndEditExecutable: true`. Without `CSC_LINK`, electron-builder skips signing and still produces an installer.
 
-## Unsigned builds
+## Unsigned builds (no budget for a cert?)
 
-- `after-pack.cjs` embeds the tent icon via rcedit when signing is skipped
-- Installer welcome/finish pages explain **More info → Run anyway** for SmartScreen
+DevTent is **free and open source** — a standard Authenticode certificate often costs hundreds of dollars per year. Unsigned builds are normal for community projects.
 
-## Reputation
+What we do instead:
 
-Even unsigned builds gain SmartScreen reputation over time. Code signing is recommended for production distribution.
+- Installer welcome/finish pages explain **More info → Run anyway** when SmartScreen appears
+- Releases are published on **GitHub** with public source — you can verify what you are installing
+- SmartScreen **reputation improves** as more people run the same signed-or-unsigned binary from the same URL over time
+
+### If Windows blocks the installer
+
+1. Click **More info** on the blue SmartScreen dialog
+2. Click **Run anyway**
+3. Prefer downloading only from [GitHub Releases](https://github.com/DubStepMad/devtent/releases) (not random mirrors)
+
+### Optional: local signing later
+
+When budget allows, use the CI secrets or local `CSC_LINK` flow above — no code changes required.
+
+`after-pack.cjs` embeds the tent icon via rcedit when signing is skipped.

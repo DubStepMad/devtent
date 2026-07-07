@@ -2,7 +2,8 @@ import path from "node:path";
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
 import { normalizeProfile } from "./profile-runtime.js";
 import { parseProcfile } from "./services.js";
-import { getServicePresets, writeProcfileRaw, syncPhpProcfileFromProfile } from "./procfile.js";
+import { getServicePresets, writeProcfileRaw } from "./procfile.js";
+import { syncPhpCgiProcfile } from "./php-cgi-sync.js";
 import type { ProcfileEntry } from "./types.js";
 
 const OPTIONAL_SERVICE_IDS = new Set(["redis", "mailpit"]);
@@ -24,10 +25,13 @@ function applyStackExclusions(entries: ProcfileEntry[]): ProcfileEntry[] {
     return entries.filter((e) => e.name !== "nginx");
   }
   if (names.has("mysql")) {
-    return entries.filter((e) => e.name !== "postgresql");
+    return entries.filter((e) => e.name !== "postgresql" && e.name !== "mariadb");
+  }
+  if (names.has("mariadb")) {
+    return entries.filter((e) => e.name !== "postgresql" && e.name !== "mysql");
   }
   if (names.has("postgresql")) {
-    return entries.filter((e) => e.name !== "mysql");
+    return entries.filter((e) => e.name !== "mysql" && e.name !== "mariadb");
   }
   return entries;
 }
@@ -57,7 +61,7 @@ async function buildProfileStackEntries(
 
   const phpPreset = presets.find((p) => p.id === "php-fpm");
   if (phpPreset && (await isPresetInstalled(root, phpPreset.command))) {
-    next.push({ name: "php-fpm", command: phpPreset.command });
+    // Legacy id — syncPhpCgiProcfile writes php-cgi-* entries after stack sync
   }
 
   const webServer = profile.webServer ?? "nginx";
@@ -102,7 +106,7 @@ export async function syncProfileProcfileFromProfile(
         ? merged.map((e) => `${e.name}: ${e.command}`).join("\n") + "\n"
         : "# DevTent Procfile — enable services from the tray panel\n";
     await writeProcfileRaw(root, content);
-    await syncPhpProcfileFromProfile(root);
+    await syncPhpCgiProcfile(root);
     return;
   }
 
@@ -116,5 +120,5 @@ export async function syncProfileProcfileFromProfile(
       : "# DevTent Procfile — enable services from the tray panel\n";
 
   await writeProcfileRaw(root, content);
-  await syncPhpProcfileFromProfile(root);
+  await syncPhpCgiProcfile(root);
 }

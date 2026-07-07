@@ -57,6 +57,12 @@ export async function enableSsl(root: string, domain: string): Promise<SslResult
     };
   }
 
+  try {
+    await installMkcertCa(root);
+  } catch {
+    // CA may already be trusted — continue with cert generation
+  }
+
   await runMkcert(mkcertPath, sslDir, domain);
 
   if (!config.ssl.domains) config.ssl.domains = [];

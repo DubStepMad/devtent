@@ -24,7 +24,7 @@
       <h1>Welcome to DevTent</h1>
       <p class="subtitle">Click below to finish setup — no folders to pick.</p>
       <div class="setup-callout">
-        <p>DevTent uses <code id="setup-root-path">c:\devtent</code> on your install drive. Drop projects in <code id="setup-www-path">c:\devtent\www</code> for sites like <code>myapp.test</code>.</p>
+        <p>DevTent uses <code id="setup-root-path">c:\devtent</code> on your install drive. Drop projects in <code id="setup-www-path">c:\devtent\www</code> for sites like <code>myapp.localhost</code> — no hosts file admin needed.</p>
       </div>
       <button type="button" class="btn primary wide" id="setup-init">Get Started</button>
       <label class="migrate-check setup-stack-check">
@@ -47,15 +47,28 @@
         <span>DevTent</span>
       </div>
       <nav class="sidebar-nav">
-        <button class="nav-item active" data-view="dashboard">Dashboard</button>
-        <button class="nav-item" data-view="services">Services</button>
-        <button class="nav-item" data-view="logs">Logs</button>
-        <button class="nav-item" data-view="projects">Projects</button>
-        <button class="nav-item" data-view="quick-add">Quick Add</button>
-        <button class="nav-item" data-view="quick-app">Quick App</button>
-        <button class="nav-item" data-view="node">Node</button>
-        <button class="nav-item" data-view="profiles">Profiles</button>
-        <button class="nav-item" data-view="settings">Settings</button>
+        <div class="nav-group">
+          <span class="nav-group-label">Overview</span>
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        </div>
+        <div class="nav-group">
+          <span class="nav-group-label">Sites</span>
+          <button class="nav-item" data-view="projects">Projects</button>
+          <button class="nav-item" data-view="quick-app">Quick App</button>
+        </div>
+        <div class="nav-group">
+          <span class="nav-group-label">Developer</span>
+          <button class="nav-item" data-view="services">Services</button>
+          <button class="nav-item" data-view="logs">Logs</button>
+          <button class="nav-item" data-view="tooling">Tooling</button>
+          <button class="nav-item" data-view="dumps">Dumps</button>
+          <button class="nav-item" data-view="quick-add">Quick Add</button>
+        </div>
+        <div class="nav-group">
+          <span class="nav-group-label">Config</span>
+          <button class="nav-item" data-view="profiles">Profiles</button>
+          <button class="nav-item" data-view="settings">Settings</button>
+        </div>
       </nav>
       <div class="sidebar-footer">
         <span class="badge">DTCL · Free</span>
@@ -64,7 +77,10 @@
 
     <div class="main">
       <header class="topbar window-drag">
-        <h2 id="page-title" class="no-drag">Dashboard</h2>
+        <div class="topbar-head no-drag">
+          <h2 id="page-title">Dashboard</h2>
+          <p id="page-subtitle" class="page-subtitle">Stack health and quick actions</p>
+        </div>
         <div class="topbar-actions no-drag">
           <button class="btn success" id="btn-start-all">▶ Start All</button>
           <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
@@ -92,8 +108,12 @@
             </div>
           </div>
           <div class="panel">
-            <h3>Environment health</h3>
+            <div class="panel-heading-row">
+              <h3>Environment health</h3>
+              <button type="button" class="btn secondary sm" id="btn-run-doctor">Run doctor</button>
+            </div>
             <ul id="health-list" class="health-list panel-desc"></ul>
+            <p id="doctor-result" class="panel-desc settings-hint hidden"></p>
           </div>
           <div class="panel">
             <h3>Recent projects</h3>
@@ -144,24 +164,44 @@
         </section>
 
         <section id="view-projects" class="view-panel hidden">
-          <div class="toolbar">
-            <button class="btn primary" id="btn-sync-vhosts">Sync Virtual Hosts</button>
-            <button class="btn secondary" id="btn-update-hosts">Update hosts file (Admin)</button>
-            <button class="btn secondary" id="btn-open-www">Open www/ folder</button>
+          <div class="view-intro">
+            <p>Sites at <code id="projects-domain-hint">*.localhost</code> from <strong>www/</strong>, <strong>parked folders</strong>, or <strong>linked</strong> projects. Use <strong>.localhost</strong> in Settings to skip hosts-file admin.</p>
           </div>
-          <p class="panel-desc">If <code>*.test</code> sites do not resolve, click <strong>Update hosts file (Admin)</strong>. Windows should show a UAC prompt — check the taskbar if you do not see it. DevTent itself stays non-admin.</p>
+          <div class="toolbar projects-toolbar">
+            <button class="btn primary" id="btn-sync-vhosts">Sync virtual hosts</button>
+            <button class="btn secondary" id="btn-update-hosts">Update hosts (Admin)</button>
+            <button class="btn secondary" id="btn-open-www">Open www/</button>
+          </div>
           <p id="hosts-helper-hint" class="panel-desc hidden"></p>
           <ul id="projects-list" class="project-list"></ul>
-          <p id="projects-empty" class="empty-hint">No projects in www/. Create one in Quick App or drop a folder into www/.</p>
+          <p id="projects-empty" class="empty-hint">No sites yet. Create one in Quick App, drop a folder into www/, park a folder, or link an external project.</p>
+
+          <div class="panel sites-panel">
+            <h3>Parked folders</h3>
+            <p class="panel-desc settings-hint">Every project inside a parked folder gets its own <code>name.<span class="parked-tld-hint">localhost</span></code> URL automatically.</p>
+            <ul id="parked-list" class="sites-config-list"></ul>
+            <button type="button" class="btn secondary" id="btn-park-folder">Park a folder…</button>
+          </div>
+
+          <div class="panel sites-panel">
+            <h3>Linked projects</h3>
+            <p class="panel-desc settings-hint">Serve a project outside www/ — useful for client repos on another drive.</p>
+            <ul id="linked-list" class="sites-config-list"></ul>
+            <button type="button" class="btn secondary" id="btn-link-project">Link a project…</button>
+          </div>
         </section>
 
         <section id="view-quick-add" class="view-panel hidden">
-          <p class="panel-desc">One-click install for PHP, Nginx, MySQL, Node, and more. All runtimes are downloaded from official sources.</p>
-          <div id="manifests-grid" class="card-grid"></div>
+          <div class="view-intro">
+            <p>Install stack runtimes into your portable <code>bin/</code> folder. Tunneling (<code>cloudflared</code>) installs automatically when you use <strong>Share</strong> on a project.</p>
+          </div>
+          <div id="manifests-grid" class="quick-add-sections"></div>
         </section>
 
         <section id="view-quick-app" class="view-panel hidden">
-          <p class="panel-desc">Scaffold a new project in www/ with automatic virtual host setup.</p>
+          <div class="view-intro">
+            <p>Scaffold a new site in <code>www/</code>. Laravel projects get <strong>automatic SQL query capture</strong> in the Dumps tab.</p>
+          </div>
           <div class="form-row">
             <label>Template</label>
             <select id="template-select"></select>
@@ -181,21 +221,67 @@
           </div>
         </section>
 
-        <section id="view-node" class="view-panel hidden">
-          <p class="panel-desc">Install and switch Node.js versions for the active profile — similar to nvm. Use the DevTent terminal so <code>node</code> and <code>npm</code> match your selection.</p>
+        <section id="view-dumps" class="view-panel hidden">
+          <div class="view-intro">
+            <p>Live <code>dump()</code>, <code>dd()</code>, errors, and Laravel queries. SQL is captured automatically for Laravel apps created with Quick App or after running <strong>Run doctor</strong>.</p>
+          </div>
+          <div class="toolbar dumps-toolbar">
+            <div class="chip-group" role="group" aria-label="Filter dumps">
+              <button type="button" class="chip active" data-dump-filter="all">All</button>
+              <button type="button" class="chip" data-dump-filter="dump">dump</button>
+              <button type="button" class="chip" data-dump-filter="dd">dd</button>
+              <button type="button" class="chip" data-dump-filter="query">query</button>
+              <button type="button" class="chip" data-dump-filter="error">errors</button>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <button type="button" class="btn secondary sm" id="btn-dumps-refresh">Refresh</button>
+            <button type="button" class="btn secondary sm" id="btn-dumps-clear">Clear</button>
+            <label class="log-follow">
+              <input type="checkbox" id="dumps-follow" checked>
+              Follow
+            </label>
+          </div>
+          <div id="dumps-viewer" class="log-viewer dumps-viewer" aria-live="polite">
+            <div class="empty-state">
+              <div class="empty-state-icon">◇</div>
+              <p class="empty-state-title">No dumps yet</p>
+              <p class="empty-state-desc">Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-tooling" class="view-panel hidden">
+          <div class="tooling-hero">
+            <div class="view-intro tooling-intro">
+              <p>Composer, Node, Bun, and the Laravel installer — self-contained and on your PATH. Use <strong>Open terminal</strong> so commands resolve correctly.</p>
+            </div>
+            <button type="button" class="btn primary" id="btn-tooling-terminal">Open terminal</button>
+          </div>
+          <div class="panel panel-flush">
+            <h3 class="panel-title">Developer tools</h3>
+            <div id="tooling-cards" class="tool-cards"></div>
+          </div>
+          <details class="panel panel-collapsible">
+            <summary>PATH preview</summary>
+            <p class="panel-desc settings-hint">Folders prepended when you open a DevTent terminal.</p>
+            <ul id="tooling-path-list" class="tooling-path-list"></ul>
+          </details>
           <div class="panel">
-            <h3>Versions</h3>
-            <table class="node-versions-table">
-              <thead>
-                <tr>
-                  <th>Version</th>
-                  <th>Installed</th>
-                  <th>Active</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="node-versions-list"></tbody>
-            </table>
+            <h3 class="panel-title">Node.js versions</h3>
+            <p class="panel-desc settings-hint">Use your <strong>nvm / fnm / Volta</strong> install, or pick a DevTent-managed version below.</p>
+            <div class="table-wrap">
+              <table class="data-table node-versions-table">
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Active</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="node-versions-list"></tbody>
+              </table>
+            </div>
             <p id="node-empty" class="empty-hint hidden">No Node manifests found.</p>
           </div>
         </section>
@@ -230,6 +316,7 @@
                 <span class="profile-service-label">Database</span>
                 <select id="profile-database-type" class="text-input profile-service-option">
                   <option value="mysql">MySQL</option>
+                  <option value="mariadb">MariaDB</option>
                   <option value="postgresql">PostgreSQL</option>
                 </select>
               </label>
@@ -275,6 +362,18 @@
                     <span>Auto-start services when DevTent opens</span>
                   </label>
                   <p class="panel-desc settings-hint">Starts your active profile stack (PHP, web server, database, etc.) after DevTent launches.</p>
+                </div>
+                <div class="panel">
+                  <h3>Local domains</h3>
+                  <p class="panel-desc settings-hint">Choose how site URLs are formed. <strong>.localhost</strong> works in Chrome and Edge without editing the hosts file or approving admin prompts.</p>
+                  <label class="settings-field">
+                    <span>Domain suffix</span>
+                    <select id="settings-tld" class="text-input">
+                      <option value="localhost">.localhost — no admin (recommended)</option>
+                      <option value="test">.test — classic (hosts file)</option>
+                    </select>
+                  </label>
+                  <p id="settings-tld-hint" class="panel-desc settings-hint"></p>
                 </div>
                 <div class="panel">
                   <h3>Quit</h3>

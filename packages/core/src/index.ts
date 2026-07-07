@@ -11,6 +11,7 @@ export {
   updateProfile,
   deleteProfile,
   applyPhpVersionToActiveProfile,
+  setDevTentTld,
   getDefaultConfig,
   getDefaultInstallRoot,
   normalizeInstallRoot,
@@ -46,6 +47,70 @@ export {
 } from "./vhosts.js";
 export type { HostsSyncResult, VhostSyncResult, HostsSyncOptions } from "./vhosts.js";
 
+export {
+  discoverAllVirtualHosts,
+  discoverProjectNames,
+  listParkedPaths,
+  listLinkedSites,
+  addParkedPath,
+  removeParkedPath,
+  linkSite,
+  unlinkSite,
+  setSitePhpVersion,
+} from "./sites.js";
+
+export { runDoctor } from "./doctor.js";
+export type { DoctorFinding, DoctorReport } from "./doctor.js";
+
+export {
+  normalizeTld,
+  tldRequiresHostsFile,
+  formatSiteDomain,
+  ZERO_ADMIN_TLD,
+} from "./domain.js";
+
+export {
+  installLaravelQueryCapture,
+  installLaravelQueryCaptureForSites,
+  isLaravelProject,
+  hasLaravelQueryCapture,
+} from "./laravel-query-capture.js";
+export { LARAVEL_QUERY_CAPTURE_MARKER } from "./dump-capture.js";
+
+export {
+  groupQuickAddManifests,
+  listQuickAddManifests,
+  getQuickAddCategory,
+  QUICK_ADD_CATEGORY_LABELS,
+} from "./quick-add-manifests.js";
+export type { QuickAddCategory } from "./quick-add-manifests.js";
+export { buildLaravelEnvSnippet, formatSiteLabel } from "./laravel-env.js";
+export { laravelCaptureProviderSnippet } from "./dump-capture.js";
+export type { LaravelEnvSnippet } from "./laravel-env.js";
+
+export {
+  resolvePhpCgiPort,
+  phpCgiProcfileName,
+  phpVersionFromProcfileName,
+  resolvePhpVersionForVhost,
+} from "./php-ports.js";
+
+export { syncPhpCgiProcfile, collectRequiredPhpVersions } from "./php-cgi-sync.js";
+
+export {
+  ensureDumpCaptureFiles,
+  ensurePhpCaptureForVersion,
+  readDumpEvents,
+  clearDumpEvents,
+  DUMPS_LOG,
+} from "./dump-capture.js";
+export type { DumpEvent } from "./dump-capture.js";
+
+export { startShare, stopShare, listActiveShares } from "./share.js";
+export type { ShareSession } from "./share.js";
+
+export { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized } from "./mariadb.js";
+
 export type { CreateProfileInput, UpdateProfileInput, SwitchProfileResult } from "./config.js";
 
 export {
@@ -76,8 +141,23 @@ export {
   isNodeVersionInstalled,
   getNodeDisplayLabel,
   nodeVersionFromLegacyPath,
+  applyExternalNodeToActiveProfile,
+  detectExternalNode,
+  EXTERNAL_NODE_ID,
+  isExternalNodeActive,
 } from "./node-runtime.js";
-export type { NodeRuntimePaths, NodeVersionInfo } from "./node-runtime.js";
+export type { NodeRuntimePaths, NodeVersionInfo, ExternalNodeInfo } from "./node-runtime.js";
+
+export {
+  listTooling,
+  installTool,
+  updateTool,
+  removeTool,
+  isToolingManifest,
+  getComposerHome,
+  TOOLING_IDS,
+} from "./tooling.js";
+export type { ToolingEntry, ToolingOverview, ToolingSource, ToolingId, ExternalNodeOption } from "./tooling.js";
 
 export {
   searchLogFiles,

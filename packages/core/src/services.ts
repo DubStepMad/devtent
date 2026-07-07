@@ -5,14 +5,24 @@ import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
 import { backupMysql, writeMysqlIni } from "./mysql.js";
+import { writeMariaDbIni } from "./mariadb.js";
 import { ensureNginxSupportFiles } from "./nginx-support.js";
+import { ensurePhpCaptureForVersion } from "./dump-capture.js";
+import { phpVersionFromProcfileName } from "./php-ports.js";
+import { resolvePhpPaths } from "./profile-runtime.js";
 import { ensureApacheConfig, APACHE_PROCFILE_COMMAND, needsApacheProcfileRepair } from "./apache-support.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
 
-const START_ORDER = ["php-fpm", "nginx", "apache", "mysql", "postgresql", "redis", "mailpit"];
+function serviceStartOrder(name: string): number {
+  if (name.startsWith("php-cgi-") || name === "php-fpm") return 0;
+  const idx = ["nginx", "apache", "mysql", "mariadb", "postgresql", "redis", "mailpit"].indexOf(name);
+  return idx === -1 ? 500 : idx + 10;
+}
 
-const STARTUP_VERIFY_MS = 600;
+function sortEntriesForStart(entries: ProcfileEntry[]): ProcfileEntry[] {
+  return [...entries].sort((a, b) => serviceStartOrder(a.name) - serviceStartOrder(b.name));
+}
 
 export function parseProcfileCommand(command: string): { executable: string; args: string[] } {
   const tokens: string[] = [];
@@ -41,13 +51,7 @@ export function parseProcfileCommand(command: string): { executable: string; arg
   return { executable: tokens[0]!, args: tokens.slice(1) };
 }
 
-function sortEntriesForStart(entries: ProcfileEntry[]): ProcfileEntry[] {
-  return [...entries].sort((a, b) => {
-    const ai = START_ORDER.indexOf(a.name);
-    const bi = START_ORDER.indexOf(b.name);
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-  });
-}
+const STARTUP_VERIFY_MS = 600;
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -126,6 +130,13 @@ async function prepareServiceStart(root: string, name: string): Promise<void> {
     }
     await writeMysqlIni(root);
   }
+  if (name === "mariadb") {
+    await writeMariaDbIni(root);
+  }
+  const phpVersion = phpVersionFromProcfileName(name);
+  if (phpVersion) {
+    await ensurePhpCaptureForVersion(root, phpVersion);
+  }
 }
 
 export async function startService(root: string, name: string): Promise<ServiceStatus> {
@@ -161,13 +172,20 @@ export async function startService(root: string, name: string): Promise<ServiceS
     throw new Error(`Service "${name}" binary not found: ${executable}`);
   }
 
+  const spawnEnv: NodeJS.ProcessEnv = { ...process.env, DEVTENT_ROOT: root };
+  const phpVersion = phpVersionFromProcfileName(name);
+  if (phpVersion) {
+    const paths = resolvePhpPaths(phpVersion);
+    spawnEnv.PHPRC = resolvePath(root, paths.phpRc);
+  }
+
   const child = spawn(exePath, args, {
     cwd: root,
     shell: false,
     windowsHide: true,
     detached: process.platform !== "win32",
     stdio: ["ignore", logFd, logFd],
-    env: { ...process.env, DEVTENT_ROOT: root },
+    env: spawnEnv,
   });
 
   if (!child.pid) {

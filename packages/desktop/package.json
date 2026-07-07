@@ -1,6 +1,6 @@
 {
   "name": "@devtent/desktop",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "DevTent Desktop — primary GUI for your local dev environment",
   "license": "LicenseRef-DTCL-1.0",
   "author": "DevTent Contributors",
@@ -15,7 +15,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
     "pack": "npm run build && node scripts/ensure-eb-nsis.cjs && electron-builder --dir",
-    "dist": "npm run build && node scripts/run-dist.cjs"
+    "dist": "npm run build && node scripts/run-dist.cjs",
+    "screenshots": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@devtent/core": "*"
@@ -24,6 +25,7 @@
     "@types/node": "^22.13.10",
     "electron": "35.7.5",
     "electron-builder": "^25.1.8",
+    "playwright": "^1.52.0",
     "pngjs": "^7.0.0",
     "to-ico": "^1.1.5",
     "typescript": "^5.8.2"

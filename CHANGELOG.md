@@ -2,6 +2,38 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.2.0] - 2026-07-07
+
+Feature release closing Yerd/Herd comparison gaps, with a redesigned desktop UI and zero-admin local domains.
+
+### Added
+
+- **`.localhost` domains (default)** — browsers resolve `*.localhost` without hosts-file admin; `.test` remains optional in Settings
+- **Park & link sites** — serve `www/`, parked folders, or external projects (`devtent sites park|link`)
+- **Per-site PHP** — separate `php-cgi` pools and per-project PHP dropdown
+- **MariaDB** — Quick Add manifest and profile database option
+- **Public share** — Cloudflare quick tunnel (`devtent share`, Share button in Projects)
+- **Laravel live dumps** — Dumps tab; auto `dump()`/`dd()` capture; **automatic SQL query capture** for Laravel Quick App and `doctor --fix`
+- **`devtent doctor --fix`** — environment health checks with safe repairs
+- **Developer Tooling tab** — Composer, Node, Bun, Laravel installer; external Node manager support (nvm/fnm/Volta)
+- **Laravel .env helper** — per-site snippet for DB, mail, and Redis
+- **Symfony Quick App template**
+- **Comparison doc** — [docs/COMPARISON.md](docs/COMPARISON.md) vs Herd, Yerd, and Lerd
+- **README screenshots** — fictional demo data; `npm run screenshots -w @devtent/desktop` to regenerate
+- **Quick Add grouping** — PHP, web servers, databases, cache/mail/SSL sections
+- **CLI parity** — `sites`, `share`, `dumps`, `doctor`, `node use external`
+
+### Changed
+
+- **Desktop UI overhaul** — grouped sidebar (Overview / Sites / Developer / Config), page subtitles, project cards, tooling cards, dumps filters, share status on project cards
+- **HTTPS** — auto `mkcert -install` when enabling SSL
+- **Installer & SmartScreen** — clearer unsigned/open-source guidance ([docs/SIGNING.md](docs/SIGNING.md))
+- **Dumps** — click file:line to open in editor (linked projects supported)
+
+### Fixed
+
+- Screenshot capture serves app icon correctly for README assets
+
 ## [1.1.2] - 2026-07-04
 
 ### Added
@@ -134,6 +166,7 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
 
+[1.2.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.2.0
 [1.1.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.1
 [1.1.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.0

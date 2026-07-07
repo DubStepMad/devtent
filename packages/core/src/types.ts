@@ -6,6 +6,7 @@ export interface DevTentConfig {
   ssl: SslConfig;
   paths: PathsConfig;
   services: Record<string, ServiceConfig>;
+  sites?: SitesConfig;
 }
 
 export interface SslConfig {
@@ -20,6 +21,23 @@ export interface PathsConfig {
   bin: string;
   logs: string;
   data: string;
+}
+
+/** Parked folders (scan subdirs as sites) and linked external project paths. */
+export interface SitesConfig {
+  /** Absolute paths — each immediate subfolder becomes `{name}.{tld}`. */
+  parked?: string[];
+  linked?: LinkedSite[];
+  /** Per-site PHP manifest overrides for www/parked/linked sites by name. */
+  phpOverrides?: Record<string, string>;
+}
+
+export interface LinkedSite {
+  name: string;
+  /** Absolute path to project directory. */
+  path: string;
+  /** Optional per-site PHP manifest id (e.g. php-8.2) — stored for future routing. */
+  phpVersion?: string;
 }
 
 export interface ServiceConfig {
@@ -45,11 +63,13 @@ export interface Profile {
   /** CLI binary path — derived from phpVersion when saving */
   php?: string;
   webServer?: "nginx" | "apache";
-  database?: "mysql" | "postgresql" | "none";
+  database?: "mysql" | "mariadb" | "postgresql" | "none";
   /** Optional add-on services included in this profile's Services tab */
   services?: ProfileOptionalService[];
   /** Quick Add manifest id, e.g. node-22 */
   nodeVersion?: string;
+  /** Use Node from PATH (nvm, fnm, Volta, system) instead of DevTent-managed builds */
+  useExternalNode?: boolean;
   /** CLI binary path — derived from nodeVersion when saving */
   node?: string;
   env?: Record<string, string>;
@@ -61,6 +81,11 @@ export interface VirtualHost {
   root: string;
   ssl: boolean;
   phpVersion?: string;
+  source?: "www" | "parked" | "linked";
+  /** Full project directory (for open-in-folder). */
+  projectPath?: string;
+  /** Parked root when source is parked. */
+  parkedFrom?: string;
 }
 
 export type PostInstallStep =

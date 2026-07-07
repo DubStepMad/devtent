@@ -1,10 +1,10 @@
 # DevTent
 
-[![CI](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml/badge.svg)](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml)
-[![GitHub release](https://img.shields.io/github/v/release/DubStepMad/devtent)](https://github.com/DubStepMad/devtent/releases/latest)
-[![License: DTCL v1.0](https://img.shields.io/badge/License-DTCL%20v1.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-blue?logo=windows&logoColor=white)](https://github.com/DubStepMad/devtent/releases/latest)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[CI](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml)
+[GitHub release](https://github.com/DubStepMad/devtent/releases/latest)
+[License: DTCL v1.0](LICENSE)
+[Platform](https://github.com/DubStepMad/devtent/releases/latest)
+[Node.js](https://nodejs.org/)
 
 **The free, open-source local dev environment — forever.**
 
@@ -12,17 +12,35 @@ DevTent is a portable Windows stack for PHP, Nginx, MySQL, and more — with pro
 
 > Built by developers, for developers. Fork it, extend it, ship features the community needs.
 
+
+
 ## Screenshots
 
-| Dashboard | Tray quick panel |
-| --- | --- |
-| ![DevTent dashboard](docs/screenshots/dashboard.png) | ![DevTent tray quick panel](docs/screenshots/quick-panel.png) |
+Screenshots use **fictional demo data** (`bookstore.test`, `api-demo.test`, etc.) — not a real install.
 
-| Services | Profiles |
+| Dashboard | Projects |
 | --- | --- |
-| ![DevTent services](docs/screenshots/services.png) | ![DevTent profiles](docs/screenshots/profiles.png) |
+| [![DevTent dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) | [![DevTent projects](docs/screenshots/projects.png)](docs/screenshots/projects.png) |
 
-The **dashboard** is your home base — projects, stack status, and getting started. The **tray quick panel** keeps start/stop, sites, and Procfile toggles one click away. **Services** and **Profiles** let you manage what runs and which PHP / web server / database stack is active.
+| Services | Tooling |
+| --- | --- |
+| [![DevTent services](docs/screenshots/services.png)](docs/screenshots/services.png) | [![DevTent tooling](docs/screenshots/tooling.png)](docs/screenshots/tooling.png) |
+
+| Dumps | Profiles |
+| --- | --- |
+| [![DevTent dumps](docs/screenshots/dumps.png)](docs/screenshots/dumps.png) | [![DevTent profiles](docs/screenshots/profiles.png)](docs/screenshots/profiles.png) |
+
+| Tray quick panel |
+| --- |
+| [![DevTent tray quick panel](docs/screenshots/tray.png)](docs/screenshots/tray.png) |
+
+The **dashboard** is your home base — stack health, recent sites, and quick actions. **Projects** covers sites, per-site PHP, SSL, park/link, and share. Under **Developer** you get **Services**, **Logs**, **Tooling**, and live **Dumps**. **Profiles** switch your PHP / web server / database stack. The **tray quick panel** keeps start/stop and sites one click away.
+
+Regenerate screenshots after UI changes:
+
+```bash
+npm run screenshots -w @devtent/desktop
+```
 
 ## Why DevTent?
 
@@ -30,38 +48,61 @@ The **dashboard** is your home base — projects, stack status, and getting star
 - **Free & open** — DTCL v1.0 copyleft; source stays open in derivatives
 - **Just works on first run** — optional one-click **recommended stack** (PHP, Nginx, MySQL, mkcert) with services auto-started
 - **Database peace of mind** — automatic MySQL backups before stop, daily while the app is open, 7-day retention
-- **Modern full stack** — PostgreSQL, Redis, Mailpit, Node, mkcert via Quick Add
+- **Modern full stack** — PostgreSQL, Redis, Mailpit, Node/Bun/Composer tooling, mkcert via Quick Add / Tooling
+- **Park & link sites** — serve `www/`, parked folders, or external projects on `*.test`
+- **Developer tooling** — Composer, Node, Bun, and Laravel installer in one **Tooling** tab
+- **Environment doctor** — `devtent doctor --fix` and dashboard health checks with safe repairs
 - **Pretty URLs** — `myapp.test` via auto virtual hosts + hosts file
 - **Profiles** — switch PHP / stack configs from the UI
 - **Import wizard** — copy projects, databases, and runtimes from an existing local environment
 - **Tray + dashboard** — quick panel for day-to-day work
 
-## Features (v1.1)
+## How DevTent compares
 
-- **SSL workflow** — Enable HTTPS per domain from the UI; Apache and Nginx vhosts regenerate automatically with `:443` blocks
-- **Environment health** — Dashboard panel surfaces missing runtimes, stopped services, backup status, and SSL gaps with quick-fix links
-- **MySQL restore** — Restore from saved backups in Settings or via `devtent mysql restore`
-- **Portability** — Export/import full environment bundles (projects, profiles, data, configs)
-- **Node version management** — Install and switch Node 18/20/21/22 per profile (UI + CLI)
-- **Enhanced log viewer** — Search, PHP file-location parsing, auto-refresh, and open-in-editor
-- **Profile optional services** — Toggle Redis and Mailpit per profile; Services tab reflects profile stack only
-- **Onboarding wizard** — Guided first-project setup after initial install
-- **Graceful quit** — Optional stop-all-services on app exit (Settings)
+DevTent sits in the same space as [Laravel Herd](https://herd.laravel.com/), [Yerd](https://yerd.app/), and [Lerd](https://lerd.dev/) — but is the **only free, open-source stack built for Windows first**, with a portable folder you fully own.
 
-## Features (v1.0)
+| | Herd | Yerd | Lerd | **DevTent** |
+| --- | :---: | :---: | :---: | :---: |
+| Windows | ✓ | ✗ | ✗ | **✓** |
+| Open source | ✗ | ✓ | ✓ | **✓** |
+| No containers | ✓ | ✓ | ✗ | **✓** |
+| `doctor` health checks | ✗ | ✓ | ✗ | **✓** |
+| DB + mail (no Pro paywall) | Pro | ✓ | ✓ | **✓** |
+| Laravel live dumps | Pro | ✓ | ✓ | **✓** ([Dumps](docs/COMPARISON.md#using-new-features) tab) |
+| Public tunnel / share | ✓ | ✗ | ✓ | **✓** (`devtent share <site>`) |
+| PHP per site | ✓ | ✓ | ✓ | **✓** (per-site PHP dropdown) |
 
-- **Recommended stack** — On setup, install PHP 8.3, Nginx, MySQL 8.4, and mkcert in one flow; enable services and start them automatically.
-- **MySQL backups** — `mysqldump` before MySQL stops; daily scheduled backups; manual backup in Settings; stored under `data/backups/mysql/` (7-day retention).
-- **Portable & isolated** — Everything lives in one folder. Copy it to a USB drive or another machine.
-- **Profile system** — Switch between PHP 8.2 / 8.3 / 8.4 stacks from the UI.
-- **Service orchestration** — Start/stop **Nginx, MySQL, PHP, PostgreSQL, Redis, and Mailpit** via Quick Add + Procfile toggles; add any custom command.
-- **Auto virtual hosts** — Drop a project in `www/` and get `myapp.test` automatically. On Windows, DevTent opens an elevated CMD prompt to update the hosts file when needed (the app itself stays non-admin).
-- **SSL with mkcert** — Install mkcert via Quick Add, then enable HTTPS per domain.
-- **Quick Add** — PHP 8.2–8.4, Nginx, MySQL 8.4, Node 22, mkcert, Redis, Mailpit, PostgreSQL 16 (one click each).
-- **Quick App** — Scaffold Laravel or plain PHP projects from the dashboard.
-- **Environment import** — Copy `www/` projects, php.ini, database files, and runtimes from a folder you already use (source folder is read-only; nothing is deleted).
-- **Tray-first UX** — Quick panel + full dashboard.
-- **Windows installer** — NSIS `.exe` with Start Menu shortcut and tray integration.
+### Laravel dumps, share & per-site PHP
+
+These ship in the desktop app and CLI — not on a roadmap.
+
+**Laravel live dumps** — `dump()` and `dd()` from any PHP site are captured automatically. Open the **Dumps** tab to follow them live. For Laravel SQL queries, paste the capture snippet from `devtent dumps` docs into `AppServiceProvider::boot()` (or use **Laravel .env** in the app).
+
+```bash
+devtent dumps list          # tail dump log in the terminal
+devtent dumps clear
+```
+
+**Public share** — exposes a local `*.test` site via a Cloudflare quick tunnel (installs `cloudflared` on first use).
+
+```bash
+devtent share myapp         # prints public URL; Ctrl+C to stop
+devtent share list
+devtent share stop myapp
+```
+
+**PHP per site** — each site can run a different PHP version (separate `php-cgi` on ports 9082, 9083, 9084…). Regenerates vhosts and Procfile automatically.
+
+```bash
+devtent sites php myapp php-8.4
+devtent sites php myapp           # show current version
+```
+
+| MariaDB | ◐ | ✓ | ◐ | **✓** |
+
+Full feature matrix, honest gaps, and roadmap: **[docs/COMPARISON.md](docs/COMPARISON.md)**.
+
+
 
 ### Custom services
 
@@ -69,16 +110,22 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 
 ## Quick start
 
+
+
 ### Prerequisites
 
 - [Node.js 20+](https://nodejs.org/) — developers building from source only
 - Windows 10/11 (v1.0 target platform)
 
+
+
 ### End users — Windows installer
 
-Download **DevTent Setup 1.1.2.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
+Download **DevTent Setup 1.2.0.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
 
 > **SmartScreen notice:** The installer is **unsigned** in v1.0. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
+
+
 
 ### Developers — run from source
 
@@ -106,7 +153,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.1.2.exe`
+Output: `packages/desktop/release/DevTent Setup 1.2.0.exe`
 
 ### CLI (optional)
 
@@ -117,6 +164,8 @@ npm run devtent -- start
 npm run devtent -- mysql backup
 npm run devtent -- migrate import --from C:\\path\\to\\environment
 ```
+
+
 
 ## Project structure
 
@@ -131,6 +180,8 @@ devtent/                  # Your portable instance (after setup)
 ├── profiles/              # Stack profiles
 └── devtent.toml          # Main configuration
 ```
+
+
 
 ## CLI reference
 
@@ -158,7 +209,11 @@ devtent quick-app <template>     # Scaffold a new project
 devtent node list                  # List installable Node versions
 devtent node install <version>     # Install Node (e.g. node-22)
 devtent node use <version>         # Set active Node for profile
-devtent migrate import --from <path>   # Import from existing environment folder
+devtent sites link <path>       # Link external project
+devtent sites php <name> <ver> # Per-site PHP (php-8.2, php-8.3, php-8.4)
+devtent share <site>           # Public tunnel (Ctrl+C to stop)
+devtent dumps list             # Live dump()/dd() output
+devtent doctor --fix           # Diagnose and repair environment
 ```
 
 `migrate laragon` is a legacy alias for `migrate import`.
@@ -186,3 +241,4 @@ See [docs/LICENSE-FAQ.md](docs/LICENSE-FAQ.md) for a plain-language summary.
 - [GitHub Issues](https://github.com/DubStepMad/devtent/issues)
 - [GitHub Discussions](https://github.com/DubStepMad/devtent/discussions)
 - [Releases](https://github.com/DubStepMad/devtent/releases)
+
