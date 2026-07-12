@@ -2,7 +2,6 @@ import { app, BrowserWindow, Menu, nativeImage } from "electron";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { registerIpcHandlers, refreshRoot, getCurrentRoot, setOpenDashboardHandler, setRequestQuitHandler, broadcastUpdateAvailable } from "./ipc-handlers.js";
-import { stopAll, maybeDailyMysqlBackup } from "@devtent/core";
 import { __dirname } from "./dir.js";
 import { setupTray, hideTrayPopup, setTrayRunning, getIconPath, destroyTray } from "./tray.js";
 import { ensureEnvironmentReady } from "./startup-environment.js";
@@ -19,6 +18,10 @@ import { getDefaultRoot, getInstallRootEarly } from "./paths.js";
 import { isInstallInProgressSync, shouldExitForInstallInProgress } from "./install-lock.js";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+
+/** Delay first scheduled MySQL dump so it does not compete with tray/UI startup. */
+const FIRST_BACKUP_DELAY_MS = 10 * 60 * 1000;
+const BACKUP_INTERVAL_MS = 60 * 60 * 1000;
 
 const isE2eSmoke = process.argv.includes("--e2e-smoke");
 const wantsQuit = process.argv.includes("--quit");
@@ -193,27 +196,32 @@ app.whenReady().then(async () => {
     createWindow({ setup: true });
   } else {
     await syncLaunchAtLoginFromSettings();
-    try {
-      await maybeAutoStartServices(getCurrentRoot());
-    } catch (err) {
+    // Do not block tray/UI on service spawn — start in the background.
+    void maybeAutoStartServices(getCurrentRoot()).catch((err) => {
       console.error("Auto-start services failed:", err);
-    }
+    });
   }
+
+  // Warm the core module after tray is up so the first IPC call is faster.
+  void import("@devtent/core");
 
   const runScheduledBackup = async () => {
     const activeRoot = getCurrentRoot();
     if (!activeRoot || !(await isInitialized(activeRoot))) return;
     try {
+      const { maybeDailyMysqlBackup } = await import("@devtent/core");
       await maybeDailyMysqlBackup(activeRoot);
     } catch {
       // Non-fatal
     }
   };
 
-  void runScheduledBackup();
-  setInterval(() => {
+  setTimeout(() => {
     void runScheduledBackup();
-  }, 60 * 60 * 1000);
+    setInterval(() => {
+      void runScheduledBackup();
+    }, BACKUP_INTERVAL_MS);
+  }, FIRST_BACKUP_DELAY_MS);
 
   void scheduleBackgroundUpdateCheck();
 });
@@ -266,6 +274,7 @@ app.on("before-quit", (event) => {
       const settings = await loadSettings();
       const root = getCurrentRoot();
       if (settings.stopServicesOnQuit !== false && root && (await isInitialized(root))) {
+        const { stopAll } = await import("@devtent/core");
         await stopAll(root);
       }
     } catch {

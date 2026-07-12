@@ -1,7 +1,7 @@
 {
   "name": "@devtent/desktop",
   "version": "1.2.0",
-  "description": "DevTent Desktop — primary GUI for your local dev environment",
+  "description": "DevTent",
   "license": "LicenseRef-DTCL-1.0",
   "author": "DevTent Contributors",
   "type": "module",
@@ -36,6 +36,7 @@
     "icon": "assets/icon.png",
     "afterPack": "scripts/after-pack.cjs",
     "electronVersion": "35.7.5",
+    "electronLanguages": ["en-US"],
     "npmRebuild": false,
     "asar": true,
     "compression": "normal",
@@ -45,13 +46,17 @@
     },
     "files": [
       "dist/**/*",
-      "assets/**/*",
+      "!dist/**/*.{map,d.ts}",
+      "!dist/**/*.d.ts.map",
+      "!dist/ui/screenshot*",
+      "!dist/manifests/**",
+      "!dist/templates/**",
       "package.json"
     ],
     "extraResources": [
       { "from": "dist/manifests", "to": "manifests" },
       { "from": "dist/templates", "to": "templates" },
-      { "from": "assets", "to": "assets" }
+      { "from": "assets/icon.png", "to": "assets/icon.png" }
     ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],

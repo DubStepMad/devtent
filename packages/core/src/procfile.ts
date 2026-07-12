@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
-import { parseProcfile, saveProcfileEntry } from "./services.js";
+import { parseProcfile, saveProcfileEntry, clearProcfileCache } from "./services.js";
 import {
   DEFAULT_PHP_VERSION,
   getPhpDisplayName,
@@ -36,6 +36,7 @@ export async function readProcfileRaw(root: string): Promise<string> {
 export async function writeProcfileRaw(root: string, content: string): Promise<void> {
   const procfilePath = path.join(root, "Procfile");
   await writeFile(procfilePath, content.endsWith("\n") ? content : content + "\n", "utf-8");
+  clearProcfileCache(root);
 }
 
 export async function getServicePresets(root: string): Promise<ServicePreset[]> {

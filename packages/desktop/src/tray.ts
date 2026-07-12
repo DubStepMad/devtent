@@ -15,13 +15,25 @@ import { loadSettings, saveSettings } from "./paths.js";
 const POPUP_WIDTH = 380;
 const POPUP_HEIGHT = 620;
 
+export type RefreshScope = "all" | "services" | "sites" | "profiles" | "tooling" | "settings";
+
 let tray: Tray | null = null;
 let trayPopup: BrowserWindow | null = null;
 let popupVisible = false;
 let animationTimer: ReturnType<typeof setInterval> | null = null;
 let animationFrame = 0;
-const idleIcon = createTrayIcon(0);
-const animationFrames = createTrayAnimationFrames();
+let idleIcon: Electron.NativeImage | null = null;
+let animationFrames: Electron.NativeImage[] | null = null;
+
+function getIdleIcon(): Electron.NativeImage {
+  if (!idleIcon) idleIcon = createTrayIcon(0);
+  return idleIcon;
+}
+
+function getAnimationFrames(): Electron.NativeImage[] {
+  if (!animationFrames) animationFrames = createTrayAnimationFrames();
+  return animationFrames;
+}
 
 export function getTray(): Tray | null {
   return tray;
@@ -35,10 +47,10 @@ export function getIconPath(name: string): string {
   return devPath;
 }
 
-export function broadcastRefresh(): void {
+export function broadcastRefresh(scope: RefreshScope = "all"): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("devtent:refresh");
+      win.webContents.send("devtent:refresh", scope);
     }
   }
 }
@@ -49,14 +61,15 @@ function stopTrayAnimation(): void {
     animationTimer = null;
   }
   animationFrame = 0;
-  tray?.setImage(idleIcon);
+  tray?.setImage(getIdleIcon());
 }
 
 function startTrayAnimation(): void {
   stopTrayAnimation();
+  const frames = getAnimationFrames();
   animationTimer = setInterval(() => {
-    animationFrame = (animationFrame + 1) % animationFrames.length;
-    tray?.setImage(animationFrames[animationFrame] ?? idleIcon);
+    animationFrame = (animationFrame + 1) % frames.length;
+    tray?.setImage(frames[animationFrame] ?? getIdleIcon());
   }, 450);
 }
 
@@ -169,8 +182,9 @@ export async function toggleTrayPopup(): Promise<void> {
 
 export function hideTrayPopup(): void {
   if (trayPopup && !trayPopup.isDestroyed()) {
-    trayPopup.hide();
+    trayPopup.destroy();
   }
+  trayPopup = null;
   popupVisible = false;
 }
 
@@ -199,7 +213,7 @@ export async function setupTray(
   onQuit: () => void,
   getRoot: () => string
 ): Promise<Tray> {
-  const icon = createTrayIcon(0);
+  const icon = getIdleIcon();
   tray = new Tray(icon);
   tray.setToolTip("DevTent — click for quick panel");
 

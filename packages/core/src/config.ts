@@ -13,6 +13,29 @@ export const CONFIG_FILENAME = "devtent.toml";
 export const DEFAULT_PROFILE = "default";
 const ACTIVE_PROFILE_MARKER = path.join("profiles", ".active");
 
+type TomlCache<T> = { mtimeMs: number; value: T };
+const configCache = new Map<string, TomlCache<DevTentConfig>>();
+const profileCache = new Map<string, TomlCache<Profile>>();
+
+function cacheKey(root: string, name = ""): string {
+  return path.resolve(root) + (name ? `::${name}` : "");
+}
+
+function invalidateConfigCache(root: string): void {
+  configCache.delete(cacheKey(root));
+}
+
+function invalidateProfileCache(root: string, name?: string): void {
+  if (name) {
+    profileCache.delete(cacheKey(root, name));
+    return;
+  }
+  const prefix = path.resolve(root) + "::";
+  for (const key of profileCache.keys()) {
+    if (key.startsWith(prefix) || key === path.resolve(root)) profileCache.delete(key);
+  }
+}
+
 export const DEFAULT_DIRS = [
   "bin",
   "www",
@@ -95,17 +118,31 @@ export async function pathExists(filePath: string): Promise<boolean> {
 
 export async function loadConfig(root: string): Promise<DevTentConfig> {
   const configPath = path.join(root, CONFIG_FILENAME);
-  if (!(await pathExists(configPath))) {
-    throw new Error(`DevTent not initialized at ${root}. Run: devtent init ${root}`);
+  const key = cacheKey(root);
+  try {
+    const info = await stat(configPath);
+    const cached = configCache.get(key);
+    if (cached && cached.mtimeMs === info.mtimeMs) {
+      return cached.value;
+    }
+    const raw = await readFile(configPath, "utf-8");
+    const value = parseToml(raw) as unknown as DevTentConfig;
+    configCache.set(key, { mtimeMs: info.mtimeMs, value });
+    return value;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") {
+      throw new Error(`DevTent not initialized at ${root}. Run: devtent init ${root}`);
+    }
+    throw err;
   }
-  const raw = await readFile(configPath, "utf-8");
-  return parseToml(raw) as unknown as DevTentConfig;
 }
 
 export async function saveConfig(root: string, config: DevTentConfig): Promise<void> {
   const configPath = path.join(root, CONFIG_FILENAME);
   await writeFile(configPath, stringifyToml(config as unknown as Record<string, unknown>), "utf-8");
   await writeActiveProfileMarker(root, config.activeProfile);
+  invalidateConfigCache(root);
 }
 
 export async function setDevTentTld(root: string, tld: string): Promise<string> {
@@ -255,15 +292,29 @@ export async function saveProfile(root: string, profile: Profile): Promise<void>
     stringifyToml(normalized as unknown as Record<string, unknown>),
     "utf-8"
   );
+  invalidateProfileCache(root, normalized.name);
 }
 
 export async function loadProfile(root: string, name: string): Promise<Profile> {
   const profilePath = path.join(root, "profiles", `${name}.toml`);
-  if (!(await pathExists(profilePath))) {
-    throw new Error(`Profile "${name}" not found`);
+  const key = cacheKey(root, name);
+  try {
+    const info = await stat(profilePath);
+    const cached = profileCache.get(key);
+    if (cached && cached.mtimeMs === info.mtimeMs) {
+      return cached.value;
+    }
+    const raw = await readFile(profilePath, "utf-8");
+    const value = normalizeProfile(parseToml(raw) as unknown as Profile);
+    profileCache.set(key, { mtimeMs: info.mtimeMs, value });
+    return value;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") {
+      throw new Error(`Profile "${name}" not found`);
+    }
+    throw err;
   }
-  const raw = await readFile(profilePath, "utf-8");
-  return normalizeProfile(parseToml(raw) as unknown as Profile);
 }
 
 export async function listProfiles(root: string): Promise<Profile[]> {
@@ -271,15 +322,11 @@ export async function listProfiles(root: string): Promise<Profile[]> {
   if (!(await pathExists(profilesDir))) return [];
 
   const files = await readdir(profilesDir);
-  const profiles: Profile[] = [];
+  const names = files
+    .filter((file) => file.endsWith(".toml"))
+    .map((file) => file.replace(/\.toml$/, ""));
 
-  for (const file of files) {
-    if (!file.endsWith(".toml")) continue;
-    const name = file.replace(/\.toml$/, "");
-    profiles.push(await loadProfile(root, name));
-  }
-
-  return profiles;
+  return Promise.all(names.map((name) => loadProfile(root, name)));
 }
 
 export interface SwitchProfileResult {
@@ -389,6 +436,7 @@ export async function deleteProfile(root: string, name: string): Promise<void> {
     throw new Error(`Profile "${name}" not found`);
   }
   await unlink(profilePath);
+  invalidateProfileCache(root, name);
 }
 
 export async function applyPhpVersionToActiveProfile(

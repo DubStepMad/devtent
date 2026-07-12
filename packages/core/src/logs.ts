@@ -28,18 +28,21 @@ export async function listLogFiles(root: string): Promise<LogFileInfo[]> {
   if (!(await pathExists(logsDir))) return [];
 
   const entries = await readdir(logsDir, { withFileTypes: true });
-  const files: LogFileInfo[] = [];
-
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const full = path.join(logsDir, entry.name);
-    const info = await stat(full);
-    files.push({
-      name: entry.name,
-      sizeBytes: info.size,
-      modifiedAt: info.mtime.toISOString(),
-    });
-  }
+  const files = (
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const full = path.join(logsDir, entry.name);
+          const info = await stat(full);
+          return {
+            name: entry.name,
+            sizeBytes: info.size,
+            modifiedAt: info.mtime.toISOString(),
+          } satisfies LogFileInfo;
+        })
+    )
+  );
 
   return files.sort((a, b) => a.name.localeCompare(b.name));
 }

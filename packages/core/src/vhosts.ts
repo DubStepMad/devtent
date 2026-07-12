@@ -93,12 +93,13 @@ export async function generateVirtualHosts(
     await ensureApacheConfig(root);
   }
 
-  for (const vhost of vhosts) {
-    await writeNginxSite(root, vhost);
-    await writeApacheSite(root, vhost);
-  }
+  await Promise.all(
+    vhosts.map(async (vhost) => {
+      await Promise.all([writeNginxSite(root, vhost), writeApacheSite(root, vhost)]);
+    })
+  );
 
-  await syncPhpCgiProcfile(root);
+  await syncPhpCgiProcfile(root, vhosts);
 
   const config = await loadConfig(root);
   const needsHostsFile = tldRequiresHostsFile(config.tld);
@@ -148,6 +149,10 @@ server {
   error_log logs/${vhost.name}-error.log;
 }
 `;
+  if (await pathExists(sitePath)) {
+    const existing = await readFile(sitePath, "utf-8");
+    if (existing === content) return;
+  }
   await writeFile(sitePath, content, "utf-8");
 }
 
@@ -191,6 +196,10 @@ async function writeApacheSite(root: string, vhost: VirtualHost): Promise<void> 
   CustomLog "logs/${vhost.name}-access.log" common
 </VirtualHost>${sslBlock}
 `;
+  if (await pathExists(sitePath)) {
+    const existing = await readFile(sitePath, "utf-8");
+    if (existing === content) return;
+  }
   await writeFile(sitePath, content, "utf-8");
 }
 

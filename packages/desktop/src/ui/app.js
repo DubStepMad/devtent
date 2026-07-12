@@ -39,6 +39,10 @@ const TOOL_ICONS = {
 };
 
 let currentDumpFilter = "all";
+let currentView = "dashboard";
+let lastLogContentSignature = "";
+let lastDumpsSignature = "";
+let refreshInFlight = null;
 
 const QUICK_ADD_HIDDEN = new Set(["composer", "bun", "cloudflared"]);
 
@@ -342,6 +346,7 @@ function handleHostsSyncResult(result) {
 }
 
 function showView(name) {
+  currentView = name;
   document.querySelectorAll(".view-panel").forEach((p) => p.classList.add("hidden"));
   document.getElementById(`view-${name}`)?.classList.remove("hidden");
   document.getElementById("page-title").textContent = TITLES[name] || name;
@@ -549,8 +554,13 @@ async function refreshLogs(fileName = selectedLogFile) {
     select.value = target;
     selectedLogFile = target;
     const content = await api.readLogTail(target, 500);
+    const contentSig = `${target}:${content.length}:${content.slice(-120)}:${searchQuery}`;
+    if (contentSig === lastLogContentSignature && !listChanged) return;
+    lastLogContentSignature = contentSig;
     renderLogViewerContent(viewer, content, searchQuery);
-    viewer.scrollTop = viewer.scrollHeight;
+    if (document.getElementById("log-follow")?.checked) {
+      viewer.scrollTop = viewer.scrollHeight;
+    }
   } else if (!files.length) {
     viewer.textContent = "No log files yet — start a service to generate logs.";
   }
@@ -564,7 +574,9 @@ function stopLogListRefresh() {
 }
 
 function startLogListRefresh() {
+  // Single poller covers list + follow; avoid dual 2s timers.
   stopLogListRefresh();
+  stopLogFollow();
   logListRefreshTimer = setInterval(() => {
     void refreshLogs(selectedLogFile);
   }, 2000);
@@ -578,11 +590,8 @@ function stopLogFollow() {
 }
 
 function startLogFollow() {
-  stopLogFollow();
-  if (!document.getElementById("log-follow")?.checked || !selectedLogFile) return;
-  logFollowTimer = setInterval(() => {
-    void refreshLogs(selectedLogFile);
-  }, 2000);
+  // Prefer the shared list refresh timer when follow is on.
+  startLogListRefresh();
 }
 
 let dumpsFollowTimer = null;
@@ -607,6 +616,12 @@ async function refreshDumps() {
     currentDumpFilter === "all"
       ? events
       : events.filter((ev) => ev.type === currentDumpFilter);
+
+  const sig = `${currentDumpFilter}:${events.length}:${events[events.length - 1]?.ts ?? 0}:${events[events.length - 1]?.message?.slice(0, 40) ?? ""}`;
+  if (sig === lastDumpsSignature && viewer.querySelector(".dump-entry, .empty-state")) {
+    return;
+  }
+  lastDumpsSignature = sig;
 
   if (!events.length) {
     viewer.innerHTML = renderDumpsEmptyState(
@@ -1578,7 +1593,8 @@ async function refreshMysqlBackups() {
   });
 }
 
-async function refreshAll() {
+async function refreshAll(options = {}) {
+  const { includeSettings = false } = options;
   const status = await api.getRoot();
   if (!status.initialized) {
     if (!isFreshInstall(status)) {
@@ -1594,7 +1610,59 @@ async function refreshAll() {
   showSetup(false);
   const state = await api.getState();
   await refreshDashboard(state);
-  await refreshSettings(state.root);
+  if (includeSettings || currentView === "settings") {
+    await refreshSettings(state.root);
+  }
+}
+
+async function handleScopedRefresh(scope = "all") {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      if (scope === "services") {
+        await refreshServices();
+        if (currentView === "dashboard") {
+          const state = await api.getState();
+          await refreshDashboard(state);
+        }
+        return;
+      }
+      if (scope === "sites") {
+        if (currentView === "projects" || currentView === "dashboard") {
+          await refreshProjects();
+        }
+        if (currentView === "dashboard") {
+          const state = await api.getState();
+          await refreshDashboard(state);
+        }
+        return;
+      }
+      if (scope === "profiles") {
+        await refreshProfiles();
+        if (currentView === "services") await refreshServices();
+        return;
+      }
+      if (scope === "tooling") {
+        if (currentView === "tooling") await refreshTooling();
+        return;
+      }
+      if (scope === "settings") {
+        if (currentView === "settings") {
+          const root = await api.getRoot();
+          await refreshSettings(root.root);
+        }
+        return;
+      }
+      await refreshAll({ includeSettings: currentView === "settings" });
+      if (currentView === "services") await refreshServices();
+      if (currentView === "projects") await refreshProjects();
+      if (currentView === "tooling") await refreshTooling();
+      if (currentView === "profiles") await refreshProfiles();
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
 }
 
 async function updateLaragonPreview(
@@ -1735,7 +1803,7 @@ async function boot() {
   }
 
   api.onProgress((payload) => handleProgress(payload));
-  api.onRefresh(() => refreshAll().catch(console.error));
+  api.onRefresh((scope) => handleScopedRefresh(scope).catch(console.error));
   api.onUpdateAvailable((result) => {
     if (result.status !== "available" || !result.update) return;
     pendingUpdate = result.update;
@@ -1796,12 +1864,9 @@ async function boot() {
   } else {
     await api.setWindowMode("dashboard");
     showSetup(false);
-    await refreshAll();
-    await refreshServices();
-    await refreshProjects();
-    await refreshManifests();
-    await refreshTemplates();
-    await refreshProfiles();
+    await refreshAll({ includeSettings: false });
+    // Load the active view first; defer secondary lists until needed.
+    await Promise.all([refreshServices(), refreshProjects(), refreshProfiles()]);
   }
 
   document.querySelectorAll(".migrate-project-actions button").forEach((btn) => {

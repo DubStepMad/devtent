@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { openSync, appendFileSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
@@ -13,6 +13,17 @@ import { resolvePhpPaths } from "./profile-runtime.js";
 import { ensureApacheConfig, APACHE_PROCFILE_COMMAND, needsApacheProcfileRepair } from "./apache-support.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
+
+type ProcfileCache = { mtimeMs: number; entries: ProcfileEntry[] };
+const procfileCache = new Map<string, ProcfileCache>();
+
+function invalidateProcfileCache(root: string): void {
+  procfileCache.delete(path.resolve(root));
+}
+
+export function clearProcfileCache(root: string): void {
+  invalidateProcfileCache(root);
+}
 
 function serviceStartOrder(name: string): number {
   if (name.startsWith("php-cgi-") || name === "php-fpm") return 0;
@@ -51,7 +62,8 @@ export function parseProcfileCommand(command: string): { executable: string; arg
   return { executable: tokens[0]!, args: tokens.slice(1) };
 }
 
-const STARTUP_VERIFY_MS = 600;
+const STARTUP_VERIFY_MS = 400;
+const STARTUP_READY_MS = 80;
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -82,36 +94,51 @@ function appendServiceLog(logPath: string, message: string): void {
 
 export async function parseProcfile(root: string): Promise<ProcfileEntry[]> {
   const procfilePath = path.join(root, "Procfile");
-  if (!(await pathExists(procfilePath))) return [];
-
-  const content = await readFile(procfilePath, "utf-8");
-  const entries: ProcfileEntry[] = [];
-
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const colonIdx = trimmed.indexOf(":");
-    if (colonIdx === -1) continue;
-
-    const name = trimmed.slice(0, colonIdx).trim();
-    const command = trimmed.slice(colonIdx + 1).trim();
-    if (name && command) {
-      entries.push({ name, command });
+  const key = path.resolve(root);
+  try {
+    const info = await stat(procfilePath);
+    const cached = procfileCache.get(key);
+    if (cached && cached.mtimeMs === info.mtimeMs) {
+      return cached.entries;
     }
-  }
+    const content = await readFile(procfilePath, "utf-8");
+    const entries: ProcfileEntry[] = [];
 
-  return entries;
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const colonIdx = trimmed.indexOf(":");
+      if (colonIdx === -1) continue;
+
+      const name = trimmed.slice(0, colonIdx).trim();
+      const command = trimmed.slice(colonIdx + 1).trim();
+      if (name && command) {
+        entries.push({ name, command });
+      }
+    }
+
+    procfileCache.set(key, { mtimeMs: info.mtimeMs, entries });
+    return entries;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") return [];
+    throw err;
+  }
 }
 
-async function prepareServiceStart(root: string, name: string): Promise<void> {
+async function prepareServiceStart(
+  root: string,
+  name: string,
+  entries?: ProcfileEntry[]
+): Promise<void> {
   if (name === "nginx") {
     await ensureNginxSupportFiles(root);
   }
   if (name === "apache") {
     await ensureApacheConfig(root);
-    const entries = await parseProcfile(root);
-    const apache = entries.find((e) => e.name === "apache");
+    const list = entries ?? (await parseProcfile(root));
+    const apache = list.find((e) => e.name === "apache");
     if (apache && needsApacheProcfileRepair(apache.command)) {
       const httpd = resolvePath(root, "bin/apache/bin/httpd.exe");
       if (await pathExists(httpd)) {
@@ -120,8 +147,8 @@ async function prepareServiceStart(root: string, name: string): Promise<void> {
     }
   }
   if (name === "mysql") {
-    const entries = await parseProcfile(root);
-    const mysql = entries.find((e) => e.name === "mysql");
+    const list = entries ?? (await parseProcfile(root));
+    const mysql = list.find((e) => e.name === "mysql");
     if (mysql && !mysql.command.includes("--defaults-file=")) {
       await saveProcfileEntry(root, {
         name: "mysql",
@@ -139,9 +166,23 @@ async function prepareServiceStart(root: string, name: string): Promise<void> {
   }
 }
 
-export async function startService(root: string, name: string): Promise<ServiceStatus> {
-  const entries = await parseProcfile(root);
-  const entry = entries.find((e) => e.name === name);
+async function waitForStartup(child: ChildProcess): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < STARTUP_VERIFY_MS) {
+    if (!isChildAlive(child)) return false;
+    if (Date.now() - started >= STARTUP_READY_MS) return true;
+    await waitMs(40);
+  }
+  return isChildAlive(child);
+}
+
+export async function startService(
+  root: string,
+  name: string,
+  options?: { entry?: ProcfileEntry; entries?: ProcfileEntry[]; configLogsDir?: string }
+): Promise<ServiceStatus> {
+  const entries = options?.entries ?? (await parseProcfile(root));
+  const entry = options?.entry ?? entries.find((e) => e.name === name);
 
   if (!entry) {
     throw new Error(`Service "${name}" not found in Procfile`);
@@ -157,13 +198,14 @@ export async function startService(root: string, name: string): Promise<ServiceS
     };
   }
 
-  await prepareServiceStart(root, name);
+  await prepareServiceStart(root, name, entries);
 
-  const config = await loadConfig(root);
-  await mkdir(resolvePath(root, config.paths.logs), { recursive: true });
+  const logsDir =
+    options?.configLogsDir ?? (await loadConfig(root)).paths.logs;
+  await mkdir(resolvePath(root, logsDir), { recursive: true });
   await mkdir(resolvePath(root, "tmp"), { recursive: true });
 
-  const logPath = path.join(root, config.paths.logs, `${name}.log`);
+  const logPath = path.join(root, logsDir, `${name}.log`);
   const logFd = openSync(logPath, "a");
 
   const { executable, args } = parseProcfileCommand(entry.command);
@@ -207,9 +249,9 @@ export async function startService(root: string, name: string): Promise<ServiceS
     );
   });
 
-  await waitMs(STARTUP_VERIFY_MS);
+  const alive = await waitForStartup(child);
 
-  if (!isChildAlive(child)) {
+  if (!alive) {
     runningProcesses.delete(name);
     return {
       name,
@@ -264,14 +306,37 @@ export async function startAll(root: string, services?: string[]): Promise<Servi
     services ? entries.filter((e) => services.includes(e.name)) : entries
   );
 
-  const results: ServiceStatus[] = [];
+  const config = await loadConfig(root);
+  await mkdir(resolvePath(root, config.paths.logs), { recursive: true });
+  await mkdir(resolvePath(root, "tmp"), { recursive: true });
+
+  // Start by wave so PHP CGI comes up before web servers, but services in a wave run in parallel.
+  const waves = new Map<number, ProcfileEntry[]>();
   for (const entry of toStart) {
-    try {
-      results.push(await startService(root, entry.name));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      results.push({ name: entry.name, running: false, error: message });
-    }
+    const order = serviceStartOrder(entry.name);
+    const wave = waves.get(order) ?? [];
+    wave.push(entry);
+    waves.set(order, wave);
+  }
+
+  const results: ServiceStatus[] = [];
+  for (const order of [...waves.keys()].sort((a, b) => a - b)) {
+    const wave = waves.get(order)!;
+    const waveResults = await Promise.all(
+      wave.map(async (entry) => {
+        try {
+          return await startService(root, entry.name, {
+            entry,
+            entries,
+            configLogsDir: config.paths.logs,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { name: entry.name, running: false, error: message } satisfies ServiceStatus;
+        }
+      })
+    );
+    results.push(...waveResults);
   }
   return results;
 }
@@ -281,11 +346,12 @@ export async function stopAll(
   services?: string[],
   options?: { skipBackup?: boolean }
 ): Promise<ServiceStatus[]> {
+  // Bulk stop skips MySQL dump by default — daily backup covers that; keep dump on single stop.
+  const skipBackup = options?.skipBackup !== false;
   const names = services ?? [...runningProcesses.keys()];
-  const results: ServiceStatus[] = [];
-  for (const name of names) {
-    results.push(await stopService(name, root, options));
-  }
+  const results = await Promise.all(
+    names.map((name) => stopService(name, root, { skipBackup }))
+  );
   return results;
 }
 
@@ -318,6 +384,7 @@ export async function saveProcfileEntry(root: string, entry: ProcfileEntry): Pro
 
   const content = entries.map((e) => `${e.name}: ${e.command}`).join("\n") + "\n";
   await writeFile(path.join(root, "Procfile"), content, "utf-8");
+  invalidateProcfileCache(root);
 }
 
 export function isServiceRunning(name: string): boolean {

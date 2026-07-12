@@ -139,8 +139,8 @@ const api = {
     ipcRenderer.on("devtent:progress", handler);
     return () => ipcRenderer.removeListener("devtent:progress", handler);
   },
-  onRefresh: (callback: () => void) => {
-    const handler = () => callback();
+  onRefresh: (callback: (scope?: string) => void) => {
+    const handler = (_event: IpcRendererEvent, scope?: string) => callback(scope ?? "all");
     ipcRenderer.on("devtent:refresh", handler);
     return () => ipcRenderer.removeListener("devtent:refresh", handler);
   },

@@ -1,6 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { loadConfig, pathExists } from "./config.js";
 import { listLogFiles } from "./logs.js";
 
 export interface LogSearchMatch {
@@ -49,19 +47,11 @@ function resolveLogFilePath(root: string, fileName: string): string {
 }
 
 async function readLogLines(root: string, fileName: string): Promise<string[]> {
-  const full = resolveLogFilePath(root, fileName);
-  if (!(await pathExists(full))) return [];
-  const info = await stat(full);
-  if (info.size === 0) return [];
-  const maxBytes = 2 * 1024 * 1024;
-  const content =
-    info.size <= maxBytes
-      ? await readFile(full, "utf-8")
-      : await readFile(full, "utf-8").then((text) => {
-          const lines = text.split(/\r?\n/);
-          return lines.slice(-5000).join("\n");
-        });
-  return content.split(/\r?\n/);
+  // Validate path shape, then tail-read (never load multi-MB logs whole).
+  resolveLogFilePath(root, fileName);
+  const { readLogTail } = await import("./logs.js");
+  const content = await readLogTail(root, fileName, 5000);
+  return content ? content.split(/\r?\n/) : [];
 }
 
 export async function searchLogFiles(
@@ -133,7 +123,6 @@ function resolveProjectPath(root: string, filePath: string): string {
 export async function listLogFilesWithMeta(root: string): Promise<
   Array<{ name: string; sizeBytes: number; modifiedAt: string; label?: string }>
 > {
-  const config = await loadConfig(root);
   const files = await listLogFiles(root);
   return files.map((f) => ({
     ...f,

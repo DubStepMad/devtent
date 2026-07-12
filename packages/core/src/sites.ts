@@ -156,34 +156,25 @@ export async function discoverAllVirtualHosts(root: string): Promise<VirtualHost
   const phpOverrides = sites.phpOverrides;
   const tld = config.tld;
   const seen = new Set<string>();
-  const vhosts: VirtualHost[] = [];
 
-  const pushSite = async (entry: {
+  type Pending = {
     name: string;
     projectDir: string;
     source: VirtualHost["source"];
     parkedFrom?: string;
     phpVersion?: string;
-  }) => {
+  };
+  const pending: Pending[] = [];
+
+  const queue = (entry: Pending) => {
     if (seen.has(entry.name)) return;
     seen.add(entry.name);
-
-    const domain = `${entry.name}.${tld}`;
-    vhosts.push({
-      name: entry.name,
-      domain,
-      root: await resolveProjectWebRoot(entry.projectDir),
-      ssl: await hasSslCertificate(root, domain),
-      phpVersion: entry.phpVersion ?? phpOverrides[entry.name] ?? defaultPhp,
-      source: entry.source,
-      projectPath: entry.projectDir,
-      parkedFrom: entry.parkedFrom,
-    });
+    pending.push(entry);
   };
 
   const wwwRoot = resolvePath(root, config.paths.www);
   for (const name of await discoverProjectNames(wwwRoot)) {
-    await pushSite({
+    queue({
       name,
       projectDir: path.join(wwwRoot, name),
       source: "www",
@@ -194,7 +185,7 @@ export async function discoverAllVirtualHosts(root: string): Promise<VirtualHost
   for (const parkedRoot of sites.parked) {
     if (!(await pathExists(parkedRoot))) continue;
     for (const name of await discoverProjectNames(parkedRoot)) {
-      await pushSite({
+      queue({
         name,
         projectDir: path.join(parkedRoot, name),
         source: "parked",
@@ -206,13 +197,33 @@ export async function discoverAllVirtualHosts(root: string): Promise<VirtualHost
 
   for (const link of sites.linked) {
     if (!(await pathExists(link.path))) continue;
-    await pushSite({
+    queue({
       name: link.name,
       projectDir: link.path,
       source: "linked",
       phpVersion: link.phpVersion,
     });
   }
+
+  const vhosts = await Promise.all(
+    pending.map(async (entry) => {
+      const domain = `${entry.name}.${tld}`;
+      const [webRoot, ssl] = await Promise.all([
+        resolveProjectWebRoot(entry.projectDir),
+        hasSslCertificate(root, domain),
+      ]);
+      return {
+        name: entry.name,
+        domain,
+        root: webRoot,
+        ssl,
+        phpVersion: entry.phpVersion ?? phpOverrides[entry.name] ?? defaultPhp,
+        source: entry.source,
+        projectPath: entry.projectDir,
+        parkedFrom: entry.parkedFrom,
+      } satisfies VirtualHost;
+    })
+  );
 
   return vhosts.sort((a, b) => a.name.localeCompare(b.name));
 }

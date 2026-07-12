@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
 import { resolvePhpPaths } from "./profile-runtime.js";
@@ -63,14 +63,22 @@ spl_autoload_register(static function (string $class): void {
 export async function ensureDumpCaptureFiles(root: string): Promise<void> {
   await mkdir(resolvePath(root, "etc/php"), { recursive: true });
   await mkdir(resolvePath(root, "logs"), { recursive: true });
-  await writeFile(resolvePath(root, "etc/php/devtent-capture.php"), CAPTURE_PHP, "utf-8");
+  const capturePhp = resolvePath(root, "etc/php/devtent-capture.php");
+  if (!(await pathExists(capturePhp))) {
+    await writeFile(capturePhp, CAPTURE_PHP, "utf-8");
+  }
   const logPath = resolvePath(root, DUMPS_LOG);
   if (!(await pathExists(logPath))) {
     await writeFile(logPath, "", "utf-8");
   }
 }
 
+const phpCaptureReady = new Set<string>();
+
 export async function ensurePhpCaptureForVersion(root: string, phpVersion: string): Promise<void> {
+  const key = `${path.resolve(root)}::${phpVersion}`;
+  if (phpCaptureReady.has(key)) return;
+
   await ensureDumpCaptureFiles(root);
   const paths = resolvePhpPaths(phpVersion);
   const phpDir = resolvePath(root, paths.phpRc);
@@ -99,6 +107,8 @@ auto_prepend_file = "${capturePath}"
   } else {
     await writeFile(phpIni, `; DevTent PHP config\ninclude="devtent.ini"\n`, "utf-8");
   }
+
+  phpCaptureReady.add(key);
 }
 
 export async function readDumpEvents(
@@ -108,9 +118,32 @@ export async function readDumpEvents(
   const logPath = resolvePath(root, DUMPS_LOG);
   if (!(await pathExists(logPath))) return [];
 
-  const raw = await readFile(logPath, "utf-8");
+  const info = await stat(logPath);
+  if (info.size === 0) return [];
+
+  const tail = options?.tail;
+  let raw: string;
+  if (!tail || info.size <= 512 * 1024) {
+    raw = await readFile(logPath, "utf-8");
+  } else {
+    // Approximate: ~400 bytes/event → read a trailing window instead of the whole file.
+    const chunkSize = Math.min(info.size, Math.max(64 * 1024, tail * 512));
+    const handle = await open(logPath, "r");
+    try {
+      const buffer = Buffer.alloc(chunkSize);
+      await handle.read(buffer, 0, chunkSize, Math.max(0, info.size - chunkSize));
+      raw = buffer.toString("utf8");
+      if (info.size > chunkSize) {
+        const nl = raw.indexOf("\n");
+        if (nl >= 0) raw = raw.slice(nl + 1);
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+
   const lines = raw.split(/\r?\n/).filter(Boolean);
-  const slice = options?.tail ? lines.slice(-options.tail) : lines;
+  const slice = tail ? lines.slice(-tail) : lines;
   const events: DumpEvent[] = [];
   for (const line of slice) {
     try {

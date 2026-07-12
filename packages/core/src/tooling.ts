@@ -18,6 +18,9 @@ import { installFromManifest, loadManifest } from "./quick-add.js";
 
 const execFileAsync = promisify(execFile);
 
+const PATH_CACHE_TTL_MS = 60_000;
+const pathLookupCache = new Map<string, { at: number; paths: string[] }>();
+
 export type ToolingSource = "managed" | "external" | "missing";
 
 export interface ToolingEntry {
@@ -77,15 +80,22 @@ function isUnderRoot(root: string, candidate: string): boolean {
 }
 
 async function findOnPath(executable: string): Promise<string[]> {
+  const cached = pathLookupCache.get(executable);
+  if (cached && Date.now() - cached.at < PATH_CACHE_TTL_MS) {
+    return cached.paths;
+  }
   const file = process.platform === "win32" ? "where.exe" : "which";
   const args = process.platform === "win32" ? [executable] : ["-a", executable];
   try {
     const { stdout } = await execFileAsync(file, args, { windowsHide: true });
-    return String(stdout)
+    const paths = String(stdout)
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
+    pathLookupCache.set(executable, { at: Date.now(), paths });
+    return paths;
   } catch {
+    pathLookupCache.set(executable, { at: Date.now(), paths: [] });
     return [];
   }
 }
@@ -356,7 +366,9 @@ export async function listTooling(root: string, manifestsDir: string): Promise<T
     buildBunEntry(root, manifestsDir),
     buildLaravelInstallerEntry(root),
   ]);
-  const pathEntries = await getPathEntries(root);
+  const pathEntries = await getPathEntries(root, {
+    externalNodePath: detected?.path,
+  });
   return { tools, pathEntries, nodeVersions, externalNode };
 }
 

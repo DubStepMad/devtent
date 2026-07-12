@@ -5,7 +5,10 @@ import { normalizeProfile } from "./profile-runtime.js";
 import { resolveNodePaths } from "./node-runtime.js";
 import { detectExternalNode } from "./external-node.js";
 
-export async function getPathEntries(root: string): Promise<string[]> {
+export async function getPathEntries(
+  root: string,
+  options?: { externalNodePath?: string }
+): Promise<string[]> {
   const config = await loadConfig(root);
   const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
   const entries: string[] = [];
@@ -16,9 +19,10 @@ export async function getPathEntries(root: string): Promise<string[]> {
     entries.push(resolvePath(root, path.dirname(profile.php)));
   }
   if (profile.useExternalNode) {
-    const external = await detectExternalNode(root);
-    if (external) {
-      entries.push(path.dirname(external.path));
+    const externalPath =
+      options?.externalNodePath ?? (await detectExternalNode(root))?.path;
+    if (externalPath) {
+      entries.push(path.dirname(externalPath));
     }
   } else if (profile.nodeVersion) {
     const nodePaths = resolveNodePaths(profile.nodeVersion);

@@ -38,16 +38,15 @@ export async function listManifests(manifestsDir: string): Promise<QuickAddManif
   if (!(await pathExists(manifestsDir))) return [];
 
   const files = await readdir(manifestsDir);
-  const manifests: QuickAddManifest[] = [];
-
-  for (const file of files) {
-    if (!file.endsWith(".yaml") && !file.endsWith(".yml")) continue;
-    const raw = await readFile(path.join(manifestsDir, file), "utf-8");
-    const manifest = parseYaml(raw) as QuickAddManifest;
-    if (manifest.platform === "all" || manifest.platform === process.platform) {
-      manifests.push(manifest);
-    }
-  }
+  const yamlFiles = files.filter((file) => file.endsWith(".yaml") || file.endsWith(".yml"));
+  const manifests = (
+    await Promise.all(
+      yamlFiles.map(async (file) => {
+        const raw = await readFile(path.join(manifestsDir, file), "utf-8");
+        return parseYaml(raw) as QuickAddManifest;
+      })
+    )
+  ).filter((manifest) => manifest.platform === "all" || manifest.platform === process.platform);
 
   return manifests.sort((a, b) => a.name.localeCompare(b.name));
 }
