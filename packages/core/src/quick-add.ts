@@ -214,11 +214,19 @@ async function ensurePostgresDataDir(
 
   await mkdir(dataDir, { recursive: true });
   log("Initializing PostgreSQL data directory…");
-  await runShellCommand(
-    root,
-    `"${initdb}" -U postgres -A trust -E UTF8 -D "${dataDir}"`,
-    log
-  );
+  log(`  $ ${initdb} -U postgres -A trust -E UTF8 -D ${dataDir}`);
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(
+      initdb,
+      ["-U", "postgres", "-A", "trust", "-E", "UTF8", "-D", dataDir],
+      { cwd: root, shell: false, windowsHide: true, stdio: "inherit" }
+    );
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`initdb failed (${code})`));
+    });
+    proc.on("error", reject);
+  });
 }
 
 async function runShellCommand(
@@ -227,8 +235,15 @@ async function runShellCommand(
   log: (msg: string) => void
 ): Promise<void> {
   log(`  $ ${command}`);
+  const { parseProcfileCommand } = await import("./services.js");
+  const { executable, args } = parseProcfileCommand(command);
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn(command, [], { cwd, shell: true, stdio: "inherit" });
+    const proc = spawn(executable, args, {
+      cwd,
+      shell: false,
+      windowsHide: true,
+      stdio: "inherit",
+    });
     proc.on("close", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`Command failed (${code}): ${command}`));

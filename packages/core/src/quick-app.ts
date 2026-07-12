@@ -8,6 +8,7 @@ import {
   installLaravelQueryCapture,
   isLaravelProject,
 } from "./laravel-query-capture.js";
+import { parseProcfileCommand } from "./services.js";
 import type { QuickAppTemplate } from "./types.js";
 
 export async function loadTemplate(templatesDir: string, name: string): Promise<QuickAppTemplate> {
@@ -38,6 +39,14 @@ export async function listTemplates(templatesDir: string): Promise<QuickAppTempl
   return templates;
 }
 
+function assertSafeProjectName(projectName: string): void {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(projectName)) {
+    throw new Error(
+      "Project name must start with a letter or number and contain only letters, numbers, _ or -"
+    );
+  }
+}
+
 export async function createFromTemplate(
   root: string,
   templateName: string,
@@ -46,6 +55,7 @@ export async function createFromTemplate(
   onProgress?: (msg: string) => void
 ): Promise<string> {
   const log = onProgress ?? (() => {});
+  assertSafeProjectName(projectName);
   const template = await loadTemplate(templatesDir, templateName);
   const projectPath = resolvePath(root, `www/${projectName}`);
 
@@ -63,7 +73,7 @@ export async function createFromTemplate(
       .replace(/\{root\}/g, root);
 
     log(`  $ ${resolved}`);
-    await runCommand(resolved, projectPath);
+    await runCommand(resolved, root);
   }
 
   if (template.postCreate) {
@@ -91,8 +101,15 @@ export async function createFromTemplate(
 }
 
 function runCommand(command: string, cwd: string): Promise<void> {
+  const { executable, args } = parseProcfileCommand(command);
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, { cwd, shell: true, stdio: "inherit", env: process.env });
+    const proc = spawn(executable, args, {
+      cwd,
+      shell: false,
+      windowsHide: true,
+      stdio: "inherit",
+      env: process.env,
+    });
     proc.on("close", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`Command failed (${code}): ${command}`));
@@ -102,6 +119,7 @@ function runCommand(command: string, cwd: string): Promise<void> {
 }
 
 export async function writePlainPhpProject(root: string, name: string): Promise<void> {
+  assertSafeProjectName(name);
   const projectPath = path.join(root, "www", name);
   await mkdir(projectPath, { recursive: true });
 

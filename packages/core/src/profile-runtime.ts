@@ -23,6 +23,9 @@ export function phpVersionFromLegacyPath(phpPath?: string): string | undefined {
 }
 
 export function resolvePhpPaths(phpVersion: string): PhpRuntimePaths {
+  if (!/^php-\d+(?:\.\d+)*$/i.test(phpVersion)) {
+    throw new Error(`Invalid PHP version id: ${phpVersion}`);
+  }
   const base = `bin/php/${phpVersion}`;
   const cgi = `${base}/php-cgi.exe`;
   const cgiPort = resolvePhpCgiPort(phpVersion);

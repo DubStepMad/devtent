@@ -1,10 +1,10 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { loadConfig, loadProfile, saveProfile, updateProfile } from "./config.js";
 import { normalizeProfile } from "./profile-runtime.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const EXTERNAL_NODE_ID = "external";
 
@@ -25,11 +25,11 @@ function isUnderRoot(root: string, candidate: string): boolean {
 }
 
 async function findOnPath(executable: string): Promise<string[]> {
-  const command =
-    process.platform === "win32" ? `where ${executable}` : `which -a ${executable}`;
+  const file = process.platform === "win32" ? "where.exe" : "which";
+  const args = process.platform === "win32" ? [executable] : ["-a", executable];
   try {
-    const { stdout } = await execAsync(command, { windowsHide: true });
-    return stdout
+    const { stdout } = await execFileAsync(file, args, { windowsHide: true });
+    return String(stdout)
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
@@ -66,11 +66,11 @@ export function inferNodeManager(nodePath: string): string {
 
 async function readNodeVersion(nodePath: string): Promise<string | undefined> {
   try {
-    const { stdout } = await execAsync(`"${nodePath}" --version`, {
+    const { stdout } = await execFileAsync(nodePath, ["--version"], {
       windowsHide: true,
       timeout: 10000,
     });
-    return stdout.trim().replace(/^v/i, "");
+    return String(stdout).trim().replace(/^v/i, "");
   } catch {
     return undefined;
   }

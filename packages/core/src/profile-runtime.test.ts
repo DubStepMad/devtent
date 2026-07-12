@@ -19,6 +19,11 @@ describe("profile runtime", () => {
     assert.match(paths.procfileCommand, /php-cgi\.exe -b 127\.0\.0\.1:9084/);
   });
 
+  it("rejects unsafe PHP version ids", () => {
+    assert.throws(() => resolvePhpPaths("php-8.4; rm -rf /"), /Invalid PHP version id/);
+    assert.throws(() => resolvePhpPaths("../evil"), /Invalid PHP version id/);
+  });
+
   it("infers phpVersion from legacy profile paths", () => {
     assert.equal(phpVersionFromLegacyPath("bin/php/php-8.4/php.exe"), "php-8.4");
     const profile = normalizeProfile({

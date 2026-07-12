@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -16,7 +16,7 @@ import type { NodeVersionInfo } from "./node-runtime.js";
 import { installNodeVersion, listNodeVersions, nodeVersionFromLegacyPath } from "./node-runtime.js";
 import { installFromManifest, loadManifest } from "./quick-add.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export type ToolingSource = "managed" | "external" | "missing";
 
@@ -77,11 +77,11 @@ function isUnderRoot(root: string, candidate: string): boolean {
 }
 
 async function findOnPath(executable: string): Promise<string[]> {
-  const command =
-    process.platform === "win32" ? `where ${executable}` : `which -a ${executable}`;
+  const file = process.platform === "win32" ? "where.exe" : "which";
+  const args = process.platform === "win32" ? [executable] : ["-a", executable];
   try {
-    const { stdout } = await execAsync(command, { windowsHide: true });
-    return stdout
+    const { stdout } = await execFileAsync(file, args, { windowsHide: true });
+    return String(stdout)
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
@@ -104,13 +104,27 @@ async function detectExternalBinary(
   return undefined;
 }
 
-async function captureCommand(command: string, cwd: string): Promise<string | undefined> {
+async function captureCommand(
+  file: string,
+  args: string[],
+  cwd: string,
+  env?: NodeJS.ProcessEnv
+): Promise<string | undefined> {
   try {
-    const { stdout } = await execAsync(command, { cwd, windowsHide: true, timeout: 15000 });
-    return stdout.trim();
+    const { stdout } = await execFileAsync(file, args, {
+      cwd,
+      windowsHide: true,
+      timeout: 15000,
+      env,
+    });
+    return String(stdout).trim();
   } catch {
     return undefined;
   }
+}
+
+function withComposerHome(composerHome: string): NodeJS.ProcessEnv {
+  return { ...process.env, COMPOSER_HOME: composerHome };
 }
 
 async function getActivePhpCli(root: string): Promise<string | undefined> {
@@ -127,7 +141,7 @@ async function getManagedComposerVersion(root: string): Promise<string | undefin
   const php = await getActivePhpCli(root);
   if (!php) return undefined;
 
-  const output = await captureCommand(`"${php}" "${composerPhar}" --version --no-ansi`, root);
+  const output = await captureCommand(php, [composerPhar, "--version", "--no-ansi"], root);
   const match = output?.match(/Composer version\s+([^\s]+)/i);
   return match?.[1];
 }
@@ -135,7 +149,7 @@ async function getManagedComposerVersion(root: string): Promise<string | undefin
 async function getManagedBunVersion(root: string): Promise<string | undefined> {
   const bunExe = resolvePath(root, "bin/bun/bun.exe");
   if (!(await pathExists(bunExe))) return undefined;
-  const output = await captureCommand(`"${bunExe}" --version`, root);
+  const output = await captureCommand(bunExe, ["--version"], root);
   return output?.replace(/^v/i, "");
 }
 
@@ -160,8 +174,10 @@ async function getLaravelInstallerVersion(root: string): Promise<string | undefi
 
   const composerHome = getComposerHome(root);
   const output = await captureCommand(
-    `set COMPOSER_HOME=${composerHome}&& "${php}" "${composerPhar}" global show laravel/installer --no-ansi`,
-    root
+    php,
+    [composerPhar, "global", "show", "laravel/installer", "--no-ansi"],
+    root,
+    withComposerHome(composerHome)
   );
   const match = output?.match(/versions?\s*:\s*\*?\s*([^\s]+)/i);
   return match?.[1];
@@ -376,9 +392,10 @@ export async function installTool(
 
     const composerHome = getComposerHome(root);
     log("Installing Laravel installer via Composer…");
-    await execAsync(
-      `set COMPOSER_HOME=${composerHome}&& "${php}" "${composerPhar}" global require laravel/installer --no-interaction`,
-      { cwd: root, windowsHide: true }
+    await execFileAsync(
+      php,
+      [composerPhar, "global", "require", "laravel/installer", "--no-interaction"],
+      { cwd: root, windowsHide: true, env: withComposerHome(composerHome) }
     );
     log("✓ Laravel installer installed");
     return;
@@ -457,9 +474,10 @@ export async function removeTool(
     const composerHome = getComposerHome(root);
     if ((await pathExists(composerPhar)) && php) {
       try {
-        await execAsync(
-          `set COMPOSER_HOME=${composerHome}&& "${php}" "${composerPhar}" global remove laravel/installer --no-interaction`,
-          { cwd: root, windowsHide: true }
+        await execFileAsync(
+          php,
+          [composerPhar, "global", "remove", "laravel/installer", "--no-interaction"],
+          { cwd: root, windowsHide: true, env: withComposerHome(composerHome) }
         );
         return;
       } catch {

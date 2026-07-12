@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createReadStream } from "node:fs";
 import { mkdir, readdir, readFile, writeFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
@@ -49,16 +50,16 @@ export async function isMysqlDataInitialized(root: string): Promise<boolean> {
   return false;
 }
 
-function runCommand(cwd: string, command: string): Promise<void> {
+function runCommand(cwd: string, file: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, [], { cwd, shell: true, stdio: "pipe" });
+    const proc = spawn(file, args, { cwd, shell: false, windowsHide: true, stdio: "pipe" });
     let stderr = "";
     proc.stderr?.on("data", (chunk) => {
       stderr += String(chunk);
     });
     proc.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `Command failed (${code}): ${command}`));
+      else reject(new Error(stderr.trim() || `Command failed (${code}): ${file} ${args.join(" ")}`));
     });
     proc.on("error", reject);
   });
@@ -79,7 +80,7 @@ export async function initializeMysql(root: string, onProgress?: (msg: string) =
   await mkdir(resolvePath(root, "data/mysql"), { recursive: true });
   await writeMysqlIni(root);
   log("Initializing MySQL data directory…");
-  await runCommand(root, `"${mysqld}" --initialize-insecure --datadir=data/mysql`);
+  await runCommand(root, mysqld, ["--initialize-insecure", "--datadir=data/mysql"]);
   log("MySQL data directory ready");
 }
 
@@ -108,7 +109,11 @@ export async function backupMysql(
   await mkdir(backupDir, { recursive: true });
   log(`Backing up MySQL (${reason})…`);
 
-  await runCommand(root, `"${mysqldump}" -uroot --all-databases --result-file="${sqlPath}"`);
+  await runCommand(root, mysqldump, [
+    "-uroot",
+    "--all-databases",
+    `--result-file=${sqlPath}`,
+  ]);
 
   const info: MysqlBackupInfo = {
     id: path.basename(backupDir),
@@ -187,11 +192,24 @@ export async function restoreMysql(
   }
 
   log(`Restoring MySQL from ${backup.id}…`);
-  const cmd =
-    process.platform === "win32"
-      ? `type "${sqlPath}" | "${mysql}" -uroot`
-      : `"${mysql}" -uroot < "${sqlPath}"`;
-  await runCommand(root, cmd);
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(mysql, ["-uroot"], {
+      cwd: root,
+      shell: false,
+      windowsHide: true,
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    let stderr = "";
+    proc.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `MySQL restore failed (${code})`));
+    });
+    proc.on("error", reject);
+    createReadStream(sqlPath).pipe(proc.stdin!);
+  });
   log("MySQL restore completed");
   return { success: true, message: `Restored MySQL from backup ${backup.id}` };
 }
