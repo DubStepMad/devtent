@@ -2,6 +2,19 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.2.2] - 2026-07-12
+
+Quiet update indicator so you do not have to check Settings manually.
+
+### Added
+
+- **Update badge** — small dot on Settings / Updates, plus a topbar “Update vX” chip when a release is available
+- **Tray tooltip** — mentions the available version when an update is waiting
+
+### Changed
+
+- Background update checks no longer open a modal; a short toast + persistent badge is enough until you choose to install
+
 ## [1.2.1] - 2026-07-12
 
 Performance and security patch for a snappier desktop experience.

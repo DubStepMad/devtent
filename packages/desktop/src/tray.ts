@@ -224,13 +224,31 @@ export async function setupTray(
   return tray;
 }
 
+let trayUpdateVersion: string | null = null;
+let servicesRunning = false;
+
+function refreshTrayTooltip(): void {
+  if (!tray) return;
+  const parts = ["DevTent"];
+  if (trayUpdateVersion) {
+    parts.push(`update v${trayUpdateVersion} available`);
+  } else if (servicesRunning) {
+    parts.push("services running (click for panel)");
+  } else {
+    parts.push("idle (click for panel)");
+  }
+  tray.setToolTip(parts.join(" — "));
+}
+
+export function setTrayUpdateAvailable(version: string | null): void {
+  trayUpdateVersion = version ? String(version).replace(/^v/i, "") : null;
+  refreshTrayTooltip();
+}
+
 export function setTrayRunning(running: boolean): void {
   if (!tray) return;
-  tray.setToolTip(
-    running
-      ? "DevTent — services running (click for panel)"
-      : "DevTent — idle (click for panel)"
-  );
+  servicesRunning = running;
+  refreshTrayTooltip();
   if (running) {
     startTrayAnimation();
   } else {

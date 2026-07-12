@@ -185,6 +185,7 @@ let setupActive = false;
 let lastSetupPercent = 0;
 let pendingUpdate = null;
 let updateInstalling = false;
+let updateBadgeVisible = false;
 let logFollowTimer = null;
 let logListRefreshTimer = null;
 let logSearchTimer = null;
@@ -242,8 +243,46 @@ function setUpdateStatusLine(result) {
   }
 }
 
+function setUpdateAvailableIndicator(update) {
+  pendingUpdate = update || null;
+  updateBadgeVisible = Boolean(update);
+  const version = update?.latestVersion;
+
+  document.getElementById("nav-update-dot")?.classList.toggle("hidden", !updateBadgeVisible);
+  document.getElementById("settings-update-dot")?.classList.toggle("hidden", !updateBadgeVisible);
+
+  const chip = document.getElementById("btn-update-available");
+  if (chip) {
+    chip.classList.toggle("hidden", !updateBadgeVisible);
+    chip.textContent = version ? `Update v${version}` : "Update available";
+    chip.title = version
+      ? `DevTent v${version} is available — click to install`
+      : "Update available — click to install";
+  }
+
+  const settingsBtn = document.querySelector('.nav-item[data-view="settings"]');
+  if (settingsBtn) {
+    settingsBtn.setAttribute(
+      "aria-label",
+      updateBadgeVisible ? `Settings, update available${version ? ` (v${version})` : ""}` : "Settings"
+    );
+  }
+}
+
+function clearUpdateAvailableIndicator() {
+  setUpdateAvailableIndicator(null);
+}
+
+function openPendingUpdate() {
+  if (!pendingUpdate) return;
+  showView("settings");
+  showSettingsSection("updates");
+  showUpdateDialog(pendingUpdate);
+}
+
 function showUpdateDialog(update) {
   pendingUpdate = update;
+  setUpdateAvailableIndicator(update);
   const overlay = document.getElementById("update-overlay");
   const title = document.getElementById("update-title");
   const versionLine = document.getElementById("update-version-line");
@@ -263,7 +302,7 @@ function showUpdateDialog(update) {
 
 function hideUpdateDialog() {
   document.getElementById("update-overlay")?.classList.add("hidden");
-  if (!updateInstalling) pendingUpdate = null;
+  // Keep pendingUpdate so the quiet badge remains after "Remind me later".
 }
 
 function setUpdateProgress(percent, message) {
@@ -287,8 +326,10 @@ async function runUpdateCheck({ showDialogOnAvailable = false, respectSkip = fal
   const result = await api.checkForUpdates({ respectSkip });
   setUpdateStatusLine(result);
   if (result.status === "available") {
-    pendingUpdate = result.update;
+    setUpdateAvailableIndicator(result.update);
     if (showDialogOnAvailable) showUpdateDialog(result.update);
+  } else if (result.status === "up-to-date") {
+    clearUpdateAvailableIndicator();
   }
   return result;
 }
@@ -1806,15 +1847,15 @@ async function boot() {
   api.onRefresh((scope) => handleScopedRefresh(scope).catch(console.error));
   api.onUpdateAvailable((result) => {
     if (result.status !== "available" || !result.update) return;
-    pendingUpdate = result.update;
     setUpdateStatusLine(result);
+    setUpdateAvailableIndicator(result.update);
     const setupVisible = !document.getElementById("view-setup")?.classList.contains("hidden");
     if (setupVisible) {
-      showToast(`DevTent v${result.update.latestVersion} is available — check Settings when setup finishes`, "success", 8000);
+      showToast(`Update v${result.update.latestVersion} ready in Settings when setup finishes`, "success", 5000);
       return;
     }
-    showToast(`DevTent v${result.update.latestVersion} is available`, "success", 6000);
-    showUpdateDialog(result.update);
+    // Quiet notice only — no modal. Badge/chip stays until install or skip.
+    showToast(`DevTent v${result.update.latestVersion} is available`, "success", 4500);
   });
   api.onUpdateDownloadProgress(({ percent, message }) => setUpdateProgress(percent, message));
   api.onNavigate?.((view) => {
@@ -1975,7 +2016,7 @@ async function boot() {
       }
       if (view === "settings") {
         const { root } = await api.getRoot();
-        showSettingsSection("general");
+        showSettingsSection(updateBadgeVisible ? "updates" : "general");
         await refreshSettings(root);
       }
     };
@@ -2128,6 +2169,10 @@ async function boot() {
     }
   });
 
+  document.getElementById("btn-update-available")?.addEventListener("click", () => {
+    openPendingUpdate();
+  });
+
   document.getElementById("btn-rollback-app")?.addEventListener("click", async () => {
     const btn = document.getElementById("btn-rollback-app");
     if (!confirm("Restore the previous DevTent version? The app will restart.")) return;
@@ -2167,6 +2212,7 @@ async function boot() {
       await api.skipUpdateVersion(pendingUpdate.latestVersion);
       showToast(`Skipped v${pendingUpdate.latestVersion}`, "success");
     }
+    clearUpdateAvailableIndicator();
     hideUpdateDialog();
   });
 

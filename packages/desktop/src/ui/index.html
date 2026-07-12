@@ -67,7 +67,7 @@
         <div class="nav-group">
           <span class="nav-group-label">Config</span>
           <button class="nav-item" data-view="profiles">Profiles</button>
-          <button class="nav-item" data-view="settings">Settings</button>
+          <button class="nav-item" data-view="settings">Settings<span class="nav-update-dot hidden" id="nav-update-dot" aria-hidden="true"></span></button>
         </div>
       </nav>
       <div class="sidebar-footer">
@@ -82,6 +82,9 @@
           <p id="page-subtitle" class="page-subtitle">Stack health and quick actions</p>
         </div>
         <div class="topbar-actions no-drag">
+          <button type="button" class="btn secondary sm update-available-btn hidden" id="btn-update-available" title="Open update details">
+            Update available
+          </button>
           <button class="btn success" id="btn-start-all">▶ Start All</button>
           <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
         </div>
@@ -344,7 +347,7 @@
               <button type="button" class="settings-nav-item" data-settings-section="folders">Folders</button>
               <button type="button" class="settings-nav-item" data-settings-section="backups">Backups</button>
               <button type="button" class="settings-nav-item" data-settings-section="transfer">Transfer</button>
-              <button type="button" class="settings-nav-item" data-settings-section="updates">Updates</button>
+              <button type="button" class="settings-nav-item" data-settings-section="updates">Updates<span class="nav-update-dot hidden" id="settings-update-dot" aria-hidden="true"></span></button>
             </nav>
 
             <div class="settings-content">

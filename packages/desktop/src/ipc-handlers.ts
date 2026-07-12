@@ -17,7 +17,7 @@ import {
   getTemplatesDir,
   getDefaultRoot,
 } from "./paths.js";
-import { broadcastRefresh, setTrayRunning, hideTrayPopup } from "./tray.js";
+import { broadcastRefresh, setTrayRunning, hideTrayPopup, setTrayUpdateAvailable } from "./tray.js";
 import { applyWindowMode } from "./window-layout.js";
 import { validateExternalUrl, resolveRootSubpath } from "./security.js";
 import { openFolderInShell } from "./open-folder.js";
@@ -98,6 +98,7 @@ function sendUpdateDownloadProgress(percent: number, message: string): void {
 
 export function broadcastUpdateAvailable(result: UpdateCheckResult): void {
   if (result.status !== "available") return;
+  setTrayUpdateAvailable(result.update.latestVersion);
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send("devtent:update-available", result);
@@ -771,11 +772,18 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:checkForUpdates", async (_e, options?: { respectSkip?: boolean }) => {
-    return checkForUpdates(options);
+    const result = await checkForUpdates(options);
+    if (result.status === "available") {
+      setTrayUpdateAvailable(result.update.latestVersion);
+    } else if (result.status === "up-to-date") {
+      setTrayUpdateAvailable(null);
+    }
+    return result;
   });
 
   ipcMain.handle("devtent:skipUpdateVersion", async (_e, version: string) => {
     await skipUpdateVersion(version);
+    setTrayUpdateAvailable(null);
   });
 
   ipcMain.handle("devtent:downloadAndInstallUpdate", async (_e, update: UpdateInfo) => {

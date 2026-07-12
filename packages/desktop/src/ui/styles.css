@@ -338,6 +338,40 @@ a,
 .nav-item:hover { background: var(--surface-hover); color: var(--text); }
 .nav-item.active { background: rgba(56, 189, 248, 0.15); color: var(--accent); font-weight: 600; }
 
+.nav-item,
+.settings-nav-item {
+  position: relative;
+}
+
+.nav-update-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+}
+
+.nav-update-dot.hidden {
+  display: none;
+}
+
+.update-available-btn {
+  border-color: rgba(56, 189, 248, 0.35);
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.update-available-btn:hover {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.update-available-btn.hidden {
+  display: none;
+}
+
 .sidebar-footer { padding: 1rem; border-top: 1px solid var(--border); }
 
 .badge {
