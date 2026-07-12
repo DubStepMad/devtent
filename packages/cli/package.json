@@ -1,6 +1,6 @@
 {
   "name": "@devtent/cli",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DevTent CLI — manage your local dev environment",
   "license": "LicenseRef-DTCL-1.0",
   "type": "module",

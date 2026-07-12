@@ -2,6 +2,26 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [1.2.1] - 2026-07-12
+
+Performance and security patch for a snappier desktop experience.
+
+### Security
+
+- **Shell command injection** — run tooling, MySQL, Node detection, Quick Add, and Quick App via `execFile`/`spawn` with argv arrays instead of interpolated shell strings (CodeQL `js/shell-command-constructed-from-input`)
+- **PHP version ids** — reject unsafe values before building runtime paths
+
+### Changed
+
+- **Faster startup** — lazy-load `@devtent/core`, defer auto-start and MySQL backup, build tray animation frames on demand
+- **Faster Start all** — parallel service waves and shorter startup verify instead of a fixed 600ms wait per service
+- **Smarter UI refresh** — scoped `devtent:refresh` events; skip full dashboard/settings reloads on every service change
+- **Hot-path caching** — mtime caches for config, profiles, and Procfile; PATH lookup cache; parallel site discovery and manifest listing
+- **Logs & dumps** — single poller, skip unchanged DOM rebuilds, tail-read large dump/log files
+- **Quit / stop all** — skip MySQL dump on bulk stop (daily backup still runs)
+- **Installer size** — ship `en-US` Electron locales only; trim asar maps, screenshots, and duplicate assets
+- **Task Manager name** — show **DevTent** instead of the long package description
+
 ## [1.2.0] - 2026-07-07
 
 Feature release closing Yerd/Herd comparison gaps, with a redesigned desktop UI and zero-admin local domains.
