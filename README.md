@@ -1,10 +1,10 @@
 # DevTent
 
-[CI](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml)
-[GitHub release](https://github.com/DubStepMad/devtent/releases/latest)
-[License: DTCL v1.0](LICENSE)
-[Platform](https://github.com/DubStepMad/devtent/releases/latest)
-[Node.js](https://nodejs.org/)
+[![CI](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml/badge.svg)](https://github.com/DubStepMad/devtent/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/DubStepMad/devtent)](https://github.com/DubStepMad/devtent/releases/latest)
+[![License: DTCL v1.0](https://img.shields.io/badge/License-DTCL%20v1.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/DubStepMad/devtent/releases/latest)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 
 **The free, open-source local dev environment — forever.**
 

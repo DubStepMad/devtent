@@ -8,6 +8,11 @@ All notable changes to DevTent are documented in this file.
 
 Feature release: multi-platform desktop, richer Database/PHP tooling, external databases, and a refreshed brand.
 
+### Security
+
+- **Laravel `.env` CLI** — `devtent laravel env` redacts passwords by default (`--secrets` to print them)
+- **Database name sanitizer** — linear-time scrubbing (avoids polynomial ReDoS on underscore runs)
+
 ### Added
 
 - **External profile databases** — point a profile at a NAS or remote MySQL/MariaDB/PostgreSQL (host/port/user/password); Database page lists/creates DBs without a managed local service; Laravel `.env` snippets use the remote connection

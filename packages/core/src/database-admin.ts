@@ -155,11 +155,25 @@ async function findPostgresBinary(root: string, name: string): Promise<string | 
 }
 
 function sanitizeDbName(name: string): string {
-  const cleaned = name.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+  // Linear scan — avoid `/[^a-z0-9_]+/` + `/^_+|_+$/` which CodeQL flags as polynomial ReDoS.
+  const raw = name.trim().toLowerCase();
+  let cleaned = "";
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    const isLetter = c >= 97 && c <= 122;
+    const isDigit = c >= 48 && c <= 57;
+    cleaned += isLetter || isDigit || c === 95 ? raw[i]! : "_";
+  }
+  let start = 0;
+  while (start < cleaned.length && cleaned.charCodeAt(start) === 95) start++;
+  let end = cleaned.length;
+  while (end > start && cleaned.charCodeAt(end - 1) === 95) end--;
+  cleaned = cleaned.slice(start, end);
+
   if (!cleaned || cleaned.length > 63) {
     throw new Error("Invalid database name (use letters, numbers, underscore)");
   }
-  if (!/^[a-z]/.test(cleaned)) {
+  if (cleaned.charCodeAt(0) < 97 || cleaned.charCodeAt(0) > 122) {
     throw new Error("Database name must start with a letter");
   }
   return cleaned;

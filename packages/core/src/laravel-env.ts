@@ -11,6 +11,8 @@ export interface LaravelEnvSnippet {
   domain: string;
   lines: string[];
   envBlock: string;
+  /** Same as envBlock with secrets never interpolated — safe for terminals / logs. */
+  envBlockRedacted: string;
 }
 
 export async function buildLaravelEnvSnippet(
@@ -26,49 +28,55 @@ export async function buildLaravelEnvSnippet(
   const config = await loadConfig(root);
   const profile = await loadProfile(root, config.activeProfile);
   const lines: string[] = [];
+  const redacted: string[] = [];
+  const push = (line: string, logLine = line) => {
+    lines.push(line);
+    redacted.push(logLine);
+  };
+
   const scheme = vhost.ssl ? "https" : "http";
-  lines.push(`APP_URL=${scheme}://${vhost.domain}`);
-  lines.push("");
+  push(`APP_URL=${scheme}://${vhost.domain}`);
+  push("");
 
   const db = resolveDatabaseTargetFromProfile(profile);
   if (db.engine === "mysql" || db.engine === "mariadb") {
-    lines.push("DB_CONNECTION=mysql");
-    lines.push(`DB_HOST=${db.host}`);
-    lines.push(`DB_PORT=${db.port}`);
-    lines.push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
-    lines.push(`DB_USERNAME=${db.user}`);
-    lines.push(`DB_PASSWORD=${db.password}`);
-    lines.push("");
+    push("DB_CONNECTION=mysql");
+    push(`DB_HOST=${db.host}`);
+    push(`DB_PORT=${db.port}`);
+    push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
+    push(`DB_USERNAME=${db.user}`);
+    push(`DB_PASSWORD=${db.password}`, db.password ? "DB_PASSWORD=***" : "DB_PASSWORD=");
+    push("");
   } else if (db.engine === "postgresql") {
-    lines.push("DB_CONNECTION=pgsql");
-    lines.push(`DB_HOST=${db.host}`);
-    lines.push(`DB_PORT=${db.port}`);
-    lines.push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
-    lines.push(`DB_USERNAME=${db.user}`);
-    lines.push(`DB_PASSWORD=${db.password}`);
-    lines.push("");
+    push("DB_CONNECTION=pgsql");
+    push(`DB_HOST=${db.host}`);
+    push(`DB_PORT=${db.port}`);
+    push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
+    push(`DB_USERNAME=${db.user}`);
+    push(`DB_PASSWORD=${db.password}`, db.password ? "DB_PASSWORD=***" : "DB_PASSWORD=");
+    push("");
   }
 
   const mailpitPath = resolvePath(root, binPath(["bin", "mailpit", "mailpit"]));
   const profileServices = profile.services ?? [];
   if (profileServices.includes("mailpit") && (await pathExists(mailpitPath))) {
-    lines.push("MAIL_MAILER=smtp");
-    lines.push("MAIL_HOST=127.0.0.1");
-    lines.push("MAIL_PORT=1025");
-    lines.push("MAIL_USERNAME=null");
-    lines.push("MAIL_PASSWORD=null");
-    lines.push("MAIL_ENCRYPTION=null");
-    lines.push("MAIL_FROM_ADDRESS=hello@example.com");
-    lines.push(`MAIL_FROM_NAME="${siteName}"`);
-    lines.push("");
-    lines.push("# Mailpit web UI: http://127.0.0.1:8025");
+    push("MAIL_MAILER=smtp");
+    push("MAIL_HOST=127.0.0.1");
+    push("MAIL_PORT=1025");
+    push("MAIL_USERNAME=null");
+    push("MAIL_PASSWORD=null");
+    push("MAIL_ENCRYPTION=null");
+    push("MAIL_FROM_ADDRESS=hello@example.com");
+    push(`MAIL_FROM_NAME="${siteName}"`);
+    push("");
+    push("# Mailpit web UI: http://127.0.0.1:8025");
   }
 
   if (profile.services?.includes("redis")) {
-    lines.push("REDIS_HOST=127.0.0.1");
-    lines.push("REDIS_PASSWORD=null");
-    lines.push("REDIS_PORT=6379");
-    lines.push("");
+    push("REDIS_HOST=127.0.0.1");
+    push("REDIS_PASSWORD=null");
+    push("REDIS_PORT=6379");
+    push("");
   }
 
   return {
@@ -76,6 +84,7 @@ export async function buildLaravelEnvSnippet(
     domain: vhost.domain,
     lines,
     envBlock: lines.join("\n"),
+    envBlockRedacted: redacted.join("\n"),
   };
 }
 

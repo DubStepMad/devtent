@@ -1031,11 +1031,20 @@ laravelCmd
   .command("env <site>")
   .description("Print .env snippet for DB, mail, and APP_URL")
   .option("-r, --root <path>", "DevTent root directory")
-  .action(async (site: string, opts: { root?: string }) => {
+  .option("--secrets", "Include passwords in output (avoid on shared terminals)")
+  .action(async (site: string, opts: { root?: string; secrets?: boolean }) => {
     const root = resolveRoot(opts.root);
     const snippet = await buildLaravelEnvSnippet(root, site);
     log(`# Paste into .env for ${snippet.domain}`);
-    log(snippet.envBlock);
+    if (opts.secrets) {
+      // Avoid console.log sinks for clear-text secrets (CodeQL js/clear-text-logging)
+      process.stdout.write(`${snippet.envBlock}\n`);
+    } else {
+      log(snippet.envBlockRedacted);
+      if (snippet.envBlock !== snippet.envBlockRedacted) {
+        log("# Passwords redacted — re-run with --secrets or copy from the desktop site drawer");
+      }
+    }
   });
 
 program.parse();
