@@ -4,6 +4,14 @@
   "description": "DevTent",
   "license": "LicenseRef-DTCL-1.0",
   "author": "DevTent Contributors",
+  "homepage": "https://github.com/DubStepMad/devtent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DubStepMad/devtent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DubStepMad/devtent/issues"
+  },
   "type": "module",
   "main": "dist/main.js",
   "scripts": {

@@ -81,18 +81,19 @@ async function main() {
   const srcW = sourcePng.width;
   const srcH = sourcePng.height;
 
-  const sizes = [16, 32, 48, 64, 128, 256];
+  const sizes = [16, 32, 48, 64, 128, 256, 512];
   const pngBuffers = [];
 
   for (const size of sizes) {
     const rgba = resizeRgba(srcRgba, srcW, srcH, size);
     const pngBuf = rgbaToPngBuffer(size, rgba);
-    pngBuffers.push(pngBuf);
+    // ICO needs the smaller set; 512 is for macOS electron-builder only
+    if (size <= 256) pngBuffers.push(pngBuf);
     fs.writeFileSync(path.join(assetsDir, `icon-${size}.png`), pngBuf);
   }
 
-  // Primary PNG for electron-builder (opaque — OS taskbar / .exe)
-  fs.copyFileSync(path.join(assetsDir, "icon-256.png"), path.join(assetsDir, "icon.png"));
+  // Primary PNG for electron-builder (macOS requires ≥512×512)
+  fs.copyFileSync(path.join(assetsDir, "icon-512.png"), path.join(assetsDir, "icon.png"));
 
   // Transparent mark for dashboard / tray popup (no navy square)
   const uiRgba = punchNavyBackground(resizeRgba(srcRgba, srcW, srcH, 256), 256);
