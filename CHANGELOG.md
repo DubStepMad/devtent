@@ -2,6 +2,39 @@
 
 All notable changes to DevTent are documented in this file.
 
+## [Unreleased]
+
+## [1.3.0] - 2026-07-15
+
+Feature release: multi-platform desktop, richer Database/PHP tooling, external databases, and a refreshed brand.
+
+### Added
+
+- **External profile databases** — point a profile at a NAS or remote MySQL/MariaDB/PostgreSQL (host/port/user/password); Database page lists/creates DBs without a managed local service; Laravel `.env` snippets use the remote connection
+- **Database page** — list/create databases for the active engine; manual backups for managed MySQL, MariaDB, and PostgreSQL
+- **PHP.ini page** — per-version extension toggles and raw `php.ini` editor
+- **Site details drawer** — open/folder/PHP/SSL/share/Laravel .env/telemetry/queue & Vite workers/create matching DB from Projects
+- **Dumps filters** — search, site filter, clear-by-type, install Laravel telemetry toolbar; long bodies collapse
+- **Tray quick links** — Mail, Dumps, Doctor, Database; Doctor badge when health has warnings/errors
+- **Broader Laravel dumps** — capture jobs, views, requests, logs, cache, and outbound HTTP via AppServiceProvider listeners (plus existing dump/query/error hooks); new Dumps filter chips
+- **Named Cloudflare tunnels** — login, create, configure hostname ↔ site, start/stop (`devtent share named …` and Share page)
+- **Local CA status + DNS** — Doctor shows mkcert CA trust; optional built-in DNS on port 15353 for custom TLDs (`devtent dns`); macOS `/etc/resolver` installer
+- **Command palette** — `Ctrl/Cmd+K` (or `/`) with navigation, sites, and actions; topbar shortcut button; number keys `1`–`9` jump views; `R` refresh, `S` start all, `D` doctor
+- **Desktop watch mode** — `npm run start` / `npm run dev` rebuilds on change (UI reload; main process restart)
+- **macOS & Linux desktop** — Electron DMG/zip (arm64) and AppImage/deb (x64) via the release matrix
+- **Platform adapters** — binary path helpers (`.exe` only on Windows); Unix hosts elevation (`osascript` / `pkexec` / `sudo`)
+- **PHP-FPM on Unix** — per-version pools on the same FastCGI ports as Windows php-cgi; static-php.dev Quick Add manifests for darwin-arm64 / linux-x64
+- **Multi-platform Quick Add** — platform-specific manifests (`name.platform-arch.yaml`); tar.gz/tar.xz extract; `downloadType: system` to link nginx/redis from PATH
+- **Cross-platform updater** — picks Windows `.exe`, macOS `.dmg`/`.zip`, or Linux AppImage/`.deb` from GitHub Releases
+
+### Changed
+
+- **New DevTent logo** — hollow tent + `</>` mark; transparent UI badge; packaged icons from `logo-source.png`
+- **Desktop UX (Yerd-inspired)** — sidebar groups for Integrations + System; first-class **Doctor**, **Mail**, **Share**, **Database**, and **PHP** pages; Overview site chips; onboarding uses `.localhost` (no hosts elevation step); clearer profiles/startup copy
+- Project cards simplified to summary + Details drawer
+- Comparison docs and README list DevTent as supporting Windows, macOS, and Linux
+- Composer manifest is `platform: all` (phar + bat/shell wrapper)
+
 ## [1.2.2] - 2026-07-12
 
 Quiet update indicator so you do not have to check Settings manually.
@@ -197,7 +230,7 @@ First public release.
 
 - Windows installer is **unsigned** — SmartScreen guidance in installer UI and [docs/SIGNING.md](docs/SIGNING.md)
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
-- Linux/macOS desktop builds are planned; CLI/core have partial non-Windows support
+- Linux/macOS desktop builds ship via the release matrix (DMG / AppImage / deb)
 
 [1.2.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.2.0
 [1.1.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.2

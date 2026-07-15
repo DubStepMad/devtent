@@ -4,6 +4,7 @@ import { normalizeProfile } from "./profile-runtime.js";
 import type { QuickAddManifest } from "./types.js";
 import { isManifestInstalled } from "./profile-runtime.js";
 import { listManifests, loadManifest } from "./quick-add.js";
+import { binaryName, npmLauncher } from "./platform/binary.js";
 
 export interface NodeRuntimePaths {
   nodeVersion: string;
@@ -27,12 +28,23 @@ export function nodeVersionFromLegacyPath(nodePath?: string): string | undefined
   return match?.[1];
 }
 
-export function resolveNodePaths(nodeVersion: string): NodeRuntimePaths {
+export function resolveNodePaths(
+  nodeVersion: string,
+  platform = process.platform
+): NodeRuntimePaths {
   const base = `bin/node/${nodeVersion}`;
+  if (platform === "win32") {
+    return {
+      nodeVersion,
+      cli: `${base}/${binaryName("node", platform)}`,
+      npm: `${base}/${npmLauncher(platform)}`,
+    };
+  }
+  // Official Node.js unix tarballs use bin/node after hoist
   return {
     nodeVersion,
-    cli: `${base}/node.exe`,
-    npm: `${base}/npm.cmd`,
+    cli: `${base}/bin/node`,
+    npm: `${base}/bin/npm`,
   };
 }
 

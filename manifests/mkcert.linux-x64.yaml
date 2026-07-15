@@ -1,0 +1,9 @@
+﻿name: mkcert
+version: "1.4.4"
+description: mkcert — local HTTPS certificates for development
+platform: linux
+arch: x64
+url: https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64
+installPath: bin/mkcert
+binary: mkcert
+downloadType: binary

@@ -55,6 +55,20 @@ export interface ServiceDefinition extends ServiceConfig {
 
 export type ProfileOptionalService = "redis" | "mailpit";
 
+/** Managed profile engines plus external (NAS / remote) and none. */
+export type ProfileDatabase = "mysql" | "mariadb" | "postgresql" | "external" | "none";
+
+/** Dialect for clients / Laravel when `database` is `"external"`. */
+export type ExternalDatabaseEngine = "mysql" | "mariadb" | "postgresql";
+
+export interface DatabaseConnection {
+  engine: ExternalDatabaseEngine;
+  host: string;
+  port: number;
+  user: string;
+  password?: string;
+}
+
 export interface Profile {
   name: string;
   description?: string;
@@ -63,7 +77,9 @@ export interface Profile {
   /** CLI binary path — derived from phpVersion when saving */
   php?: string;
   webServer?: "nginx" | "apache";
-  database?: "mysql" | "mariadb" | "postgresql" | "none";
+  database?: ProfileDatabase;
+  /** Connection settings when `database` is `"external"` (ignored for managed engines). */
+  databaseConnection?: DatabaseConnection;
   /** Optional add-on services included in this profile's Services tab */
   services?: ProfileOptionalService[];
   /** Quick Add manifest id, e.g. node-22 */
@@ -102,8 +118,8 @@ export interface QuickAddManifest {
   url: string;
   installPath: string;
   binary?: string;
-  /** `zip` (default) or `exe` for single-file downloads like mkcert */
-  downloadType?: "zip" | "exe";
+  /** Archive or single-file download. `binary` = single executable; `system` = link from PATH. */
+  downloadType?: "zip" | "exe" | "binary" | "tar.gz" | "tar.xz" | "system";
   /** After extract, hoist a single nested folder (e.g. `pgsql` for PostgreSQL zips). */
   archiveSubdir?: string;
   postInstall?: PostInstallStep[];

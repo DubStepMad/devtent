@@ -1,0 +1,10 @@
+﻿name: node-22
+version: "22.14.0"
+description: Node.js 22 LTS for Linux x64
+platform: linux
+arch: x64
+url: https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.gz
+installPath: bin/node/node-22
+binary: bin/node
+downloadType: tar.gz
+archiveSubdir: node-v22.14.0-linux-x64

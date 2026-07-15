@@ -26,9 +26,33 @@ export function clearProcfileCache(root: string): void {
 }
 
 function serviceStartOrder(name: string): number {
-  if (name.startsWith("php-cgi-") || name === "php-fpm") return 0;
+  if (
+    name.startsWith("php-cgi-") ||
+    name.startsWith("php-fpm-") ||
+    name === "php-fpm"
+  ) {
+    return 0;
+  }
   const idx = ["nginx", "apache", "mysql", "mariadb", "postgresql", "redis", "mailpit"].indexOf(name);
   return idx === -1 ? 500 : idx + 10;
+}
+
+/** Logical Services-tab id "php-fpm" maps to versioned php-cgi-* / php-fpm-* Procfile rows. */
+export function isPhpStackServiceName(name: string): boolean {
+  return name === "php-fpm" || name.startsWith("php-cgi-") || name.startsWith("php-fpm-");
+}
+
+export function resolveProcfileServiceNames(
+  entries: ProcfileEntry[],
+  name: string
+): string[] {
+  if (name === "php-fpm") {
+    const phpNames = entries
+      .filter((e) => isPhpStackServiceName(e.name))
+      .map((e) => e.name);
+    return phpNames.length > 0 ? phpNames : [];
+  }
+  return entries.some((e) => e.name === name) ? [name] : [];
 }
 
 function sortEntriesForStart(entries: ProcfileEntry[]): ProcfileEntry[] {
@@ -182,6 +206,40 @@ export async function startService(
   options?: { entry?: ProcfileEntry; entries?: ProcfileEntry[]; configLogsDir?: string }
 ): Promise<ServiceStatus> {
   const entries = options?.entries ?? (await parseProcfile(root));
+
+  // UI / profile use logical "php-fpm"; Procfile has php-cgi-8.3 / php-fpm-8.3 after sync.
+  if (name === "php-fpm" && !options?.entry) {
+    const phpNames = resolveProcfileServiceNames(entries, "php-fpm");
+    if (phpNames.length === 0) {
+      throw new Error(
+        `Service "php-fpm" not found in Procfile — install PHP via Quick Add and sync the profile`
+      );
+    }
+    const results: ServiceStatus[] = [];
+    for (const phpName of phpNames) {
+      results.push(
+        await startService(root, phpName, {
+          entries,
+          configLogsDir: options?.configLogsDir,
+        })
+      );
+    }
+    const running = results.filter((r) => r.running);
+    if (running.length === 0) {
+      return {
+        name: "php-fpm",
+        running: false,
+        error: results.find((r) => r.error)?.error ?? "PHP processes exited during startup",
+      };
+    }
+    return {
+      name: "php-fpm",
+      running: true,
+      pid: running[0]?.pid,
+      startedAt: running[0]?.startedAt,
+    };
+  }
+
   const entry = options?.entry ?? entries.find((e) => e.name === name);
 
   if (!entry) {
@@ -275,6 +333,21 @@ export async function restartService(root: string, name: string): Promise<Servic
 }
 
 export async function stopService(name: string, root?: string, options?: { skipBackup?: boolean }): Promise<ServiceStatus> {
+  // Expand logical php-fpm → all versioned PHP processes currently running or in Procfile
+  if (name === "php-fpm") {
+    const entries = root ? await parseProcfile(root) : [];
+    const fromProcfile = resolveProcfileServiceNames(entries, "php-fpm");
+    const fromRunning = [...runningProcesses.keys()].filter((n) => isPhpStackServiceName(n));
+    const names = [...new Set([...fromProcfile, ...fromRunning])];
+    if (names.length === 0) {
+      return { name: "php-fpm", running: false };
+    }
+    for (const phpName of names) {
+      await stopService(phpName, root, options);
+    }
+    return { name: "php-fpm", running: false };
+  }
+
   const entry = runningProcesses.get(name);
   if (!entry) {
     return { name, running: false };
@@ -370,6 +443,19 @@ export function getServiceStatuses(): ServiceStatus[] {
       uptime: Date.now() - startedAt.getTime(),
     });
   }
+
+  // Services UI uses logical id "php-fpm" — surface aggregate status when versioned PHP is running
+  const phpRunning = statuses.filter((s) => isPhpStackServiceName(s.name) && s.name !== "php-fpm");
+  if (phpRunning.length > 0 && !statuses.some((s) => s.name === "php-fpm")) {
+    statuses.push({
+      name: "php-fpm",
+      running: true,
+      pid: phpRunning[0]?.pid,
+      startedAt: phpRunning[0]?.startedAt,
+      uptime: phpRunning[0]?.uptime,
+    });
+  }
+
   return statuses;
 }
 

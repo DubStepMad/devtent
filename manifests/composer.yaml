@@ -1,9 +1,9 @@
-name: composer
+﻿name: composer
 version: "2.8.4"
-description: Composer — PHP dependency manager (composer.phar + composer.bat)
-platform: win32
-arch: x64
+description: Composer — PHP dependency manager (composer.phar)
+platform: all
+arch: all
 url: https://getcomposer.org/download/2.8.4/composer.phar
 installPath: bin/composer
 binary: composer.phar
-downloadType: exe
+downloadType: binary

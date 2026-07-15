@@ -32,6 +32,8 @@ export {
   parseProcfile,
   saveProcfileEntry,
   isServiceRunning,
+  isPhpStackServiceName,
+  resolveProcfileServiceNames,
 } from "./services.js";
 
 export {
@@ -75,7 +77,8 @@ export {
   isLaravelProject,
   hasLaravelQueryCapture,
 } from "./laravel-query-capture.js";
-export { LARAVEL_QUERY_CAPTURE_MARKER } from "./dump-capture.js";
+export { LARAVEL_QUERY_CAPTURE_MARKER, LARAVEL_TELEMETRY_MARKER } from "./dump-capture.js";
+export type { DumpEvent, DumpEventType } from "./dump-capture.js";
 
 export {
   groupQuickAddManifests,
@@ -91,11 +94,22 @@ export type { LaravelEnvSnippet } from "./laravel-env.js";
 export {
   resolvePhpCgiPort,
   phpCgiProcfileName,
+  phpFpmProcfileName,
+  phpProcfileName,
   phpVersionFromProcfileName,
   resolvePhpVersionForVhost,
+  phpBackendKind,
 } from "./php-ports.js";
 
 export { syncPhpCgiProcfile, collectRequiredPhpVersions } from "./php-cgi-sync.js";
+
+export {
+  binaryName,
+  binPath,
+  isUnix,
+  isWindows,
+  currentPlatform,
+} from "./platform/binary.js";
 
 export {
   ensureDumpCaptureFiles,
@@ -104,10 +118,70 @@ export {
   clearDumpEvents,
   DUMPS_LOG,
 } from "./dump-capture.js";
-export type { DumpEvent } from "./dump-capture.js";
 
-export { startShare, stopShare, listActiveShares } from "./share.js";
+export { startShare, stopShare, listActiveShares, ensureCloudflared, cloudflaredHomeEnv } from "./share.js";
 export type { ShareSession } from "./share.js";
+
+export {
+  loginCloudflare,
+  cloudflareLoginStatus,
+  createNamedTunnel,
+  listNamedTunnels,
+  configureNamedTunnel,
+  startNamedTunnel,
+  stopNamedTunnel,
+  deleteNamedTunnel,
+} from "./named-tunnels.js";
+export type { NamedTunnel, NamedTunnelRuntime } from "./named-tunnels.js";
+
+export {
+  LOCAL_DNS_PORT,
+  getLocalDnsStatus,
+  startLocalDns,
+  stopLocalDns,
+  installLocalDnsResolver,
+  ensureLocalDnsFromState,
+  isLocalDnsRunning,
+} from "./local-dns.js";
+export type { LocalDnsStatus } from "./local-dns.js";
+
+export {
+  getActiveDatabaseEngine,
+  getDatabaseAdminStatus,
+  listDatabases,
+  createDatabase,
+  resolveDatabaseTarget,
+  resolveDatabaseTargetFromProfile,
+} from "./database-admin.js";
+export type {
+  DatabaseEngine,
+  DatabaseInfo,
+  DatabaseAdminStatus,
+  DatabaseTarget,
+  DatabaseTargetMode,
+} from "./database-admin.js";
+
+export {
+  listInstalledPhpVersions,
+  getActivePhpVersion,
+  readPhpIni,
+  writePhpIni,
+  setPhpExtension,
+} from "./php-ini.js";
+export type { PhpIniSummary, PhpIniExtension } from "./php-ini.js";
+
+export {
+  backupMariaDb,
+  listMariaDbBackups,
+  backupPostgres,
+  listPostgresBackups,
+  MARIADB_BACKUP_DIR,
+  POSTGRES_BACKUP_DIR,
+} from "./db-backups.js";
+export type { DbBackupInfo } from "./db-backups.js";
+
+export { listSiteWorkers, setSiteWorker } from "./site-workers.js";
+export type { SiteWorkerKind, SiteWorkerStatus } from "./site-workers.js";
 
 export { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized } from "./mariadb.js";
 
@@ -176,10 +250,11 @@ export {
 export {
   enableSsl,
   installMkcertCa,
+  getMkcertCaStatus,
   hasSslCertificate,
   sslCertPaths,
 } from "./ssl.js";
-export type { SslResult } from "./ssl.js";
+export type { SslResult, MkcertCaStatus } from "./ssl.js";
 
 export {
   getPathEntries,

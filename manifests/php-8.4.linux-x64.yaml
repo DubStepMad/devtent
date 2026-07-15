@@ -1,0 +1,9 @@
+﻿name: php-8.4
+version: "8.4.6"
+description: PHP 8.4 FPM+CLI (static-php.dev common) for Linux x64
+platform: linux
+arch: x64
+url: https://dl.static-php.dev/static-php-cli/common/php-8.4.6-fpm-linux-x86_64.tar.gz
+installPath: bin/php/php-8.4
+binary: sbin/php-fpm
+downloadType: tar.gz

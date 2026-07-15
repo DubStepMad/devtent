@@ -1,0 +1,9 @@
+﻿name: mailpit
+version: "1.27.8"
+description: Mailpit — local SMTP testing with web UI (port 8025)
+platform: linux
+arch: x64
+url: https://github.com/axllent/mailpit/releases/download/v1.27.8/mailpit-linux-amd64.tar.gz
+installPath: bin/mailpit
+binary: mailpit
+downloadType: tar.gz

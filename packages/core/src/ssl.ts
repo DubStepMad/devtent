@@ -111,6 +111,50 @@ function runMkcert(mkcertPath: string, sslDir: string, domain: string): Promise<
   });
 }
 
+export interface MkcertCaStatus {
+  mkcertInstalled: boolean;
+  mkcertPath: string;
+  caRoot?: string;
+  caExists: boolean;
+  message: string;
+}
+
+export async function getMkcertCaStatus(root: string): Promise<MkcertCaStatus> {
+  const config = await loadConfig(root);
+  const mkcertPath = resolvePath(root, config.ssl.mkcertPath);
+  const mkcertInstalled = await pathExists(mkcertPath);
+  if (!mkcertInstalled) {
+    return {
+      mkcertInstalled: false,
+      mkcertPath,
+      caExists: false,
+      message: "mkcert not installed — install via Quick Add, then trust the local CA",
+    };
+  }
+
+  const caRoot = await new Promise<string>((resolve) => {
+    const proc = spawn(mkcertPath, ["-CAROOT"], { windowsHide: true });
+    let out = "";
+    proc.stdout?.on("data", (c) => {
+      out += String(c);
+    });
+    proc.on("close", () => resolve(out.trim()));
+    proc.on("error", () => resolve(""));
+  });
+
+  const rootPem = caRoot ? path.join(caRoot, "rootCA.pem") : "";
+  const caExists = Boolean(rootPem && (await pathExists(rootPem)));
+  return {
+    mkcertInstalled: true,
+    mkcertPath,
+    caRoot: caRoot || undefined,
+    caExists,
+    message: caExists
+      ? `Local CA ready at ${caRoot}`
+      : "mkcert is installed but the local CA is not trusted yet — run Trust local CA",
+  };
+}
+
 export async function installMkcertCa(root: string): Promise<string> {
   const config = await loadConfig(root);
   const mkcertPath = resolvePath(root, config.ssl.mkcertPath);

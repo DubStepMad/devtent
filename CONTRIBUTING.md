@@ -6,7 +6,9 @@ Thank you for helping build a free, open local development environment. Every co
 
 ### 1. Quick-add manifests
 
-Add a YAML file to `manifests/` to let anyone install a new runtime with `devtent quick-add`:
+Add a YAML file to `manifests/` to let anyone install a new runtime with `devtent quick-add`.
+
+**Windows** (filename `name.yaml` or `name.win32-x64.yaml`):
 
 ```yaml
 name: php-8.4
@@ -20,6 +22,27 @@ binary: php.exe
 postInstall:
   - copy: php.ini-development → php.ini
 ```
+
+**macOS / Linux** — use a platform suffix so Windows and Unix can share the same logical name:
+
+- `php-8.4.darwin-arm64.yaml`
+- `php-8.4.linux-x64.yaml`
+
+Loader preference: `name.platform-arch.yaml` → `name.platform.yaml` → `name.yaml`.
+
+```yaml
+name: php-8.4
+version: "8.4.6"
+description: PHP 8.4 FPM+CLI (static-php.dev) for macOS arm64
+platform: darwin
+arch: arm64
+url: https://dl.static-php.dev/static-php-cli/common/php-8.4.6-fpm-macos-aarch64.tar.gz
+installPath: bin/php/php-8.4
+binary: sbin/php-fpm
+downloadType: tar.gz
+```
+
+Supported `downloadType` values: `zip`, `tar.gz`, `tar.xz`, `binary` / `exe` (single file), `system` (symlink from PATH — used for nginx/redis on Unix).
 
 ### 2. Quick-app templates
 
@@ -39,6 +62,8 @@ npm test
 - `packages/core` — engine (config, services, vhosts, profiles)
 - `packages/cli` — command-line interface
 - `packages/desktop` — Electron tray + dashboard
+
+Desktop development: `npm run start` (or `npm run dev`) builds once, launches Electron, then watches `packages/desktop/src` — UI edits reload the window; main/preload edits restart the app. Use `npm run start:once` for a single build-and-run with no watcher.
 
 ### 4. Issues & discussions
 

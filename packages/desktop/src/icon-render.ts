@@ -1,17 +1,19 @@
 /**
- * Pure RGBA icon renderer (no Electron — usable in build scripts).
+ * Pure RGBA icon renderer (no Electron — usable at runtime for tray animation).
+ * Matches the hollow tent + code mark wordmark used in logo-source.png.
  */
 
 type Rgba = [number, number, number, number];
 
-const NAVY: Rgba = [15, 23, 42, 255];
-const NAVY_LIGHT: Rgba = [30, 41, 59, 255];
+const NAVY: Rgba = [21, 31, 58, 255];
+const NAVY_LIGHT: Rgba = [30, 41, 72, 255];
 const LIME: Rgba = [132, 204, 22, 255];
-const LIME_BRIGHT: Rgba = [163, 230, 53, 255];
-const LIME_DARK: Rgba = [77, 124, 15, 255];
-const TENT_DOOR: Rgba = [20, 50, 32, 255];
-const MOON: Rgba = [250, 204, 21, 255];
-const MOON_GLOW: Rgba = [253, 224, 71, 255];
+const LIME_BRIGHT: Rgba = [194, 243, 60, 255];
+const LIME_MID: Rgba = [80, 180, 100, 255];
+const LIME_DARK: Rgba = [50, 140, 90, 255];
+const MOON: Rgba = [250, 180, 40, 255];
+const MOON_GLOW: Rgba = [255, 200, 80, 255];
+const STAR: Rgba = [150, 158, 175, 255];
 const PULSE: Rgba = [163, 230, 53, 255];
 
 function mix(a: Rgba, b: Rgba, t: number): Rgba {
@@ -45,35 +47,82 @@ function inCircle(x: number, y: number, cx: number, cy: number, r: number): bool
   return Math.hypot(x - cx, y - cy) <= r;
 }
 
-function tentInside(x: number, y: number): boolean {
-  if (y < 8 || y > 27.5) return false;
-  const half = (y - 8) * 0.58;
-  return x >= 16 - half && x <= 16 + half;
+/** Distance from point to line segment (ax,ay)-(bx,by). */
+function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-8) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-function tentLeftPanel(x: number, y: number): boolean {
-  return tentInside(x, y) && x <= 16;
+function tentStroke(x: number, y: number, halfWidth: number): boolean {
+  // Peak (16, 6.5), left base (5.5, 25.5), right base (26.5, 25.5)
+  // Bottom bar left (5.5, 25.5)-(12.5, 25.5) and right (19.5, 25.5)-(26.5, 25.5) — open doorway
+  const peakX = 16;
+  const peakY = 6.5;
+  const leftX = 5.5;
+  const rightX = 26.5;
+  const baseY = 25.5;
+  const dLeft = distToSegment(x, y, peakX, peakY, leftX, baseY);
+  const dRight = distToSegment(x, y, peakX, peakY, rightX, baseY);
+  const dBaseL = distToSegment(x, y, leftX, baseY, 12.2, baseY);
+  const dBaseR = distToSegment(x, y, 19.8, baseY, rightX, baseY);
+  return Math.min(dLeft, dRight, dBaseL, dBaseR) <= halfWidth;
 }
 
-function tentRightPanel(x: number, y: number): boolean {
-  return tentInside(x, y) && x > 16;
+function innerChevron(x: number, y: number): boolean {
+  // Small ^ near the peak
+  const tipX = 16;
+  const tipY = 11.2;
+  const half = 2.4;
+  const botY = tipY + 2.6;
+  const dL = distToSegment(x, y, tipX, tipY, tipX - half, botY);
+  const dR = distToSegment(x, y, tipX, tipY, tipX + half, botY);
+  return Math.min(dL, dR) <= 0.85;
 }
 
-function tentDoor(x: number, y: number): boolean {
-  return x >= 10.2 && x <= 13.4 && y >= 18 && y <= 27.2 && tentLeftPanel(x, y);
+function codeGlyph(x: number, y: number): boolean {
+  // Simplified </> in the lower tent opening
+  const cy = 19.8;
+  // <
+  const dLt =
+    distToSegment(x, y, 13.6, cy, 11.4, cy - 2.4) < 0.75 ||
+    distToSegment(x, y, 13.6, cy, 11.4, cy + 2.4) < 0.75;
+  // /
+  const dSlash = distToSegment(x, y, 14.5, cy + 2.2, 17.5, cy - 2.2) < 0.75;
+  // >
+  const dGt =
+    distToSegment(x, y, 18.4, cy, 20.6, cy - 2.4) < 0.75 ||
+    distToSegment(x, y, 18.4, cy, 20.6, cy + 2.4) < 0.75;
+  return dLt || dSlash || dGt;
 }
 
 function moonCrescent(x: number, y: number): boolean {
-  return inCircle(x, y, 22.2, 9.8, 3.1) && !inCircle(x, y, 23.9, 9.4, 2.55);
+  return inCircle(x, y, 23.5, 9.2, 2.9) && !inCircle(x, y, 25.0, 8.6, 2.45);
 }
 
-function groundLine(x: number, y: number): boolean {
-  return y >= 27.3 && y <= 28.1 && x >= 7 && x <= 25;
+function fourPointStar(x: number, y: number, cx: number, cy: number, r: number): boolean {
+  const dx = Math.abs(x - cx);
+  const dy = Math.abs(y - cy);
+  if (dx + dy > r) return false;
+  // Diamond cross: thinner arms
+  return dx * 2.2 + dy < r || dy * 2.2 + dx < r;
+}
+
+function tentGreenAt(x: number): Rgba {
+  // Lime left → teal-green right
+  const t = Math.max(0, Math.min(1, (x - 5.5) / 21));
+  if (t < 0.45) return mix(LIME_BRIGHT, LIME, t / 0.45);
+  return mix(LIME, LIME_DARK, (t - 0.45) / 0.55);
 }
 
 export function renderDevTentIcon(size: number, pulse = 0): Buffer {
   const buf = Buffer.alloc(size * size * 4);
   const scale = size / 32;
+  const stroke = size >= 48 ? 1.55 : size >= 24 ? 1.7 : 1.85;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -86,7 +135,7 @@ export function renderDevTentIcon(size: number, pulse = 0): Buffer {
 
       if (pulse > 0) {
         const cx = fx - 16;
-        const cy = fy - 14;
+        const cy = fy - 15;
         const dist = Math.hypot(cx, cy);
         const inner = 10 + pulse * 1.2;
         const outer = 13.5 + pulse * 2;
@@ -99,28 +148,21 @@ export function renderDevTentIcon(size: number, pulse = 0): Buffer {
 
       if (moonCrescent(fx, fy)) {
         color = blendOver(color, MOON);
-      } else if (inCircle(fx, fy, 22.2, 9.8, 3.4) && pulse > 0) {
-        const glow = 1 - Math.hypot(fx - 22.2, fy - 9.8) / 3.4;
+      } else if (inCircle(fx, fy, 23.5, 9.2, 3.3) && pulse > 0) {
+        const glow = 1 - Math.hypot(fx - 23.5, fy - 9.2) / 3.3;
         color = blendOver(color, withAlpha(MOON_GLOW, glow * pulse * 0.35));
       }
 
-      if (groundLine(fx, fy)) {
-        color = blendOver(color, withAlpha(LIME_DARK, 0.35));
+      if (fourPointStar(fx, fy, 26.2, 26.8, 1.6)) {
+        color = blendOver(color, STAR);
       }
 
-      if (tentRightPanel(fx, fy)) {
-        color = blendOver(color, LIME_DARK);
-      }
-      if (tentLeftPanel(fx, fy)) {
-        color = blendOver(color, mix(LIME_BRIGHT, LIME, 0.25));
+      if (tentStroke(fx, fy, stroke)) {
+        color = blendOver(color, tentGreenAt(fx));
       }
 
-      if (tentInside(fx, fy) && Math.abs(fx - 16) < 0.42 && fy < 25.5) {
-        color = blendOver(color, withAlpha(LIME_DARK, 0.5));
-      }
-
-      if (tentDoor(fx, fy)) {
-        color = blendOver(color, TENT_DOOR);
+      if (innerChevron(fx, fy) || codeGlyph(fx, fy)) {
+        color = blendOver(color, mix(LIME_BRIGHT, LIME_MID, (fx - 11) / 10));
       }
 
       buf[i] = color[0];

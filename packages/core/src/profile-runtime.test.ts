@@ -12,11 +12,20 @@ import {
 import type { QuickAddManifest } from "./types.js";
 
 describe("profile runtime", () => {
-  it("resolves PHP paths from manifest id", () => {
-    const paths = resolvePhpPaths("php-8.4");
+  it("resolves PHP paths from manifest id (Windows CGI)", () => {
+    const paths = resolvePhpPaths("php-8.4", "win32");
     assert.equal(paths.cli, "bin/php/php-8.4/php.exe");
     assert.equal(paths.cgi, "bin/php/php-8.4/php-cgi.exe");
+    assert.equal(paths.backend, "cgi");
     assert.match(paths.procfileCommand, /php-cgi\.exe -b 127\.0\.0\.1:9084/);
+  });
+
+  it("resolves PHP paths for Unix FPM", () => {
+    const paths = resolvePhpPaths("php-8.4", "darwin");
+    assert.equal(paths.cli, "bin/php/php-8.4/php");
+    assert.equal(paths.fpm, "bin/php/php-8.4/sbin/php-fpm");
+    assert.equal(paths.backend, "fpm");
+    assert.match(paths.procfileCommand, /sbin\/php-fpm/);
   });
 
   it("rejects unsafe PHP version ids", () => {
@@ -40,7 +49,7 @@ describe("profile runtime", () => {
       phpVersion: "php-8.3",
       webServer: "nginx",
     });
-    assert.equal(profile.php, "bin/php/php-8.3/php.exe");
+    assert.ok(profile.php?.includes("bin/php/php-8.3/php"));
     assert.equal(profile.env?.PHPRC, "bin/php/php-8.3");
   });
 });

@@ -8,7 +8,7 @@
 
 **The free, open-source local dev environment — forever.**
 
-DevTent is a portable Windows stack for PHP, Nginx, MySQL, and more — with profiles, pretty URLs (`*.test`), Quick Add runtimes, and a tray-first desktop app. It is **fully open source** under DTCL v1.0: free to use, modify, and share, with no license keys and no selling the software.
+DevTent is a portable local stack for PHP, Nginx, MySQL, and more — with profiles, pretty URLs (`*.localhost` / `*.test`), Quick Add runtimes, and a tray-first desktop app. It runs on **Windows, macOS, and Linux**, and is **fully open source** under DTCL v1.0: free to use, modify, and share, with no license keys and no selling the software.
 
 > Built by developers, for developers. Fork it, extend it, ship features the community needs.
 
@@ -59,37 +59,42 @@ npm run screenshots -w @devtent/desktop
 
 ## How DevTent compares
 
-DevTent sits in the same space as [Laravel Herd](https://herd.laravel.com/), [Yerd](https://yerd.app/), and [Lerd](https://lerd.dev/) — but is the **only free, open-source stack built for Windows first**, with a portable folder you fully own.
+DevTent sits in the same space as [Laravel Herd](https://herd.laravel.com/), [Yerd](https://yerd.app/), and [Lerd](https://lerd.dev/) — free and open source, with a portable folder you fully own. Started Windows-first; now ships installers for Windows, macOS, and Linux.
 
 | | Herd | Yerd | Lerd | **DevTent** |
 | --- | :---: | :---: | :---: | :---: |
 | Windows | ✓ | ✗ | ✗ | **✓** |
+| macOS | ✓ | ✓ | ✓ | **✓** |
+| Linux | ✗ | ✓ | ✓ | **✓** |
 | Open source | ✗ | ✓ | ✓ | **✓** |
 | No containers | ✓ | ✓ | ✗ | **✓** |
 | `doctor` health checks | ✗ | ✓ | ✗ | **✓** |
 | DB + mail (no Pro paywall) | Pro | ✓ | ✓ | **✓** |
 | Laravel live dumps | Pro | ✓ | ✓ | **✓** ([Dumps](docs/COMPARISON.md#using-new-features) tab) |
-| Public tunnel / share | ✓ | ✗ | ✓ | **✓** (`devtent share <site>`) |
+| Public tunnel / share | ✓ | ✓ | ✓ | **✓** (`devtent share <site>`) |
 | PHP per site | ✓ | ✓ | ✓ | **✓** (per-site PHP dropdown) |
 
 ### Laravel dumps, share & per-site PHP
 
 These ship in the desktop app and CLI — not on a roadmap.
 
-**Laravel live dumps** — `dump()` and `dd()` from any PHP site are captured automatically. Open the **Dumps** tab to follow them live. For Laravel SQL queries, paste the capture snippet from `devtent dumps` docs into `AppServiceProvider::boot()` (or use **Laravel .env** in the app).
+**Laravel live dumps** — `dump()` / errors from any PHP site, plus Laravel telemetry (queries, jobs, views, requests, logs, cache, HTTP) via AppServiceProvider listeners. Quick App and `doctor --fix` install capture automatically. Open the **Dumps** tab (or use the CLI).
 
 ```bash
 devtent dumps list          # tail dump log in the terminal
 devtent dumps clear
 ```
 
-**Public share** — exposes a local `*.test` site via a Cloudflare quick tunnel (installs `cloudflared` on first use).
+**Public share** — Cloudflare quick tunnels for one-off demos, or **named tunnels** with a stable hostname (`devtent share login` first).
 
 ```bash
-devtent share myapp         # prints public URL; Ctrl+C to stop
-devtent share list
-devtent share stop myapp
+devtent share myapp              # quick tunnel; Ctrl+C to stop
+devtent share named create demo
+devtent share named configure demo --site myapp --hostname app.example.com
+devtent share named start demo
 ```
+
+**Local CA & DNS** — `devtent ssl ca` / Doctor trust mkcert; `devtent dns start` answers `*.{tld}` on port 15353 (macOS can install `/etc/resolver`).
 
 **PHP per site** — each site can run a different PHP version (separate `php-cgi` on ports 9082, 9083, 9084…). Regenerates vhosts and Procfile automatically.
 
@@ -115,15 +120,21 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 ### Prerequisites
 
 - [Node.js 20+](https://nodejs.org/) — developers building from source only
-- Windows 10/11 (v1.0 target platform)
+- Windows 10/11, macOS 12+ (Apple Silicon), or a modern Linux x64 desktop
 
 
 
-### End users — Windows installer
+### End users — installers
 
-Download **DevTent Setup 1.2.2.exe** from [GitHub Releases](https://github.com/DubStepMad/devtent/releases).
+Download the installer for your OS from [GitHub Releases](https://github.com/DubStepMad/devtent/releases):
 
-> **SmartScreen notice:** The installer is **unsigned** in v1.0. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
+- **Windows:** `DevTent Setup x.y.z.exe`
+- **macOS:** `DevTent-x.y.z-arm64.dmg`
+- **Linux:** `DevTent-x.y.z-x64.AppImage` or `.deb`
+
+> **Windows SmartScreen:** The Windows installer may be **unsigned**. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
+
+On macOS/Linux, install **nginx** (and optionally **redis**) via your package manager before Quick Add if you use `downloadType: system` manifests (`brew install nginx`, `apt install nginx`).
 
 
 
@@ -153,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.2.2.exe`
+Output: `packages/desktop/release/DevTent Setup 1.3.0.exe`
 
 ### CLI (optional)
 
@@ -211,8 +222,10 @@ devtent node install <version>     # Install Node (e.g. node-22)
 devtent node use <version>         # Set active Node for profile
 devtent sites link <path>       # Link external project
 devtent sites php <name> <ver> # Per-site PHP (php-8.2, php-8.3, php-8.4)
-devtent share <site>           # Public tunnel (Ctrl+C to stop)
-devtent dumps list             # Live dump()/dd() output
+devtent share <site>           # Public quick tunnel (Ctrl+C to stop)
+devtent share named list       # Named Cloudflare tunnels
+devtent dns status             # Local DNS for custom TLDs
+devtent dumps list             # Live dump / Laravel telemetry
 devtent doctor --fix           # Diagnose and repair environment
 ```
 

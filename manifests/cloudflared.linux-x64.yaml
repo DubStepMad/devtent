@@ -1,0 +1,9 @@
+﻿name: cloudflared
+version: "2024.12.2"
+description: Cloudflare Tunnel — share local sites publicly
+platform: linux
+arch: x64
+url: https://github.com/cloudflare/cloudflared/releases/download/2024.12.2/cloudflared-linux-amd64
+installPath: bin/cloudflared
+binary: cloudflared
+downloadType: binary

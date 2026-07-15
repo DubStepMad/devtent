@@ -8,6 +8,7 @@ import {
   normalizeProfile,
   resolvePhpPaths,
 } from "./profile-runtime.js";
+import { binPath, redisConfigPath } from "./platform/binary.js";
 import type { ProcfileEntry } from "./types.js";
 
 export interface ServicePreset {
@@ -58,42 +59,43 @@ export async function getServicePresetsForProfile(
   const phpLabel = getPhpDisplayName(phpVersion);
   const phpPaths = resolvePhpPaths(phpVersion);
   const phpCommand = phpPaths.procfileCommand;
+  const redisConf = redisConfigPath();
 
   return [
     {
       id: "nginx",
       name: "NGINX",
-      command: "bin/nginx/nginx.exe -p . -c etc/nginx/nginx.conf",
+      command: `${binPath(["bin", "nginx", "nginx"])} -p . -c etc/nginx/nginx.conf`,
     },
     {
       id: "apache",
       name: "Apache",
-      command: "bin/apache/bin/httpd.exe -d . -f etc/apache/httpd.conf",
+      command: `${binPath(["bin", "apache", "bin", "httpd"])} -d . -f etc/apache/httpd.conf`,
     },
     {
       id: "mysql",
       name: "MySQL",
-      command: "bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini --console",
+      command: `${binPath(["bin", "mysql", "bin", "mysqld"])} --defaults-file=etc/mysql/my.ini --console`,
     },
     {
       id: "mariadb",
       name: "MariaDB",
-      command: "bin/mariadb/bin/mysqld.exe --defaults-file=etc/mariadb/my.ini --console",
+      command: `${binPath(["bin", "mariadb", "bin", "mysqld"])} --defaults-file=etc/mariadb/my.ini --console`,
     },
     {
       id: "postgresql",
       name: "PostgreSQL",
-      command: 'bin/postgresql/bin/postgres.exe -D data/postgresql -p 5432',
+      command: `${binPath(["bin", "postgresql", "bin", "postgres"])} -D data/postgresql -p 5432`,
     },
     {
       id: "redis",
       name: "Redis",
-      command: "bin/redis/redis-server.exe bin/redis/redis.windows.conf",
+      command: `${binPath(["bin", "redis", "redis-server"])} ${redisConf}`,
     },
     {
       id: "mailpit",
       name: "Mailpit",
-      command: "bin/mailpit/mailpit.exe",
+      command: binPath(["bin", "mailpit", "mailpit"]),
     },
     {
       id: "php-fpm",
@@ -112,13 +114,25 @@ export async function getProcfileToggles(root: string): Promise<ProcfileToggle[]
   const presets = await getServicePresets(root);
   const entries = await parseProcfile(root);
   const entryMap = new Map(entries.map((e) => [e.name, e]));
+  const hasPhpEntry = entries.some(
+    (e) =>
+      e.name === "php-fpm" ||
+      e.name.startsWith("php-cgi-") ||
+      e.name.startsWith("php-fpm-")
+  );
 
   const toggles: ProcfileToggle[] = [];
   for (const preset of presets) {
+    const enabled =
+      preset.id === "php-fpm" ? hasPhpEntry : entryMap.has(preset.id);
     toggles.push({
       ...preset,
-      enabled: entryMap.has(preset.id),
-      command: entryMap.get(preset.id)?.command ?? preset.command,
+      enabled,
+      command:
+        preset.id === "php-fpm"
+          ? entries.find((e) => e.name.startsWith("php-cgi-") || e.name.startsWith("php-fpm-"))
+              ?.command ?? preset.command
+          : entryMap.get(preset.id)?.command ?? preset.command,
       runtimeInstalled: await isPresetRuntimeInstalled(root, preset),
     });
   }
@@ -144,6 +158,28 @@ export async function setProcfileToggle(
   const preset = presets.find((p) => p.id === id);
   if (!preset) {
     throw new Error(`Unknown service: ${id}`);
+  }
+
+  // PHP is managed as versioned php-cgi-* / php-fpm-* rows — never write a bare "php-fpm:" line.
+  if (id === "php-fpm") {
+    if (enabled) {
+      const { syncPhpCgiProcfile } = await import("./php-cgi-sync.js");
+      await syncPhpCgiProcfile(root);
+    } else {
+      const entries = await parseProcfile(root);
+      const filtered = entries.filter(
+        (e) =>
+          e.name !== "php-fpm" &&
+          !e.name.startsWith("php-cgi-") &&
+          !e.name.startsWith("php-fpm-")
+      );
+      const content =
+        filtered.length > 0
+          ? filtered.map((e) => `${e.name}: ${e.command}`).join("\n") + "\n"
+          : "# DevTent Procfile — enable services from the tray panel\n";
+      await writeProcfileRaw(root, content);
+    }
+    return getProcfileToggles(root);
   }
 
   const entries = await parseProcfile(root);

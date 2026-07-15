@@ -149,6 +149,30 @@ export async function getEnvironmentHealth(root: string): Promise<HealthItem[]> 
       detail: "Required for local HTTPS certificates",
       action: "quick-add",
     });
+  } else {
+    const { getMkcertCaStatus } = await import("./ssl.js");
+    const ca = await getMkcertCaStatus(root);
+    items.push({
+      id: "mkcert-ca",
+      severity: ca.caExists ? "ok" : "warn",
+      title: ca.caExists ? "Local CA trusted (mkcert)" : "Local CA not installed",
+      detail: ca.message,
+      action: ca.caExists ? undefined : "doctor",
+    });
+  }
+
+  if (tldRequiresHostsFile(config.tld)) {
+    const { getLocalDnsStatus, isLocalDnsRunning } = await import("./local-dns.js");
+    const dns = await getLocalDnsStatus(root);
+    items.push({
+      id: "local-dns",
+      severity: isLocalDnsRunning() || dns.resolverInstalled ? "ok" : "warn",
+      title: isLocalDnsRunning()
+        ? `Local DNS running for *.${dns.tld}`
+        : `Hosts or local DNS needed for *.${dns.tld}`,
+      detail: dns.message,
+      action: "doctor",
+    });
   }
 
   return items;

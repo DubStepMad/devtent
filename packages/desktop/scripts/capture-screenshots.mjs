@@ -27,7 +27,14 @@ function contentType(filePath) {
 }
 
 async function ensureAppIcon() {
+  const iconUi = path.join(assetsDir, "icon-ui.png");
   const icon128 = path.join(assetsDir, "icon-128.png");
+  try {
+    await access(iconUi);
+    return iconUi;
+  } catch {
+    /* fall through */
+  }
   try {
     await access(icon128);
     return icon128;
@@ -37,7 +44,12 @@ async function ensureAppIcon() {
       cwd: path.resolve(__dirname, ".."),
       stdio: "inherit",
     });
-    return icon128;
+    try {
+      await access(iconUi);
+      return iconUi;
+    } catch {
+      return icon128;
+    }
   }
 }
 

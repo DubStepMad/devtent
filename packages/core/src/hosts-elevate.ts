@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath } from "./config.js";
+import { getUnixHostsSyncInstructions, requestElevatedHostsSyncUnix } from "./platform/hosts-elevate-unix.js";
+import { isUnix } from "./platform/binary.js";
 
 export interface HostsSyncHelperFiles {
   batchFile: string;
@@ -91,16 +93,24 @@ export async function requestElevatedHostsSync(
   root: string,
   newContent: string
 ): Promise<ElevatedHostsSyncLaunch> {
-  if (process.platform !== "win32") {
-    return { launched: false, batchFile: "" };
+  if (process.platform === "win32") {
+    const { batchFile } = await prepareHostsSyncFiles(root, newContent);
+    const launched = await launchElevatedHostsSync(batchFile);
+    return { launched, batchFile };
   }
 
-  const { batchFile } = await prepareHostsSyncFiles(root, newContent);
-  const launched = await launchElevatedHostsSync(batchFile);
-  return { launched, batchFile };
+  if (isUnix()) {
+    const result = await requestElevatedHostsSyncUnix(root, newContent);
+    return { launched: result.launched, batchFile: result.scriptFile };
+  }
+
+  return { launched: false, batchFile: "" };
 }
 
 export function getElevatedHostsSyncMessage(batchFile?: string): string {
+  if (isUnix()) {
+    return getUnixHostsSyncInstructions(batchFile);
+  }
   if (batchFile) {
     return (
       "Click Yes on the Windows security prompt to update your hosts file. " +
@@ -111,6 +121,9 @@ export function getElevatedHostsSyncMessage(batchFile?: string): string {
 }
 
 export function getElevatedHostsSyncFailureMessage(batchFile: string): string {
+  if (isUnix()) {
+    return `Could not open the administrator prompt. Run: sudo sh "${batchFile}"`;
+  }
   return (
     "Could not open the Administrator prompt. In File Explorer, right-click " +
     `${batchFile} and choose Run as administrator.`

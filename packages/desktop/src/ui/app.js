@@ -10,7 +10,12 @@ const TITLES = {
   services: "Services",
   logs: "Logs",
   dumps: "Dumps",
+  database: "Database",
+  "php-ini": "PHP",
   tooling: "Tooling",
+  mail: "Mail",
+  share: "Share",
+  doctor: "Doctor",
   projects: "Projects",
   "quick-add": "Quick Add",
   "quick-app": "Quick App",
@@ -19,11 +24,16 @@ const TITLES = {
 };
 
 const SUBTITLES = {
-  dashboard: "Stack health and quick actions",
+  dashboard: "Your local environment at a glance",
   services: "Start, stop, and monitor your stack",
   logs: "Service output and search",
-  dumps: "Live PHP dumps and Laravel queries",
+  dumps: "Live PHP dumps and Laravel telemetry",
+  database: "Create databases and manage backups",
+  "php-ini": "Extensions and php.ini for each version",
   tooling: "Composer, Node, Bun, and PATH",
+  mail: "Catch outgoing mail with Mailpit",
+  share: "Quick and named Cloudflare tunnels",
+  doctor: "Diagnose issues, CA, and local DNS",
   projects: "Sites, SSL, park, and link",
   "quick-add": "Install stack components",
   "quick-app": "Scaffold a new project",
@@ -39,9 +49,13 @@ const TOOL_ICONS = {
 };
 
 let currentDumpFilter = "all";
+let currentDumpSearch = "";
+let currentDumpSite = "";
 let currentView = "dashboard";
 let lastLogContentSignature = "";
 let lastDumpsSignature = "";
+let siteDrawerVhost = null;
+let phpIniSelectedVersion = "";
 let refreshInFlight = null;
 
 const QUICK_ADD_HIDDEN = new Set(["composer", "bun", "cloudflared"]);
@@ -155,15 +169,12 @@ async function runOnboarding() {
     markOnboardingStep(2, "done");
 
     markOnboardingStep(3, "active");
-    handleHostsSyncResult(await api.elevateHostsSync());
-    markOnboardingStep(3, "done");
-
-    markOnboardingStep(4, "active");
     const state = await api.getState();
     const demo = state.virtualHosts?.find((v) => v.name === "demo");
     if (demo) await api.openExternal(projectUrl(demo));
-    markOnboardingStep(4, "done");
-    showToast("Demo site ready at demo.test", "success");
+    markOnboardingStep(3, "done");
+    const domain = demo?.domain ?? "demo.localhost";
+    showToast(`Demo site ready at ${domain}`, "success");
     showOnboarding(false);
     localStorage.setItem("devtent-onboarding-done", "1");
     await refreshAll();
@@ -437,6 +448,26 @@ async function refreshDashboard(state) {
   document.getElementById("stat-status").textContent =
     (state.services?.length ?? 0) > 0 ? "Running" : "Idle";
 
+  const chips = document.getElementById("dashboard-site-chips");
+  if (chips) {
+    chips.innerHTML = "";
+    chips.classList.toggle("empty-hint", !state.virtualHosts?.length);
+    if (!state.virtualHosts?.length) {
+      chips.textContent = "No sites yet — create one in Quick App or park a folder";
+    } else {
+      state.virtualHosts.slice(0, 12).forEach((v) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "site-chip";
+        const url = projectUrl(v);
+        btn.textContent = v.domain + (v.ssl ? " 🔒" : "");
+        btn.title = url;
+        btn.onclick = () => api.openExternal(url);
+        chips.appendChild(btn);
+      });
+    }
+  }
+
   const list = document.getElementById("dashboard-projects");
   list.innerHTML = "";
   if (!state.virtualHosts?.length) {
@@ -452,6 +483,285 @@ async function refreshDashboard(state) {
   }
 
   await refreshHealth();
+}
+
+function renderDoctorFindings(findings, targetId) {
+  const list = document.getElementById(targetId);
+  if (!list) return;
+  list.innerHTML = "";
+  if (!findings?.length) {
+    list.innerHTML = "";
+    return;
+  }
+  findings.forEach((f) => {
+    const li = document.createElement("li");
+    li.className = `doctor-finding doctor-${f.severity || "ok"}`;
+    const icon =
+      f.severity === "ok" || f.severity === "fixed"
+        ? "✓"
+        : f.severity === "warn"
+          ? "!"
+          : "✕";
+    li.innerHTML = `
+      <span class="doctor-finding-icon">${icon}</span>
+      <div class="doctor-finding-body">
+        <strong>${escapeHtml(f.title)}</strong>
+        ${f.detail ? `<p class="panel-desc">${escapeHtml(f.detail)}</p>` : ""}
+      </div>`;
+    list.appendChild(li);
+  });
+}
+
+async function refreshDoctorPage(options = {}) {
+  const allClear = document.getElementById("doctor-all-clear");
+  const resultEl = document.getElementById("doctor-page-result");
+  if (!api?.runDoctor) return;
+
+  const report = await withLoading(
+    () => api.runDoctor({ repair: !!options.repair, startServices: false }),
+    options.repair ? "Applying safe fixes…" : "Running doctor…"
+  );
+
+  const findings = report?.findings ?? [];
+  const problems = findings.filter((f) => f.severity === "error" || f.severity === "warn");
+  renderDoctorFindings(findings, "doctor-findings");
+  allClear?.classList.toggle("hidden", problems.length > 0);
+
+  if (resultEl) {
+    const repaired = report?.repaired?.length
+      ? `Repaired: ${report.repaired.join("; ")}`
+      : problems.length
+        ? `${problems.length} issue(s) need attention`
+        : "Environment looks healthy";
+    resultEl.textContent = repaired;
+    resultEl.classList.remove("hidden");
+  }
+
+  await refreshHealth();
+  await refreshDoctorCaDns();
+  return report;
+}
+
+async function refreshDoctorCaDns() {
+  const caEl = document.getElementById("doctor-ca-status");
+  const dnsEl = document.getElementById("doctor-dns-status");
+  if (caEl && api?.getMkcertCaStatus) {
+    try {
+      const ca = await api.getMkcertCaStatus();
+      caEl.textContent = ca.message;
+    } catch (err) {
+      caEl.textContent = err.message || String(err);
+    }
+  }
+  if (dnsEl && api?.getLocalDnsStatus) {
+    try {
+      const dns = await api.getLocalDnsStatus();
+      dnsEl.textContent = dns.running
+        ? `DNS: listening on ${dns.bind}:${dns.port} for *.${dns.tld}`
+        : `DNS: ${dns.message}`;
+    } catch (err) {
+      dnsEl.textContent = err.message || String(err);
+    }
+  }
+}
+
+async function refreshMailPage() {
+  const status = document.getElementById("mail-status");
+  if (!status || !api?.getServices) return;
+  const services = await api.getServices().catch(() => []);
+  const mailpit = services.find((s) => s.name === "mailpit");
+  let installed = !!mailpit;
+  if (api.getProfileServices) {
+    try {
+      const { active } = await api.listProfiles();
+      const profileServices = await api.getProfileServices(active);
+      const preset = profileServices.find((s) => s.id === "mailpit");
+      installed = preset?.runtimeInstalled ?? installed;
+    } catch {
+      // keep installed from running services
+    }
+  }
+  const running = !!mailpit?.running;
+
+  if (!installed) {
+    status.textContent =
+      "Mailpit is not installed. Add it via Quick Add (mailpit) or enable it on your profile, then install.";
+  } else if (running) {
+    status.textContent = "Mailpit is running — open the UI to preview captured mail.";
+  } else {
+    status.textContent = "Mailpit is installed but not running. Start it to capture mail.";
+  }
+
+  const startBtn = document.getElementById("btn-mail-start");
+  if (startBtn) startBtn.disabled = !installed || running;
+  const openBtn = document.getElementById("btn-mail-open");
+  if (openBtn) openBtn.disabled = !running;
+}
+
+async function refreshSharePage() {
+  const activeList = document.getElementById("share-active-list");
+  const sitesList = document.getElementById("share-sites-list");
+  const empty = document.getElementById("share-sites-empty");
+  if (!sitesList) return;
+
+  const state = await api.getState().catch(() => null);
+  const shares = api.listShares ? await api.listShares().catch(() => []) : [];
+  const shareMap = new Map(shares.map((s) => [s.siteName, s]));
+
+  if (activeList) {
+    activeList.innerHTML = "";
+    activeList.classList.toggle("empty-hint", shares.length === 0);
+    if (!shares.length) {
+      activeList.textContent = "No active public tunnels";
+    } else {
+      shares.forEach((s) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<button type="button" class="link-btn">${escapeHtml(s.publicUrl)}</button>
+          <span class="panel-desc"> · ${escapeHtml(s.siteName)}</span>
+          <button type="button" class="btn sm danger btn-stop-share">Stop</button>`;
+        li.querySelector(".link-btn").onclick = () => api.openExternal(s.publicUrl);
+        li.querySelector(".btn-stop-share").onclick = async () => {
+          await withLoading(() => api.stopShare(s.siteName), `Stopping share for ${s.siteName}…`);
+          showToast(`Stopped public share for ${s.siteName}`, "success");
+          await refreshSharePage();
+        };
+        activeList.appendChild(li);
+      });
+    }
+  }
+
+  const vhosts = state?.virtualHosts ?? [];
+  sitesList.innerHTML = "";
+  empty?.classList.toggle("hidden", vhosts.length > 0);
+  vhosts.forEach((v) => {
+    const active = shareMap.get(v.name);
+    const li = document.createElement("li");
+    li.className = "project-card";
+    li.innerHTML = `
+      <div class="project-info">
+        <strong>${escapeHtml(v.domain)}</strong>
+        ${active ? `<div class="project-share-url"><button type="button" class="link-btn btn-copy-share">${escapeHtml(active.publicUrl)}</button></div>` : ""}
+      </div>
+      <div class="project-actions">
+        <button class="btn sm ${active ? "danger" : "secondary"} btn-share">${active ? "Stop share" : "Share publicly"}</button>
+      </div>`;
+    li.querySelector(".btn-share").onclick = async () => {
+      try {
+        if (active) {
+          await withLoading(() => api.stopShare(v.name), `Stopping share for ${v.name}…`);
+          showToast(`Stopped public share for ${v.name}`, "success");
+        } else {
+          const session = await withLoading(() => api.startShare(v.name), `Sharing ${v.name}…`);
+          showToast(session?.publicUrl || `Sharing ${v.name}`, "success", 8000);
+        }
+        await refreshSharePage();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    li.querySelector(".btn-copy-share")?.addEventListener("click", async () => {
+      if (!active?.publicUrl) return;
+      try {
+        await navigator.clipboard.writeText(active.publicUrl);
+        showToast("Copied public URL", "success");
+      } catch {
+        showToast(active.publicUrl, "success", 8000);
+      }
+      api.openExternal(active.publicUrl);
+    });
+    sitesList.appendChild(li);
+  });
+
+  await refreshNamedTunnels(vhosts);
+}
+
+async function refreshNamedTunnels(vhosts = []) {
+  const statusEl = document.getElementById("share-cf-status");
+  const listEl = document.getElementById("share-named-list");
+  if (!listEl || !api?.listNamedTunnels) return;
+
+  let loggedIn = false;
+  if (api.cloudflareLoginStatus) {
+    try {
+      const st = await api.cloudflareLoginStatus();
+      loggedIn = !!st.loggedIn;
+      if (statusEl) {
+        statusEl.textContent = loggedIn
+          ? "Cloudflare account linked — create a named tunnel for a stable hostname."
+          : "Log in to Cloudflare to create persistent named tunnels.";
+      }
+    } catch {
+      if (statusEl) statusEl.textContent = "Could not read Cloudflare login status.";
+    }
+  }
+
+  const tunnels = await api.listNamedTunnels().catch(() => []);
+  listEl.innerHTML = "";
+  listEl.classList.toggle("empty-hint", tunnels.length === 0);
+  if (!tunnels.length) {
+    listEl.textContent = loggedIn
+      ? "No named tunnels yet — create one above."
+      : "No named tunnels yet";
+    return;
+  }
+
+  tunnels.forEach((t) => {
+    const li = document.createElement("li");
+    li.className = "named-tunnel-row";
+    const host = t.hostname ? escapeHtml(t.hostname) : "not configured";
+    const site = t.siteName ? escapeHtml(t.siteName) : "—";
+    li.innerHTML = `
+      <div class="project-info">
+        <strong>${escapeHtml(t.name)}</strong>
+        <span class="panel-desc">${host} · site ${site}${t.running ? " · running" : ""}</span>
+      </div>
+      <div class="project-actions">
+        <button type="button" class="btn sm secondary btn-named-configure">Configure</button>
+        <button type="button" class="btn sm ${t.running ? "danger" : "primary"} btn-named-run">${t.running ? "Stop" : "Start"}</button>
+        <button type="button" class="btn sm danger btn-named-delete">Delete</button>
+      </div>`;
+    li.querySelector(".btn-named-configure").onclick = async () => {
+      const siteName = prompt("Local site name:", t.siteName || vhosts[0]?.name || "");
+      if (!siteName) return;
+      const hostname = prompt("Public hostname (must be on your Cloudflare zone):", t.hostname || "");
+      if (!hostname) return;
+      try {
+        await withLoading(
+          () => api.configureNamedTunnel(t.name, siteName, hostname),
+          `Configuring ${t.name}…`
+        );
+        showToast(`Configured ${t.name} → ${hostname}`, "success");
+        await refreshSharePage();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    li.querySelector(".btn-named-run").onclick = async () => {
+      try {
+        if (t.running) {
+          await withLoading(() => api.stopNamedTunnel(t.name), `Stopping ${t.name}…`);
+          showToast(`Stopped ${t.name}`, "success");
+        } else {
+          await withLoading(() => api.startNamedTunnel(t.name), `Starting ${t.name}…`);
+          showToast(t.hostname ? `Running → https://${t.hostname}` : `Running ${t.name}`, "success");
+        }
+        await refreshSharePage();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    li.querySelector(".btn-named-delete").onclick = async () => {
+      if (!confirm(`Delete named tunnel "${t.name}"?`)) return;
+      try {
+        await withLoading(() => api.deleteNamedTunnel(t.name), `Deleting ${t.name}…`);
+        showToast(`Deleted ${t.name}`, "success");
+        await refreshSharePage();
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    };
+    listEl.appendChild(li);
+  });
 }
 
 async function refreshHealth() {
@@ -649,32 +959,93 @@ function dumpTypeBadge(type) {
   return `<span class="dump-type-badge dump-type-${escapeHtml(type)}">${escapeHtml(type)}</span>`;
 }
 
+function dumpTypesForFilter(filter) {
+  if (filter === "all") return null;
+  if (filter === "error") return ["error", "exception"];
+  if (filter === "dump") return ["dump", "dd"];
+  return [filter];
+}
+
+function dumpSiteKey(ev) {
+  return (ev.site || "").toLowerCase();
+}
+
+async function populateDumpsSiteSelects(events, virtualHosts) {
+  const siteFilter = document.getElementById("dumps-site-filter");
+  const telemetrySelect = document.getElementById("dumps-telemetry-site");
+  const fromEvents = [...new Set(events.map(dumpSiteKey).filter(Boolean))];
+  const fromHosts = (virtualHosts ?? []).map((v) => (v.domain || v.name || "").toLowerCase()).filter(Boolean);
+  const sites = [...new Set([...fromHosts, ...fromEvents])].sort();
+
+  if (siteFilter) {
+    const prev = siteFilter.value;
+    siteFilter.innerHTML =
+      `<option value="">All sites</option>` +
+      sites.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+    if (sites.includes(prev) || prev === "") siteFilter.value = prev;
+    else {
+      siteFilter.value = "";
+      currentDumpSite = "";
+    }
+  }
+
+  if (telemetrySelect) {
+    const prev = telemetrySelect.value;
+    const names = (virtualHosts ?? []).map((v) => v.name);
+    telemetrySelect.innerHTML =
+      `<option value="">Select a site…</option>` +
+      names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+    if (names.includes(prev)) telemetrySelect.value = prev;
+  }
+}
+
 async function refreshDumps() {
   const viewer = document.getElementById("dumps-viewer");
   if (!viewer || !api?.listDumps) return;
   const events = await api.listDumps(300);
-  const filtered =
-    currentDumpFilter === "all"
-      ? events
-      : events.filter((ev) => ev.type === currentDumpFilter);
 
-  const sig = `${currentDumpFilter}:${events.length}:${events[events.length - 1]?.ts ?? 0}:${events[events.length - 1]?.message?.slice(0, 40) ?? ""}`;
+  const search = currentDumpSearch.trim().toLowerCase();
+  const filtered = events.filter((ev) => {
+    if (currentDumpFilter === "all") {
+      // keep
+    } else if (currentDumpFilter === "error") {
+      if (ev.type !== "error" && ev.type !== "exception") return false;
+    } else if (currentDumpFilter === "dump") {
+      if (ev.type !== "dump" && ev.type !== "dd") return false;
+    } else if (ev.type !== currentDumpFilter) {
+      return false;
+    }
+    if (currentDumpSite) {
+      const site = dumpSiteKey(ev);
+      if (!site || !site.includes(currentDumpSite.toLowerCase())) return false;
+    }
+    if (search) {
+      const hay = `${ev.message || ""} ${ev.context || ""} ${ev.file || ""} ${ev.site || ""} ${ev.type || ""}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const sig = `${currentDumpFilter}:${currentDumpSearch}:${currentDumpSite}:${events.length}:${events[events.length - 1]?.ts ?? 0}:${events[events.length - 1]?.message?.slice(0, 40) ?? ""}:${filtered.length}`;
   if (sig === lastDumpsSignature && viewer.querySelector(".dump-entry, .empty-state")) {
     return;
   }
   lastDumpsSignature = sig;
 
+  const state = await api.getState().catch(() => ({ virtualHosts: [] }));
+  await populateDumpsSiteSelects(events, state.virtualHosts);
+
   if (!events.length) {
     viewer.innerHTML = renderDumpsEmptyState(
       "No dumps yet",
-      "Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly."
+      "Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly. For Laravel queries and jobs, install telemetry from the toolbar above."
     );
     return;
   }
   if (!filtered.length) {
     viewer.innerHTML = renderDumpsEmptyState(
       "No matching dumps",
-      `Nothing with type <code>${escapeHtml(currentDumpFilter)}</code> in the latest batch. Try another filter or refresh.`
+      `Nothing matches the current filters. Try another type, site, or search.`
     );
     return;
   }
@@ -685,14 +1056,24 @@ async function refreshDumps() {
       const loc = ev.file
         ? ` <button type="button" class="link-btn dump-open-ide" data-file="${escapeHtml(ev.file)}" data-line="${ev.line ?? ""}">${escapeHtml(ev.file)}:${ev.line ?? ""}</button>`
         : "";
-      const ctx = ev.context ? `\n${escapeHtml(ev.context)}` : "";
+      const siteBadge = ev.site
+        ? `<span class="dump-site-badge" title="Site">${escapeHtml(ev.site)}</span>`
+        : "";
+      const bodyText = `${ev.message || ""}${ev.context ? `\n${ev.context}` : ""}`;
+      const collapsed = bodyText.length > 800;
+      const bodyClass = collapsed ? "dump-body collapsed" : "dump-body";
+      const expandBtn = collapsed
+        ? `<button type="button" class="link-btn dump-expand">Show more</button>`
+        : "";
       return `<div class="dump-entry dump-${escapeHtml(ev.type)}">
         <div class="dump-entry-head">
           <span class="dump-meta">${escapeHtml(when)}</span>
           ${dumpTypeBadge(ev.type)}
+          ${siteBadge}
           ${loc}
         </div>
-        <pre class="dump-body">${escapeHtml(ev.message)}${ctx}</pre>
+        <pre class="${bodyClass}">${escapeHtml(bodyText)}</pre>
+        ${expandBtn}
       </div>`;
     })
     .join("");
@@ -702,6 +1083,15 @@ async function refreshDumps() {
       const line = Number(btn.dataset.line);
       const result = await api.openLogInEditor(btn.dataset.file, Number.isFinite(line) ? line : undefined);
       if (!result.opened) showToast(result.message || "Could not open file", "error");
+    };
+  });
+
+  viewer.querySelectorAll(".dump-expand").forEach((btn) => {
+    btn.onclick = () => {
+      const pre = btn.previousElementSibling;
+      if (!pre) return;
+      const collapsed = pre.classList.toggle("collapsed");
+      btn.textContent = collapsed ? "Show more" : "Show less";
     };
   });
 
@@ -1189,6 +1579,69 @@ async function refreshSitesConfig() {
   }
 }
 
+function closeSiteDrawer() {
+  siteDrawerVhost = null;
+  const drawer = document.getElementById("site-drawer");
+  drawer?.classList.add("hidden");
+  if (drawer) drawer.setAttribute("aria-hidden", "true");
+}
+
+async function openSiteDrawer(vhost) {
+  if (!vhost) return;
+  siteDrawerVhost = vhost;
+  const drawer = document.getElementById("site-drawer");
+  if (!drawer) return;
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
+
+  const url = projectUrl(vhost);
+  document.getElementById("site-drawer-title").textContent = vhost.name;
+  const urlEl = document.getElementById("site-drawer-url");
+  if (urlEl) urlEl.textContent = url;
+
+  const phpSelect = document.getElementById("site-drawer-php");
+  if (phpSelect) {
+    const phpVersions = (await api.listManifests())
+      .filter((m) => m.name.startsWith("php-"))
+      .map((m) => m.name);
+    phpSelect.innerHTML = phpVersions
+      .map(
+        (id) =>
+          `<option value="${escapeHtml(id)}" ${vhost.phpVersion === id ? "selected" : ""}>${escapeHtml(id.replace(/^php-/, "PHP "))}</option>`
+      )
+      .join("");
+  }
+
+  const shares = api.listShares ? await api.listShares().catch(() => []) : [];
+  const activeShare = shares.find((s) => s.siteName === vhost.name);
+  const shareBtn = document.getElementById("site-drawer-share");
+  if (shareBtn) shareBtn.textContent = activeShare ? "Stop share" : "Share public URL";
+
+  const sslBtn = document.getElementById("site-drawer-ssl");
+  if (sslBtn) sslBtn.textContent = vhost.ssl ? "Renew SSL" : "Enable SSL";
+
+  let hasTelemetry = false;
+  try {
+    hasTelemetry = await api.hasLaravelQueryCapture(vhost.name);
+  } catch {
+    hasTelemetry = false;
+  }
+  const telemetryEl = document.getElementById("site-drawer-telemetry");
+  if (telemetryEl) {
+    telemetryEl.textContent = hasTelemetry
+      ? "Telemetry: installed"
+      : "Telemetry: not installed (Laravel AppServiceProvider)";
+  }
+
+  const workers = api.listSiteWorkers ? await api.listSiteWorkers().catch(() => []) : [];
+  const queue = workers.find((w) => w.siteName === vhost.name && w.kind === "queue");
+  const vite = workers.find((w) => w.siteName === vhost.name && w.kind === "vite");
+  const queueCb = document.getElementById("site-drawer-queue");
+  const viteCb = document.getElementById("site-drawer-vite");
+  if (queueCb) queueCb.checked = Boolean(queue?.enabled);
+  if (viteCb) viteCb.checked = Boolean(vite?.enabled);
+}
+
 async function refreshProjects() {
   const state = await api.getState();
   const rootStatus = await api.getRoot();
@@ -1200,27 +1653,17 @@ async function refreshProjects() {
   list.innerHTML = "";
 
   if (!state.virtualHosts?.length) {
-    empty.classList.remove("hidden");
+    empty?.classList.remove("hidden");
     await refreshSitesConfig();
     return;
   }
-  empty.classList.add("hidden");
-
-  const phpVersions = (await api.listManifests())
-    .filter((m) => m.name.startsWith("php-"))
-    .map((m) => m.name);
+  empty?.classList.add("hidden");
 
   for (const v of state.virtualHosts) {
     const li = document.createElement("li");
-    li.className = "project-card";
+    li.className = "project-card project-card-summary";
     const url = projectUrl(v);
     const activeShare = shareMap.get(v.name);
-    const phpOptions = phpVersions
-      .map(
-        (id) =>
-          `<option value="${escapeHtml(id)}" ${v.phpVersion === id ? "selected" : ""}>${escapeHtml(id.replace(/^php-/, "PHP "))}</option>`
-      )
-      .join("");
     li.innerHTML = `
       <div class="project-info">
         <div class="project-name-row">
@@ -1228,6 +1671,7 @@ async function refreshProjects() {
           <span class="project-name">${escapeHtml(v.name)}</span>
           ${v.ssl ? '<span class="ssl-badge" title="HTTPS enabled">🔒</span>' : ""}
           ${activeShare ? '<span class="share-active-badge">Shared</span>' : ""}
+          ${v.phpVersion ? `<span class="site-php-badge">${escapeHtml(v.phpVersion.replace(/^php-/, "PHP "))}</span>` : ""}
         </div>
         <a href="#" class="project-url project-url-link">${escapeHtml(url)}</a>
         ${
@@ -1235,21 +1679,11 @@ async function refreshProjects() {
             ? `<div class="project-share-url"><button type="button" class="link-btn btn-copy-share">${escapeHtml(activeShare.publicUrl)}</button></div>`
             : ""
         }
-        <label class="project-php-label">PHP version
-          <select class="text-input project-php-select" aria-label="PHP version for ${escapeHtml(v.name)}">
-            ${phpOptions}
-          </select>
-        </label>
       </div>
       <div class="project-actions">
         <div class="project-actions-primary">
           <button class="btn sm primary btn-open">Open site</button>
-          <button class="btn sm secondary btn-folder">Folder</button>
-        </div>
-        <div class="project-actions-secondary">
-          <button class="btn sm ${activeShare ? "danger" : "secondary"} btn-share">${activeShare ? "Stop share" : "Share public URL"}</button>
-          <button class="btn sm secondary btn-laravel-env">Laravel .env</button>
-          <button class="btn sm secondary btn-ssl">${v.ssl ? "Renew SSL" : "Enable SSL"}</button>
+          <button class="btn sm secondary btn-details">Details</button>
         </div>
       </div>`;
     li.querySelector(".btn-open").onclick = () => api.openExternal(url);
@@ -1257,26 +1691,7 @@ async function refreshProjects() {
       e.preventDefault();
       api.openExternal(url);
     });
-    li.querySelector(".btn-share").onclick = async () => {
-      try {
-        if (activeShare) {
-          await withLoading(() => api.stopShare(v.name), `Stopping share for ${v.name}…`);
-          showToast(`Stopped public share for ${v.name}`, "success");
-          await refreshProjects();
-          return;
-        }
-        const session = await withLoading(() => api.startShare(v.name), `Sharing ${v.name}…`);
-        showToast(`Public URL copied — ${session.publicUrl}`, "success", 10000);
-        try {
-          await navigator.clipboard.writeText(session.publicUrl);
-        } catch {
-          // ignore
-        }
-        await refreshProjects();
-      } catch (err) {
-        showToast(err.message || String(err), "error");
-      }
-    };
+    li.querySelector(".btn-details").onclick = () => void openSiteDrawer(v);
     li.querySelector(".btn-copy-share")?.addEventListener("click", async (e) => {
       e.preventDefault();
       if (!activeShare?.publicUrl) return;
@@ -1288,40 +1703,141 @@ async function refreshProjects() {
       }
       api.openExternal(activeShare.publicUrl);
     });
-    li.querySelector(".project-php-select")?.addEventListener("change", async (e) => {
-      const version = e.target.value;
-      await withLoading(() => api.setSitePhpVersion(v.name, version), `Setting PHP for ${v.name}…`);
-      showToast(`${v.name} → ${version}`, "success");
-      await refreshProjects();
-      await refreshServices();
-    });
-    li.querySelector(".btn-laravel-env").onclick = async () => {
-      try {
-        const snippet = await api.getLaravelEnv(v.name);
-        await navigator.clipboard.writeText(snippet.envBlock);
-        showToast(`Copied Laravel .env snippet for ${snippet.domain}`, "success");
-      } catch (err) {
-        showToast(err.message || String(err), "error");
-      }
-    };
-    li.querySelector(".btn-ssl").onclick = async () => {
-      const result = await withLoading(() => api.enableSsl(v.domain), "Generating certificate…");
-      showToast(result.message, result.success ? "success" : "error");
-      if (result.success) {
-        await refreshProjects();
-        await refreshAll();
-      }
-    };
-    li.querySelector(".btn-folder").onclick = () => {
-      if (v.projectPath && v.source !== "www") {
-        api.openProjectPath(v.projectPath);
-      } else {
-        api.openPath(`www/${v.name}`);
-      }
-    };
     list.appendChild(li);
   }
   await refreshSitesConfig();
+}
+
+function formatBackupSize(bytes) {
+  return `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`;
+}
+
+function renderBackupList(el, backups) {
+  if (!el) return;
+  if (!backups?.length) {
+    el.innerHTML = "<li class='empty-hint'>No backups yet</li>";
+    return;
+  }
+  el.innerHTML = backups
+    .slice(0, 8)
+    .map(
+      (b) =>
+        `<li><span class="mono">${escapeHtml(b.id)}</span> · ${formatBackupSize(b.sizeBytes)} · ${escapeHtml(b.reason || "manual")}</li>`
+    )
+    .join("");
+}
+
+async function refreshDatabasePage() {
+  const statusEl = document.getElementById("database-status");
+  const listEl = document.getElementById("database-list");
+  if (!statusEl || !api?.getDatabaseAdminStatus) return;
+
+  try {
+    const status = await api.getDatabaseAdminStatus();
+    statusEl.textContent = status.message;
+    statusEl.className = `panel-desc ${status.running ? "db-status-ok" : "db-status-warn"}`;
+  } catch (err) {
+    statusEl.textContent = err.message || String(err);
+    statusEl.className = "panel-desc db-status-warn";
+  }
+
+  try {
+    const { engine, databases } = await api.listDatabases();
+    if (!databases.length) {
+      listEl.className = "db-list empty-hint";
+      listEl.innerHTML = `<li>No user databases on ${escapeHtml(engine)}</li>`;
+    } else {
+      listEl.className = "db-list";
+      listEl.innerHTML = databases
+        .map((db) => `<li><span class="db-name">${escapeHtml(db.name)}</span><span class="db-engine">${escapeHtml(engine)}</span></li>`)
+        .join("");
+    }
+  } catch (err) {
+    listEl.className = "db-list empty-hint";
+    listEl.innerHTML = `<li>${escapeHtml(err.message || String(err))}</li>`;
+  }
+
+  const [mysql, mariadb, postgres] = await Promise.all([
+    api.listMysqlBackups?.().catch(() => []) ?? [],
+    api.listMariaDbBackups?.().catch(() => []) ?? [],
+    api.listPostgresBackups?.().catch(() => []) ?? [],
+  ]);
+  renderBackupList(document.getElementById("mysql-backups-page-list"), mysql);
+  renderBackupList(document.getElementById("mariadb-backups-list"), mariadb);
+  renderBackupList(document.getElementById("postgres-backups-list"), postgres);
+}
+
+async function refreshPhpIniPage(preferredVersion) {
+  if (!api?.listInstalledPhpVersions) return;
+  const versionSelect = document.getElementById("php-ini-version");
+  const extGrid = document.getElementById("php-ini-extensions");
+  const contentEl = document.getElementById("php-ini-content");
+  const pathEl = document.getElementById("php-ini-path");
+  const activeHint = document.getElementById("php-ini-active-hint");
+  if (!versionSelect) return;
+
+  const [versions, active] = await Promise.all([
+    api.listInstalledPhpVersions(),
+    api.getActivePhpVersion().catch(() => ""),
+  ]);
+  const selected =
+    preferredVersion ||
+    phpIniSelectedVersion ||
+    (versions.includes(active) ? active : versions[0] || "");
+  phpIniSelectedVersion = selected;
+
+  versionSelect.innerHTML = versions.length
+    ? versions
+        .map(
+          (v) =>
+            `<option value="${escapeHtml(v)}" ${v === selected ? "selected" : ""}>${escapeHtml(v.replace(/^php-/, "PHP "))}${v === active ? " (active)" : ""}</option>`
+        )
+        .join("")
+    : `<option value="">No PHP installed</option>`;
+
+  if (activeHint) {
+    activeHint.textContent = active ? `Profile active: ${active.replace(/^php-/, "PHP ")}` : "";
+  }
+
+  if (!selected) {
+    if (extGrid) extGrid.innerHTML = '<p class="empty-hint">Install PHP from Quick Add first.</p>';
+    if (contentEl) contentEl.value = "";
+    if (pathEl) pathEl.textContent = "";
+    return;
+  }
+
+  const summary = await api.readPhpIni(selected);
+  if (pathEl) pathEl.textContent = summary.iniPath || "";
+  if (contentEl) contentEl.value = summary.content || "";
+  if (extGrid) {
+    if (!summary.extensions?.length) {
+      extGrid.innerHTML = '<p class="empty-hint">No extensions detected</p>';
+    } else {
+      extGrid.innerHTML = summary.extensions
+        .map(
+          (ext) => `<label class="php-ext-toggle${ext.filePresent ? "" : " missing"}" title="${escapeHtml(ext.line)}">
+            <input type="checkbox" data-ext="${escapeHtml(ext.name)}" ${ext.enabled ? "checked" : ""} ${ext.filePresent ? "" : "disabled"}>
+            <span>${escapeHtml(ext.name)}</span>
+          </label>`
+        )
+        .join("");
+      extGrid.querySelectorAll("input[data-ext]").forEach((input) => {
+        input.onchange = async () => {
+          try {
+            await withLoading(
+              () => api.setPhpExtension(selected, input.dataset.ext, input.checked),
+              `Updating ${input.dataset.ext}…`
+            );
+            showToast(`${input.dataset.ext} ${input.checked ? "enabled" : "disabled"}`, "success");
+            await refreshPhpIniPage(selected);
+          } catch (err) {
+            showToast(err.message || String(err), "error");
+            input.checked = !input.checked;
+          }
+        };
+      });
+    }
+  }
 }
 
 async function refreshManifests() {
@@ -1347,17 +1863,68 @@ function formatProfileStack(profile) {
   const parts = [];
   if (profile.phpVersion) parts.push(profile.phpVersion.replace(/^php-/, "PHP "));
   if (profile.webServer) parts.push(profile.webServer);
-  if (profile.database && profile.database !== "none") parts.push(profile.database);
+  if (profile.database === "external") {
+    const c = profile.databaseConnection;
+    const host = c?.host || "?";
+    const port = c?.port || "?";
+    parts.push(`external (${host}:${port})`);
+  } else if (profile.database && profile.database !== "none") {
+    parts.push(profile.database);
+  }
   for (const id of profile.services ?? []) {
     parts.push(id);
   }
   return parts.join(" · ") || "Stack not configured";
 }
 
+const EXTERNAL_DB_DEFAULT_PORTS = { mysql: 3306, mariadb: 3306, postgresql: 5432 };
+
+function syncProfileExternalDbPanel() {
+  const enabled = document.getElementById("profile-service-database")?.checked ?? true;
+  const type = document.getElementById("profile-database-type")?.value || "mysql";
+  const panel = document.getElementById("profile-external-db");
+  if (panel) panel.classList.toggle("hidden", !enabled || type !== "external");
+}
+
 function syncProfileDatabaseToggle() {
   const enabled = document.getElementById("profile-service-database")?.checked ?? true;
   const typeSelect = document.getElementById("profile-database-type");
   if (typeSelect) typeSelect.disabled = !enabled;
+  syncProfileExternalDbPanel();
+}
+
+function defaultPortForEngine(engine) {
+  return EXTERNAL_DB_DEFAULT_PORTS[engine] ?? 3306;
+}
+
+function readExternalDbConnectionFromEditor() {
+  const engine = document.getElementById("profile-db-engine")?.value || "mariadb";
+  const host = (document.getElementById("profile-db-host")?.value || "").trim();
+  const portRaw = document.getElementById("profile-db-port")?.value;
+  const port = portRaw ? Number(portRaw) : defaultPortForEngine(engine);
+  const user = (document.getElementById("profile-db-user")?.value || "").trim();
+  const password = document.getElementById("profile-db-password")?.value ?? "";
+  return {
+    engine,
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : defaultPortForEngine(engine),
+    user: user || (engine === "postgresql" ? "postgres" : "root"),
+    password,
+  };
+}
+
+function applyExternalDbConnectionToEditor(conn) {
+  const engine = conn?.engine || "mariadb";
+  const engineEl = document.getElementById("profile-db-engine");
+  const hostEl = document.getElementById("profile-db-host");
+  const portEl = document.getElementById("profile-db-port");
+  const userEl = document.getElementById("profile-db-user");
+  const passEl = document.getElementById("profile-db-password");
+  if (engineEl) engineEl.value = engine;
+  if (hostEl) hostEl.value = conn?.host || "";
+  if (portEl) portEl.value = conn?.port != null ? String(conn.port) : String(defaultPortForEngine(engine));
+  if (userEl) userEl.value = conn?.user || "";
+  if (passEl) passEl.value = conn?.password || "";
 }
 
 function readProfileServicesFromEditor() {
@@ -1368,7 +1935,11 @@ function readProfileServicesFromEditor() {
   const services = [];
   if (document.getElementById("profile-service-redis")?.checked) services.push("redis");
   if (document.getElementById("profile-service-mailpit")?.checked) services.push("mailpit");
-  return { database, services };
+  const result = { database, services };
+  if (database === "external") {
+    result.databaseConnection = readExternalDbConnectionFromEditor();
+  }
+  return result;
 }
 
 function applyProfileServicesToEditor(profile) {
@@ -1376,7 +1947,12 @@ function applyProfileServicesToEditor(profile) {
   const databaseToggle = document.getElementById("profile-service-database");
   const databaseType = document.getElementById("profile-database-type");
   if (databaseToggle) databaseToggle.checked = hasDatabase;
-  if (databaseType) databaseType.value = hasDatabase ? profile.database || "mysql" : "mysql";
+  if (databaseType) {
+    databaseType.value = hasDatabase ? profile.database || "mysql" : "mysql";
+  }
+  applyExternalDbConnectionToEditor(
+    profile.database === "external" ? profile.databaseConnection : { engine: "mariadb" }
+  );
   const redisToggle = document.getElementById("profile-service-redis");
   const mailpitToggle = document.getElementById("profile-service-mailpit");
   if (redisToggle) redisToggle.checked = profile.services?.includes("redis") ?? false;
@@ -1441,7 +2017,7 @@ async function showProfileEditor(mode, profile) {
 }
 
 async function saveProfileEditor() {
-  const { database, services } = readProfileServicesFromEditor();
+  const { database, services, databaseConnection } = readProfileServicesFromEditor();
   const payload = {
     description: document.getElementById("profile-description").value.trim(),
     phpVersion: document.getElementById("profile-php-version").value,
@@ -1449,6 +2025,13 @@ async function saveProfileEditor() {
     database,
     services,
   };
+  if (database === "external" && databaseConnection) {
+    payload.databaseConnection = databaseConnection;
+  }
+
+  if (database === "external" && !(databaseConnection?.host || "").trim()) {
+    return showToast("External database host is required", "error");
+  }
 
   if (profileEditorMode === "create") {
     const name = document.getElementById("profile-name").value.trim();
@@ -1863,6 +2446,12 @@ async function boot() {
     if (view === "tooling") void refreshTooling();
     else if (view === "dumps") void refreshDumps().then(startDumpsFollow);
     else if (view === "logs") void refreshLogs().then(startLogFollow);
+    else if (view === "doctor") void refreshDoctorPage({ repair: false });
+    else if (view === "mail") void refreshMailPage();
+    else if (view === "share") void refreshSharePage();
+    else if (view === "database") void refreshDatabasePage();
+    else if (view === "php-ini") void refreshPhpIniPage();
+    else if (view === "projects") void refreshProjects();
     else {
       stopDumpsFollow();
       stopLogFollow();
@@ -2010,6 +2599,11 @@ async function boot() {
       if (view === "projects") await refreshProjects();
       if (view === "quick-add") await refreshManifests();
       if (view === "quick-app") await refreshTemplates();
+      if (view === "doctor") await refreshDoctorPage({ repair: false });
+      if (view === "mail") await refreshMailPage();
+      if (view === "share") await refreshSharePage();
+      if (view === "database") await refreshDatabasePage();
+      if (view === "php-ini") await refreshPhpIniPage();
       if (view === "profiles") {
         await refreshProfiles();
         hideProfileEditor();
@@ -2135,7 +2729,45 @@ async function boot() {
   document.getElementById("btn-dumps-refresh")?.addEventListener("click", () => refreshDumps());
   document.getElementById("btn-dumps-clear")?.addEventListener("click", async () => {
     await api.clearDumps();
+    lastDumpsSignature = "";
     await refreshDumps();
+  });
+  document.getElementById("btn-dumps-clear-type")?.addEventListener("click", async () => {
+    const types = dumpTypesForFilter(currentDumpFilter);
+    if (!types) {
+      await api.clearDumps();
+    } else {
+      await api.clearDumps(types);
+    }
+    lastDumpsSignature = "";
+    await refreshDumps();
+    showToast(types ? `Cleared ${types.join(", ")}` : "Dumps cleared", "success");
+  });
+  document.getElementById("dumps-search")?.addEventListener("input", (e) => {
+    currentDumpSearch = e.target.value || "";
+    lastDumpsSignature = "";
+    void refreshDumps();
+  });
+  document.getElementById("dumps-site-filter")?.addEventListener("change", (e) => {
+    currentDumpSite = e.target.value || "";
+    lastDumpsSignature = "";
+    void refreshDumps();
+  });
+  document.getElementById("btn-dumps-install-telemetry")?.addEventListener("click", async () => {
+    const site = document.getElementById("dumps-telemetry-site")?.value;
+    if (!site) {
+      showToast("Select a site first", "error");
+      return;
+    }
+    try {
+      const result = await withLoading(
+        () => api.installLaravelQueryCapture(site),
+        `Installing telemetry for ${site}…`
+      );
+      showToast(result.message || "Telemetry installed", result.installed ? "success" : "error");
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
   });
   document.querySelectorAll("[data-dump-filter]").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -2143,12 +2775,221 @@ async function boot() {
       document.querySelectorAll("[data-dump-filter]").forEach((c) => {
         c.classList.toggle("active", c.dataset.dumpFilter === currentDumpFilter);
       });
+      lastDumpsSignature = "";
       void refreshDumps();
     });
   });
   document.getElementById("dumps-follow")?.addEventListener("change", () => {
     if (document.getElementById("dumps-follow")?.checked) startDumpsFollow();
     else stopDumpsFollow();
+  });
+
+  document.getElementById("btn-projects-empty-quick-app")?.addEventListener("click", () => {
+    showView("quick-app");
+    void refreshTemplates();
+  });
+
+  const isMacPalette =
+    /Mac|iPhone|iPad/.test(navigator.platform || "") || /Mac OS X/.test(navigator.userAgent || "");
+  const paletteBtn = document.getElementById("btn-command-palette");
+  if (paletteBtn) {
+    paletteBtn.textContent = isMacPalette ? "⌘K" : "Ctrl+K";
+    paletteBtn.addEventListener("click", () => openCommandPalette());
+  }
+
+  document.getElementById("site-drawer-backdrop")?.addEventListener("click", closeSiteDrawer);
+  document.getElementById("site-drawer-close")?.addEventListener("click", closeSiteDrawer);
+  document.getElementById("site-drawer-open")?.addEventListener("click", () => {
+    if (!siteDrawerVhost) return;
+    api.openExternal(projectUrl(siteDrawerVhost));
+  });
+  document.getElementById("site-drawer-folder")?.addEventListener("click", () => {
+    if (!siteDrawerVhost) return;
+    if (siteDrawerVhost.projectPath && siteDrawerVhost.source !== "www") {
+      api.openProjectPath(siteDrawerVhost.projectPath);
+    } else {
+      api.openPath(`www/${siteDrawerVhost.name}`);
+    }
+  });
+  document.getElementById("site-drawer-php")?.addEventListener("change", async (e) => {
+    if (!siteDrawerVhost) return;
+    const version = e.target.value;
+    await withLoading(
+      () => api.setSitePhpVersion(siteDrawerVhost.name, version),
+      `Setting PHP for ${siteDrawerVhost.name}…`
+    );
+    showToast(`${siteDrawerVhost.name} → ${version}`, "success");
+    await refreshProjects();
+    await refreshServices();
+    const state = await api.getState();
+    const updated = state.virtualHosts?.find((v) => v.name === siteDrawerVhost.name);
+    if (updated) await openSiteDrawer(updated);
+  });
+  document.getElementById("site-drawer-ssl")?.addEventListener("click", async () => {
+    if (!siteDrawerVhost) return;
+    const result = await withLoading(
+      () => api.enableSsl(siteDrawerVhost.domain),
+      "Generating certificate…"
+    );
+    showToast(result.message, result.success ? "success" : "error");
+    if (result.success) {
+      await refreshProjects();
+      await refreshAll();
+      const state = await api.getState();
+      const updated = state.virtualHosts?.find((v) => v.name === siteDrawerVhost.name);
+      if (updated) await openSiteDrawer(updated);
+    }
+  });
+  document.getElementById("site-drawer-share")?.addEventListener("click", async () => {
+    if (!siteDrawerVhost) return;
+    try {
+      const shares = api.listShares ? await api.listShares().catch(() => []) : [];
+      const active = shares.find((s) => s.siteName === siteDrawerVhost.name);
+      if (active) {
+        await withLoading(
+          () => api.stopShare(siteDrawerVhost.name),
+          `Stopping share for ${siteDrawerVhost.name}…`
+        );
+        showToast(`Stopped public share for ${siteDrawerVhost.name}`, "success");
+      } else {
+        const session = await withLoading(
+          () => api.startShare(siteDrawerVhost.name),
+          `Sharing ${siteDrawerVhost.name}…`
+        );
+        showToast(`Public URL copied — ${session.publicUrl}`, "success", 10000);
+        try {
+          await navigator.clipboard.writeText(session.publicUrl);
+        } catch {
+          // ignore
+        }
+      }
+      await refreshProjects();
+      const state = await api.getState();
+      const updated = state.virtualHosts?.find((v) => v.name === siteDrawerVhost.name);
+      if (updated) await openSiteDrawer(updated);
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+  document.getElementById("site-drawer-laravel-env")?.addEventListener("click", async () => {
+    if (!siteDrawerVhost) return;
+    try {
+      const snippet = await api.getLaravelEnv(siteDrawerVhost.name);
+      await navigator.clipboard.writeText(snippet.envBlock);
+      showToast(`Copied Laravel .env snippet for ${snippet.domain}`, "success");
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+  document.getElementById("site-drawer-install-telemetry")?.addEventListener("click", async () => {
+    if (!siteDrawerVhost) return;
+    try {
+      const result = await withLoading(
+        () => api.installLaravelQueryCapture(siteDrawerVhost.name),
+        `Installing telemetry for ${siteDrawerVhost.name}…`
+      );
+      showToast(result.message || "Telemetry installed", result.installed ? "success" : "error");
+      await openSiteDrawer(siteDrawerVhost);
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+  document.getElementById("site-drawer-create-db")?.addEventListener("click", async () => {
+    if (!siteDrawerVhost) return;
+    try {
+      const result = await withLoading(
+        () => api.createDatabase(siteDrawerVhost.name),
+        `Creating database for ${siteDrawerVhost.name}…`
+      );
+      showToast(result.message || `Created ${result.name}`, "success");
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+  document.getElementById("site-drawer-queue")?.addEventListener("change", async (e) => {
+    if (!siteDrawerVhost) return;
+    try {
+      await withLoading(
+        () => api.setSiteWorker(siteDrawerVhost.name, "queue", e.target.checked),
+        e.target.checked ? "Enabling queue worker…" : "Disabling queue worker…"
+      );
+      showToast(
+        e.target.checked ? "Queue worker enabled — restart services to apply" : "Queue worker disabled",
+        "success"
+      );
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+      e.target.checked = !e.target.checked;
+    }
+  });
+  document.getElementById("site-drawer-vite")?.addEventListener("change", async (e) => {
+    if (!siteDrawerVhost) return;
+    try {
+      await withLoading(
+        () => api.setSiteWorker(siteDrawerVhost.name, "vite", e.target.checked),
+        e.target.checked ? "Enabling Vite worker…" : "Disabling Vite worker…"
+      );
+      showToast(
+        e.target.checked ? "Vite worker enabled — restart services to apply" : "Vite worker disabled",
+        "success"
+      );
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+      e.target.checked = !e.target.checked;
+    }
+  });
+
+  document.getElementById("btn-database-refresh")?.addEventListener("click", () => refreshDatabasePage());
+  document.getElementById("database-create-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("database-create-name")?.value?.trim();
+    if (!name) return;
+    try {
+      const result = await withLoading(() => api.createDatabase(name), `Creating ${name}…`);
+      showToast(result.message || `Created ${result.name}`, "success");
+      document.getElementById("database-create-name").value = "";
+      await refreshDatabasePage();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+  document.getElementById("btn-backup-mysql-page")?.addEventListener("click", async () => {
+    const backup = await withLoading(() => api.backupMysql(), "Backing up MySQL…");
+    if (backup) showToast(`MySQL backup saved (${formatBackupSize(backup.sizeBytes)})`, "success");
+    else showToast("MySQL is not running — start it first to back up", "error");
+    await refreshDatabasePage();
+  });
+  document.getElementById("btn-backup-mariadb")?.addEventListener("click", async () => {
+    const backup = await withLoading(() => api.backupMariaDb(), "Backing up MariaDB…");
+    if (backup) showToast(`MariaDB backup saved (${formatBackupSize(backup.sizeBytes)})`, "success");
+    else showToast("MariaDB is not running — start it first to back up", "error");
+    await refreshDatabasePage();
+  });
+  document.getElementById("btn-backup-postgres")?.addEventListener("click", async () => {
+    const backup = await withLoading(() => api.backupPostgres(), "Backing up PostgreSQL…");
+    if (backup) showToast(`PostgreSQL backup saved (${formatBackupSize(backup.sizeBytes)})`, "success");
+    else showToast("PostgreSQL is not running — start it first to back up", "error");
+    await refreshDatabasePage();
+  });
+
+  document.getElementById("php-ini-version")?.addEventListener("change", (e) => {
+    phpIniSelectedVersion = e.target.value;
+    void refreshPhpIniPage(phpIniSelectedVersion);
+  });
+  document.getElementById("btn-php-ini-save")?.addEventListener("click", async () => {
+    const version = document.getElementById("php-ini-version")?.value;
+    const content = document.getElementById("php-ini-content")?.value ?? "";
+    if (!version) {
+      showToast("No PHP version selected", "error");
+      return;
+    }
+    try {
+      await withLoading(() => api.writePhpIni(version, content), "Saving php.ini…");
+      showToast("php.ini saved", "success");
+      await refreshPhpIniPage(version);
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
   });
   document.getElementById("btn-github").onclick = () => api.openExternal(GITHUB_REPO_URL);
 
@@ -2261,33 +3102,119 @@ async function boot() {
     const projectPath = await api.pickLaragonRoot();
     if (!projectPath) return;
     const defaultName = projectPath.split(/[/\\]/).filter(Boolean).pop() ?? "site";
-    const name = prompt("Site name (used for name.test):", defaultName);
+    const name = prompt("Site name (used for the local domain):", defaultName);
     if (!name) return;
     await withLoading(() => api.linkProject(projectPath, name), "Linking project…");
     handleHostsSyncResult(await api.syncVhosts());
-    showToast(`Linked ${name}.test`, "success");
+    const root = await api.getRoot();
+    showToast(`Linked ${name}.${root.tld || "localhost"}`, "success");
     await refreshProjects();
   });
 
-  document.getElementById("btn-run-doctor")?.addEventListener("click", async () => {
-    const fix = confirm("Run DevTent doctor with automatic repairs?\n\nThis syncs Procfile, regenerates vhosts, and verifies configs.");
-    const report = await withLoading(
-      () => api.runDoctor({ repair: fix, startServices: false }),
-      "Running doctor…"
+  document.getElementById("btn-open-doctor")?.addEventListener("click", () => {
+    showView("doctor");
+    void refreshDoctorPage({ repair: false });
+  });
+
+  document.getElementById("btn-doctor-check")?.addEventListener("click", async () => {
+    await refreshDoctorPage({ repair: false });
+    showToast("Doctor check finished", "success");
+  });
+
+  document.getElementById("btn-doctor-fix")?.addEventListener("click", async () => {
+    const ok = confirm(
+      "Run DevTent doctor with automatic repairs?\n\nThis syncs Procfile, regenerates vhosts, and verifies configs."
     );
-    const el = document.getElementById("doctor-result");
-    if (el) {
-      const lines = [];
-      if (report.repaired?.length) lines.push(`Fixed: ${report.repaired.join("; ")}`);
-      const issues = (report.findings ?? []).filter((f) => f.severity === "warn" || f.severity === "error");
-      if (issues.length) lines.push(`${issues.length} issue(s) remaining`);
-      else lines.push("No issues found");
-      el.textContent = lines.join(" · ");
-      el.classList.remove("hidden");
-    }
+    if (!ok) return;
+    await refreshDoctorPage({ repair: true });
     showToast("Doctor finished", "success");
-    await refreshHealth();
     await refreshAll();
+  });
+
+  document.getElementById("btn-doctor-trust-ca")?.addEventListener("click", async () => {
+    try {
+      const result = await withLoading(() => api.trustMkcertCa(), "Trusting local CA…");
+      showToast(result?.message || "Local CA trusted", "success");
+      await refreshDoctorCaDns();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-doctor-dns-start")?.addEventListener("click", async () => {
+    try {
+      const status = await withLoading(() => api.startLocalDns(), "Starting local DNS…");
+      showToast(`DNS on ${status.bind}:${status.port} for *.${status.tld}`, "success");
+      await refreshDoctorCaDns();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-doctor-dns-stop")?.addEventListener("click", async () => {
+    try {
+      await withLoading(() => api.stopLocalDns(), "Stopping local DNS…");
+      showToast("Local DNS stopped", "success");
+      await refreshDoctorCaDns();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-doctor-dns-resolver")?.addEventListener("click", async () => {
+    try {
+      const result = await withLoading(() => api.installLocalDnsResolver(), "Installing OS resolver…");
+      showToast(result?.message || "Resolver install requested", result?.ok === false ? "error" : "success", 8000);
+      await refreshDoctorCaDns();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-share-cf-login")?.addEventListener("click", async () => {
+    try {
+      const result = await withLoading(() => api.cloudflareLogin(), "Opening Cloudflare login…");
+      showToast(result?.message || (result?.ok ? "Logged in" : "Login incomplete"), result?.ok ? "success" : "error");
+      await refreshSharePage();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-share-named-create")?.addEventListener("click", async () => {
+    const name = prompt("Tunnel name (letters, numbers, hyphens):", "devtent");
+    if (!name) return;
+    try {
+      const tunnel = await withLoading(() => api.createNamedTunnel(name), `Creating ${name}…`);
+      showToast(`Created tunnel ${tunnel.name}`, "success");
+      await refreshSharePage();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-mail-open")?.addEventListener("click", () => {
+    api.openExternal("http://127.0.0.1:8025");
+  });
+
+  document.getElementById("btn-mail-start")?.addEventListener("click", async () => {
+    try {
+      await withLoading(() => api.startService("mailpit"), "Starting Mailpit…");
+      showToast("Mailpit started", "success");
+      await refreshMailPage();
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+    }
+  });
+
+  document.getElementById("btn-mail-copy-env")?.addEventListener("click", async () => {
+    const text = document.getElementById("mail-env-snippet")?.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Copied Laravel mail .env block", "success");
+    } catch {
+      showToast("Could not copy — select the block manually", "error");
+    }
   });
 
   document.querySelectorAll("[data-external]").forEach((el) => {
@@ -2382,6 +3309,14 @@ async function boot() {
   });
   document.getElementById("btn-cancel-profile")?.addEventListener("click", hideProfileEditor);
   document.getElementById("profile-service-database")?.addEventListener("change", syncProfileDatabaseToggle);
+  document.getElementById("profile-database-type")?.addEventListener("change", () => {
+    syncProfileExternalDbPanel();
+  });
+  document.getElementById("profile-db-engine")?.addEventListener("change", () => {
+    const engine = document.getElementById("profile-db-engine")?.value || "mariadb";
+    const portEl = document.getElementById("profile-db-port");
+    if (portEl && !portEl.value) portEl.value = String(defaultPortForEngine(engine));
+  });
 
   document.getElementById("btn-migrate-laragon-browse").onclick = async () => {
     const picked = await api.pickLaragonRoot();
@@ -2435,6 +3370,282 @@ async function boot() {
       showToast("Root changed", "success");
     }
   };
+
+  setupCommandPalette();
+  setupKeyboardShortcuts();
+}
+
+const PALETTE_VIEWS = [
+  "dashboard",
+  "projects",
+  "services",
+  "logs",
+  "dumps",
+  "database",
+  "php-ini",
+  "tooling",
+  "mail",
+  "share",
+  "doctor",
+  "quick-add",
+  "quick-app",
+  "profiles",
+  "settings",
+];
+
+let paletteIndex = 0;
+let paletteCommands = [];
+
+function buildPaletteCommands() {
+  const nav = PALETTE_VIEWS.map((view, i) => ({
+    id: `nav-${view}`,
+    label: TITLES[view] || view,
+    hint: i < 9 ? String(i + 1) : "",
+    group: "Navigate",
+    run: () => {
+      showView(view);
+      if (view === "dumps") void refreshDumps().then(startDumpsFollow);
+      else if (view === "share") void refreshSharePage();
+      else if (view === "doctor") void refreshDoctorPage({ repair: false });
+      else if (view === "mail") void refreshMailPage();
+      else if (view === "services") void refreshServices();
+      else if (view === "projects") void refreshProjects();
+      else if (view === "database") void refreshDatabasePage();
+      else if (view === "php-ini") void refreshPhpIniPage();
+    },
+  }));
+
+  const siteCommands = [];
+  // Sites are loaded asynchronously when opening the palette
+  const cachedHosts = window.__devtentPaletteHosts || [];
+  for (const v of cachedHosts) {
+    const url = projectUrl(v);
+    siteCommands.push({
+      id: `site-open-${v.name}`,
+      label: `Open ${v.name}`,
+      hint: v.domain,
+      group: "Sites",
+      run: () => api.openExternal(url),
+    });
+    siteCommands.push({
+      id: `site-drawer-${v.name}`,
+      label: `Details: ${v.name}`,
+      hint: "drawer",
+      group: "Sites",
+      run: () => {
+        showView("projects");
+        void openSiteDrawer(v);
+      },
+    });
+  }
+
+  const actions = [
+    {
+      id: "start-all",
+      label: "Start all services",
+      hint: "S",
+      group: "Actions",
+      run: async () => {
+        await withLoading(() => api.startAll(), "Starting services…");
+        showToast("Services started", "success");
+        await refreshServices();
+      },
+    },
+    {
+      id: "stop-all",
+      label: "Stop all services",
+      hint: "",
+      group: "Actions",
+      run: async () => {
+        await withLoading(() => api.stopAll(), "Stopping services…");
+        showToast("Services stopped", "success");
+        await refreshServices();
+      },
+    },
+    {
+      id: "sync-vhosts",
+      label: "Sync virtual hosts",
+      hint: "",
+      group: "Actions",
+      run: async () => {
+        handleHostsSyncResult(await api.syncVhosts());
+        showToast("Virtual hosts synced", "success");
+        await refreshProjects();
+      },
+    },
+    {
+      id: "doctor",
+      label: "Run doctor check",
+      hint: "D",
+      group: "Actions",
+      run: async () => {
+        showView("doctor");
+        await refreshDoctorPage({ repair: false });
+      },
+    },
+    {
+      id: "refresh",
+      label: "Refresh current view",
+      hint: "R",
+      group: "Actions",
+      run: async () => {
+        await refreshAll();
+        showToast("Refreshed", "success");
+      },
+    },
+    {
+      id: "dumps-clear",
+      label: "Clear dumps",
+      hint: "",
+      group: "Actions",
+      run: async () => {
+        await api.clearDumps();
+        lastDumpsSignature = "";
+        await refreshDumps();
+        showToast("Dumps cleared", "success");
+      },
+    },
+  ];
+  return [...nav, ...siteCommands, ...actions];
+}
+
+async function openCommandPalette() {
+  const el = document.getElementById("command-palette");
+  const input = document.getElementById("command-palette-input");
+  if (!el || !input) return;
+  try {
+    const state = await api.getState();
+    window.__devtentPaletteHosts = state.virtualHosts || [];
+  } catch {
+    window.__devtentPaletteHosts = [];
+  }
+  paletteCommands = buildPaletteCommands();
+  el.classList.remove("hidden");
+  input.value = "";
+  paletteIndex = 0;
+  renderPaletteResults("");
+  input.focus();
+}
+
+function closeCommandPalette() {
+  document.getElementById("command-palette")?.classList.add("hidden");
+}
+
+function renderPaletteResults(query) {
+  const list = document.getElementById("command-palette-results");
+  if (!list) return;
+  const q = query.trim().toLowerCase();
+  const filtered = paletteCommands.filter(
+    (c) => !q || c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)
+  );
+  if (paletteIndex >= filtered.length) paletteIndex = Math.max(0, filtered.length - 1);
+  list.innerHTML = filtered
+    .map(
+      (c, i) => `<li class="command-palette-item${i === paletteIndex ? " active" : ""}" data-index="${i}" role="option">
+      <span class="command-palette-label">${escapeHtml(c.label)}</span>
+      <span class="command-palette-meta">${escapeHtml(c.group)}${c.hint ? ` · ${escapeHtml(c.hint)}` : ""}</span>
+    </li>`
+    )
+    .join("");
+  list.querySelectorAll(".command-palette-item").forEach((item) => {
+    item.onmouseenter = () => {
+      paletteIndex = Number(item.dataset.index);
+      renderPaletteResults(query);
+    };
+    item.onclick = () => void runPaletteCommand(filtered[Number(item.dataset.index)]);
+  });
+  list.dataset.filtered = JSON.stringify(filtered.map((c) => c.id));
+}
+
+async function runPaletteCommand(cmd) {
+  if (!cmd) return;
+  closeCommandPalette();
+  try {
+    await cmd.run();
+  } catch (err) {
+    showToast(err.message || String(err), "error");
+  }
+}
+
+function setupCommandPalette() {
+  const input = document.getElementById("command-palette-input");
+  document.getElementById("command-palette-backdrop")?.addEventListener("click", closeCommandPalette);
+  input?.addEventListener("input", () => {
+    paletteIndex = 0;
+    renderPaletteResults(input.value);
+  });
+  input?.addEventListener("keydown", (e) => {
+    const list = document.getElementById("command-palette-results");
+    const ids = JSON.parse(list?.dataset.filtered || "[]");
+    const filtered = ids.map((id) => paletteCommands.find((c) => c.id === id)).filter(Boolean);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      paletteIndex = Math.min(paletteIndex + 1, Math.max(0, filtered.length - 1));
+      renderPaletteResults(input.value);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      paletteIndex = Math.max(paletteIndex - 1, 0);
+      renderPaletteResults(input.value);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      void runPaletteCommand(filtered[paletteIndex]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeCommandPalette();
+    }
+  });
+}
+
+function setupKeyboardShortcuts() {
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target?.tagName || "").toLowerCase();
+    const typing = tag === "input" || tag === "textarea" || tag === "select" || e.target?.isContentEditable;
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (mod && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      const open = !document.getElementById("command-palette")?.classList.contains("hidden");
+      if (open) closeCommandPalette();
+      else openCommandPalette();
+      return;
+    }
+
+    if (e.key === "Escape") {
+      closeCommandPalette();
+      closeSiteDrawer();
+      return;
+    }
+
+    if (typing || mod || e.altKey) return;
+
+    if (e.key >= "1" && e.key <= "9") {
+      const view = PALETTE_VIEWS[Number(e.key) - 1];
+      if (view) {
+        e.preventDefault();
+        showView(view);
+      }
+      return;
+    }
+
+    const key = e.key.toLowerCase();
+    if (key === "r") {
+      e.preventDefault();
+      void refreshAll();
+    } else if (key === "s") {
+      e.preventDefault();
+      void withLoading(() => api.startAll(), "Starting services…").then(() => {
+        showToast("Services started", "success");
+        return refreshServices();
+      });
+    } else if (key === "d") {
+      e.preventDefault();
+      showView("doctor");
+      void refreshDoctorPage({ repair: false });
+    } else if (key === "/") {
+      e.preventDefault();
+      openCommandPalette();
+    }
+  });
 }
 
 boot().catch((err) => {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu, nativeImage } from "electron";
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, watch as watchFs } from "node:fs";
 import { registerIpcHandlers, refreshRoot, getCurrentRoot, setOpenDashboardHandler, setRequestQuitHandler, broadcastUpdateAvailable } from "./ipc-handlers.js";
 import { __dirname } from "./dir.js";
 import { setupTray, hideTrayPopup, setTrayRunning, getIconPath, destroyTray } from "./tray.js";
@@ -155,12 +155,34 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
   return mainWindow;
 }
 
+/** In unpackaged runs, reload windows when UI assets change (dev watcher copies into dist/ui). */
+function watchUiForDevReload(): void {
+  if (app.isPackaged) return;
+  const uiDir = path.join(__dirname, "ui");
+  if (!existsSync(uiDir)) return;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    watchFs(uiDir, { recursive: true }, () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) win.webContents.reloadIgnoringCache();
+        }
+      }, 120);
+    });
+  } catch (err) {
+    console.warn("UI reload watch unavailable:", err);
+  }
+}
+
 app.whenReady().then(async () => {
   if (isE2eSmoke) return;
 
   if (process.platform === "win32") {
     app.setAppUserModelId("dev.devtent.app");
   }
+
+  watchUiForDevReload();
 
   if (!wantsQuit && (await shouldExitForInstallInProgress(getDefaultRoot()))) {
     app.quit();

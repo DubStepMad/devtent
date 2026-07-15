@@ -14,6 +14,7 @@ function sleep(ms) {
 }
 
 function killDevTent() {
+  if (process.platform !== "win32") return;
   for (const image of ["DevTent.exe", "electron.exe"]) {
     try {
       execSync(`taskkill /F /IM ${image} /FI "USERNAME eq %USERNAME%"`, {
@@ -41,7 +42,12 @@ function tryRemoveDir(dir) {
 function copyInstallers(fromDir, toDir) {
   fs.mkdirSync(toDir, { recursive: true });
   for (const name of fs.readdirSync(fromDir)) {
-    if (!/^DevTent( Setup .+|\.Setup\.\d+\.\d+\.\d+)\.exe(\.blockmap)?$/i.test(name)) continue;
+    if (
+      !/^DevTent( Setup .+|\.Setup\.\d+\.\d+\.\d+)\.exe(\.blockmap)?$/i.test(name) &&
+      !/^DevTent-.+\.(dmg|zip|AppImage|deb)(\.blockmap)?$/i.test(name)
+    ) {
+      continue;
+    }
     fs.copyFileSync(path.join(fromDir, name), path.join(toDir, name));
     console.log(`Copied ${name} → release/`);
   }
@@ -58,10 +64,19 @@ function resolveElectronBuilderCli() {
   throw new Error("electron-builder not found — run npm install from the repo root.");
 }
 
-function runElectronBuilder(outputDir) {
+function resolveTargetFlag(argv) {
+  if (argv.includes("--mac") || argv.includes("--macos")) return "--mac";
+  if (argv.includes("--linux")) return "--linux";
+  if (argv.includes("--win") || argv.includes("--windows")) return "--win";
+  if (process.platform === "darwin") return "--mac";
+  if (process.platform === "linux") return "--linux";
+  return "--win";
+}
+
+function runElectronBuilder(outputDir, targetFlag) {
   const outputName = path.basename(outputDir);
   const builderCli = resolveElectronBuilderCli();
-  const args = [builderCli, "--win", `--config.directories.output=${outputName}`];
+  const args = [builderCli, targetFlag, `--config.directories.output=${outputName}`];
 
   const result = spawnSync(process.execPath, args, {
     cwd: projectDir,
@@ -84,33 +99,41 @@ function pickOutputDir() {
   killDevTent();
   sleep(500);
 
-  if (tryRemoveDir(winUnpacked)) {
-    return releaseDir;
+  if (process.platform === "win32") {
+    if (tryRemoveDir(winUnpacked)) {
+      return releaseDir;
+    }
+
+    if (tryRemoveDir(fallbackOutput)) {
+      console.warn("");
+      console.warn("Could not clear release/win-unpacked (file in use).");
+      console.warn("Using release-build/ for this build.");
+      console.warn("");
+      return fallbackOutput;
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const uniqueOutput = path.join(projectDir, `release-${stamp}`);
+    console.warn("");
+    console.warn("release/ and release-build/ are locked (app.asar in use).");
+    console.warn(`Using ${path.basename(uniqueOutput)}/ for this build.`);
+    console.warn("Close DevTent, Explorer windows, or your IDE preview of release/ and retry.");
+    console.warn("");
+    return uniqueOutput;
   }
 
-  if (tryRemoveDir(fallbackOutput)) {
-    console.warn("");
-    console.warn("Could not clear release/win-unpacked (file in use).");
-    console.warn("Using release-build/ for this build.");
-    console.warn("");
-    return fallbackOutput;
-  }
-
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const uniqueOutput = path.join(projectDir, `release-${stamp}`);
-  console.warn("");
-  console.warn("release/ and release-build/ are locked (app.asar in use).");
-  console.warn(`Using ${path.basename(uniqueOutput)}/ for this build.`);
-  console.warn("Close DevTent, Explorer windows, or your IDE preview of release/ and retry.");
-  console.warn("");
-  return uniqueOutput;
+  tryRemoveDir(releaseDir);
+  return releaseDir;
 }
 
 function main() {
-  execSync("node scripts/ensure-eb-nsis.cjs", { cwd: projectDir, stdio: "inherit" });
+  const targetFlag = resolveTargetFlag(process.argv.slice(2));
+  if (targetFlag === "--win") {
+    execSync("node scripts/ensure-eb-nsis.cjs", { cwd: projectDir, stdio: "inherit" });
+  }
 
   const outputDir = pickOutputDir();
-  runElectronBuilder(outputDir);
+  runElectronBuilder(outputDir, targetFlag);
 
   if (outputDir !== releaseDir) {
     copyInstallers(outputDir, releaseDir);

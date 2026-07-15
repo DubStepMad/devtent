@@ -5,10 +5,25 @@ import { resolvePhpPaths } from "./profile-runtime.js";
 
 export const DUMPS_LOG = "logs/dumps.jsonl";
 export const LARAVEL_QUERY_CAPTURE_MARKER = "DevTent live query capture";
+export const LARAVEL_TELEMETRY_MARKER = "DevTent live Laravel telemetry v2";
+export const CAPTURE_PHP_VERSION = 3;
+
+export type DumpEventType =
+  | "dump"
+  | "dd"
+  | "error"
+  | "exception"
+  | "query"
+  | "job"
+  | "view"
+  | "request"
+  | "log"
+  | "cache"
+  | "http";
 
 export interface DumpEvent {
   ts: number;
-  type: "dump" | "dd" | "error" | "exception" | "query";
+  type: DumpEventType;
   site?: string;
   message: string;
   file?: string;
@@ -18,13 +33,24 @@ export interface DumpEvent {
 
 const CAPTURE_PHP = `<?php
 declare(strict_types=1);
+// DevTent capture v${CAPTURE_PHP_VERSION}
 
 $root = getenv('DEVTENT_ROOT') ?: '';
 $logFile = $root !== '' ? $root . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR . 'dumps.jsonl' : '';
 
+function devtent_dump_site(): ?string {
+    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? null;
+    if (!is_string($host) || $host === '') return null;
+    return strtolower(preg_replace('/:\\d+$/', '', $host) ?: $host);
+}
+
 function devtent_dump_log(string $type, array $payload): void {
     global $logFile;
     if ($logFile === '') return;
+    $site = devtent_dump_site();
+    if ($site !== null && !isset($payload['site'])) {
+        $payload['site'] = $site;
+    }
     $line = json_encode(['ts' => microtime(true), 'type' => $type] + $payload, JSON_UNESCAPED_UNICODE);
     if ($line === false) return;
     @file_put_contents($logFile, $line . "\\n", FILE_APPEND | LOCK_EX);
@@ -64,7 +90,10 @@ export async function ensureDumpCaptureFiles(root: string): Promise<void> {
   await mkdir(resolvePath(root, "etc/php"), { recursive: true });
   await mkdir(resolvePath(root, "logs"), { recursive: true });
   const capturePhp = resolvePath(root, "etc/php/devtent-capture.php");
-  if (!(await pathExists(capturePhp))) {
+  const needsWrite =
+    !(await pathExists(capturePhp)) ||
+    !(await readFile(capturePhp, "utf-8")).includes(`capture v${CAPTURE_PHP_VERSION}`);
+  if (needsWrite) {
     await writeFile(capturePhp, CAPTURE_PHP, "utf-8");
   }
   const logPath = resolvePath(root, DUMPS_LOG);
@@ -155,26 +184,26 @@ export async function readDumpEvents(
   return events;
 }
 
-export async function clearDumpEvents(root: string): Promise<void> {
+export async function clearDumpEvents(
+  root: string,
+  options?: { types?: DumpEventType[] }
+): Promise<void> {
   await ensureDumpCaptureFiles(root);
-  await writeFile(resolvePath(root, DUMPS_LOG), "", "utf-8");
+  const logPath = resolvePath(root, DUMPS_LOG);
+  if (!options?.types?.length) {
+    await writeFile(logPath, "", "utf-8");
+    return;
+  }
+  const keep = new Set(options.types);
+  const events = await readDumpEvents(root);
+  const remaining = events.filter((e) => !keep.has(e.type));
+  const body = remaining.map((e) => JSON.stringify(e)).join("\n");
+  await writeFile(logPath, body ? body + "\n" : "", "utf-8");
 }
 
 export function laravelCaptureProviderSnippet(): string {
-  return `// ${LARAVEL_QUERY_CAPTURE_MARKER} — usually installed automatically by DevTent
+  return `// ${LARAVEL_TELEMETRY_MARKER} — usually installed automatically by DevTent
 // Add to App\\Providers\\AppServiceProvider::boot() if needed manually:
-if (app()->environment('local') && class_exists(\\Illuminate\\Support\\Facades\\DB::class)) {
-    \\Illuminate\\Support\\Facades\\DB::listen(function ($query) {
-        $log = (getenv('DEVTENT_ROOT') ?: '') . '/logs/dumps.jsonl';
-        if ($log === '/logs/dumps.jsonl') return;
-        $line = json_encode([
-            'ts' => microtime(true),
-            'type' => 'query',
-            'message' => $query->sql,
-            'context' => json_encode($query->bindings),
-        ]);
-        if ($line) @file_put_contents($log, $line . "\\n", FILE_APPEND | LOCK_EX);
-    });
-}
+// Captures queries, jobs, views, requests, logs, cache hits, and outbound HTTP.
 `;
 }

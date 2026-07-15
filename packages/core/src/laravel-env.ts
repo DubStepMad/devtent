@@ -2,6 +2,8 @@ import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import { loadProfile } from "./config.js";
 import { listVirtualHosts } from "./vhosts.js";
+import { binPath } from "./platform/binary.js";
+import { resolveDatabaseTargetFromProfile } from "./database-admin.js";
 import type { VirtualHost } from "./types.js";
 
 export interface LaravelEnvSnippet {
@@ -28,33 +30,26 @@ export async function buildLaravelEnvSnippet(
   lines.push(`APP_URL=${scheme}://${vhost.domain}`);
   lines.push("");
 
-  if (profile.database === "mysql") {
+  const db = resolveDatabaseTargetFromProfile(profile);
+  if (db.engine === "mysql" || db.engine === "mariadb") {
     lines.push("DB_CONNECTION=mysql");
-    lines.push("DB_HOST=127.0.0.1");
-    lines.push("DB_PORT=3306");
+    lines.push(`DB_HOST=${db.host}`);
+    lines.push(`DB_PORT=${db.port}`);
     lines.push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
-    lines.push("DB_USERNAME=root");
-    lines.push("DB_PASSWORD=");
+    lines.push(`DB_USERNAME=${db.user}`);
+    lines.push(`DB_PASSWORD=${db.password}`);
     lines.push("");
-  } else if (profile.database === "mariadb") {
-    lines.push("DB_CONNECTION=mysql");
-    lines.push("DB_HOST=127.0.0.1");
-    lines.push("DB_PORT=3307");
-    lines.push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
-    lines.push("DB_USERNAME=root");
-    lines.push("DB_PASSWORD=");
-    lines.push("");
-  } else if (profile.database === "postgresql") {
+  } else if (db.engine === "postgresql") {
     lines.push("DB_CONNECTION=pgsql");
-    lines.push("DB_HOST=127.0.0.1");
-    lines.push("DB_PORT=5432");
+    lines.push(`DB_HOST=${db.host}`);
+    lines.push(`DB_PORT=${db.port}`);
     lines.push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
-    lines.push("DB_USERNAME=postgres");
-    lines.push("DB_PASSWORD=");
+    lines.push(`DB_USERNAME=${db.user}`);
+    lines.push(`DB_PASSWORD=${db.password}`);
     lines.push("");
   }
 
-  const mailpitPath = resolvePath(root, "bin/mailpit/mailpit.exe");
+  const mailpitPath = resolvePath(root, binPath(["bin", "mailpit", "mailpit"]));
   const profileServices = profile.services ?? [];
   if (profileServices.includes("mailpit") && (await pathExists(mailpitPath))) {
     lines.push("MAIL_MAILER=smtp");

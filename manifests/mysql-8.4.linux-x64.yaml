@@ -1,0 +1,9 @@
+﻿name: mysql-8.4
+version: "8.4.4"
+description: MySQL 8.4 Community Server for Linux x64
+platform: linux
+arch: x64
+url: https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.4-linux-glibc2.28-x86_64.tar.xz
+installPath: bin/mysql
+binary: bin/mysqld
+downloadType: tar.xz

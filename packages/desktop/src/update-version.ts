@@ -2,10 +2,22 @@ export const GITHUB_OWNER = "DubStepMad";
 export const GITHUB_REPO = "devtent";
 export const INSTALLER_NAME_PREFIX = "DevTent Setup";
 const INSTALLER_DOT_NAME_PATTERN = /^DevTent\.Setup\.\d+\.\d+\.\d+\.exe$/i;
+const MAC_DMG_PATTERN = /^DevTent[- ].+\.dmg$/i;
+const MAC_ZIP_PATTERN = /^DevTent[- ].+\.zip$/i;
+const LINUX_APPIMAGE_PATTERN = /^DevTent[- ].+\.AppImage$/i;
+const LINUX_DEB_PATTERN = /^DevTent[- ].+\.deb$/i;
 
 export function isWindowsInstallerAssetName(name: string): boolean {
   if (!name.toLowerCase().endsWith(".exe")) return false;
   return name.startsWith(INSTALLER_NAME_PREFIX) || INSTALLER_DOT_NAME_PATTERN.test(name);
+}
+
+export function isMacInstallerAssetName(name: string): boolean {
+  return MAC_DMG_PATTERN.test(name) || MAC_ZIP_PATTERN.test(name);
+}
+
+export function isLinuxInstallerAssetName(name: string): boolean {
+  return LINUX_APPIMAGE_PATTERN.test(name) || LINUX_DEB_PATTERN.test(name);
 }
 
 export type GitHubReleaseAsset = {
@@ -60,16 +72,27 @@ export function validateReleaseDownloadUrl(url: string): string {
   return parsed.toString();
 }
 
-export function findInstallerAsset(release: GitHubRelease): { name: string; url: string } | null {
-  const asset = release.assets.find((a) => isWindowsInstallerAssetName(a.name));
-  if (!asset) return null;
-  return { name: asset.name, url: validateReleaseDownloadUrl(asset.browser_download_url) };
+export function findInstallerAsset(
+  release: GitHubRelease,
+  platform: NodeJS.Platform = process.platform
+): { name: string; url: string } | null {
+  const preferred =
+    platform === "darwin"
+      ? release.assets.find((a) => MAC_DMG_PATTERN.test(a.name)) ??
+        release.assets.find((a) => MAC_ZIP_PATTERN.test(a.name))
+      : platform === "linux"
+        ? release.assets.find((a) => LINUX_APPIMAGE_PATTERN.test(a.name)) ??
+          release.assets.find((a) => LINUX_DEB_PATTERN.test(a.name))
+        : release.assets.find((a) => isWindowsInstallerAssetName(a.name));
+
+  if (!preferred) return null;
+  return { name: preferred.name, url: validateReleaseDownloadUrl(preferred.browser_download_url) };
 }
 
 export function parseUpdateCheckFromRelease(
   release: GitHubRelease,
   currentVersion: string,
-  options?: { respectSkip?: boolean; skipVersion?: string }
+  options?: { respectSkip?: boolean; skipVersion?: string; platform?: NodeJS.Platform }
 ): {
   status: "up-to-date" | "available" | "error";
   latestVersion: string;
@@ -85,15 +108,18 @@ export function parseUpdateCheckFromRelease(
   };
   message?: string;
 } {
+  const platform = options?.platform ?? process.platform;
   const latestVersion = normalizeVersion(release.tag_name);
-  const installer = findInstallerAsset(release);
+  const installer = findInstallerAsset(release, platform);
+  const platformLabel =
+    platform === "darwin" ? "macOS" : platform === "linux" ? "Linux" : "Windows";
 
   if (!installer) {
     return {
       status: "error",
       latestVersion,
       releaseUrl: release.html_url,
-      message: `Release v${latestVersion} has no Windows installer attached.`,
+      message: `Release v${latestVersion} has no ${platformLabel} installer attached.`,
     };
   }
 

@@ -20,7 +20,11 @@ export function getProfileServiceIds(profile: Profile): string[] {
   const normalized = normalizeProfile(profile);
   const ids: string[] = ["php-fpm"];
   ids.push(normalized.webServer === "apache" ? "apache" : "nginx");
-  if (normalized.database && normalized.database !== "none") {
+  if (
+    normalized.database &&
+    normalized.database !== "none" &&
+    normalized.database !== "external"
+  ) {
     ids.push(normalized.database);
   }
   for (const id of normalized.services ?? []) {
@@ -60,10 +64,16 @@ export async function previewProfileSwitch(
   const profile = normalizeProfile(await loadProfile(root, profileName));
   const targetServiceIds = getProfileServiceIds(profile);
   const allowed = new Set(targetServiceIds);
-  const { getServiceStatuses } = await import("./services.js");
-  const runningToStop = getServiceStatuses()
+  const { getServiceStatuses, isPhpStackServiceName } = await import("./services.js");
+  const statuses = getServiceStatuses();
+  const runningToStop = statuses
     .filter((s) => s.running)
     .map((s) => s.name)
-    .filter((name) => !allowed.has(name));
+    .filter((name) => {
+      if (name === "php-fpm") return false; // synthetic aggregate
+      if (allowed.has(name)) return false;
+      if (allowed.has("php-fpm") && isPhpStackServiceName(name)) return false;
+      return true;
+    });
   return { runningToStop, targetServiceIds };
 }

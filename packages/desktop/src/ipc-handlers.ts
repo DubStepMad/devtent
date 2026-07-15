@@ -71,6 +71,12 @@ export function getCurrentRoot(): string {
 export async function refreshRoot(): Promise<string> {
   const settings = await loadSettings();
   currentRoot = settings.root;
+  try {
+    const core = await loadCore();
+    await core.ensureLocalDnsFromState?.(currentRoot);
+  } catch {
+    // optional — DNS may be unavailable
+  }
   return currentRoot;
 }
 
@@ -335,9 +341,87 @@ export function registerIpcHandlers(): void {
     return await (await loadCore()).readDumpEvents(currentRoot, { tail: tail ?? 200 });
   });
 
-  ipcMain.handle("devtent:clearDumps", async () => {
-    await (await loadCore()).clearDumpEvents(currentRoot);
+  ipcMain.handle("devtent:clearDumps", async (_e, types?: string[]) => {
+    await (await loadCore()).clearDumpEvents(
+      currentRoot,
+      Array.isArray(types) && types.length ? { types: types as never } : undefined
+    );
     return { ok: true };
+  });
+
+  ipcMain.handle("devtent:listDatabases", async () => {
+    return await (await loadCore()).listDatabases(currentRoot);
+  });
+
+  ipcMain.handle("devtent:createDatabase", async (_e, name: string) => {
+    return await (await loadCore()).createDatabase(currentRoot, name);
+  });
+
+  ipcMain.handle("devtent:getDatabaseAdminStatus", async () => {
+    return await (await loadCore()).getDatabaseAdminStatus(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listInstalledPhpVersions", async () => {
+    return await (await loadCore()).listInstalledPhpVersions(currentRoot);
+  });
+
+  ipcMain.handle("devtent:getActivePhpVersion", async () => {
+    return await (await loadCore()).getActivePhpVersion(currentRoot);
+  });
+
+  ipcMain.handle("devtent:readPhpIni", async (_e, phpVersion: string) => {
+    return await (await loadCore()).readPhpIni(currentRoot, phpVersion);
+  });
+
+  ipcMain.handle("devtent:writePhpIni", async (_e, phpVersion: string, content: string) => {
+    return await (await loadCore()).writePhpIni(currentRoot, phpVersion, content);
+  });
+
+  ipcMain.handle(
+    "devtent:setPhpExtension",
+    async (_e, phpVersion: string, extensionName: string, enabled: boolean) => {
+      return await (await loadCore()).setPhpExtension(currentRoot, phpVersion, extensionName, enabled);
+    }
+  );
+
+  ipcMain.handle("devtent:backupMariaDb", async () => {
+    sendProgress("Backing up MariaDB…");
+    return await (await loadCore()).backupMariaDb(currentRoot, "manual", sendProgress);
+  });
+
+  ipcMain.handle("devtent:listMariaDbBackups", async () => {
+    return await (await loadCore()).listMariaDbBackups(currentRoot);
+  });
+
+  ipcMain.handle("devtent:backupPostgres", async () => {
+    sendProgress("Backing up PostgreSQL…");
+    return await (await loadCore()).backupPostgres(currentRoot, "manual", sendProgress);
+  });
+
+  ipcMain.handle("devtent:listPostgresBackups", async () => {
+    return await (await loadCore()).listPostgresBackups(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listSiteWorkers", async () => {
+    return await (await loadCore()).listSiteWorkers(currentRoot);
+  });
+
+  ipcMain.handle(
+    "devtent:setSiteWorker",
+    async (_e, siteName: string, kind: "queue" | "vite", enabled: boolean) => {
+      const result = await (await loadCore()).setSiteWorker(currentRoot, siteName, kind, enabled);
+      broadcastRefresh();
+      return result;
+    }
+  );
+
+  ipcMain.handle("devtent:hasLaravelQueryCapture", async (_e, siteName: string) => {
+    await refreshRoot();
+    const vhosts = await (await loadCore()).listVirtualHosts(currentRoot);
+    const vhost = vhosts.find((v) => v.name === siteName);
+    if (!vhost) throw new Error(`Site not found: ${siteName}`);
+    const projectPath = vhost.projectPath ?? path.join(currentRoot, "www", vhost.name);
+    return await (await loadCore()).hasLaravelQueryCapture(projectPath);
   });
 
   ipcMain.handle("devtent:startShare", async (_e, siteName: string) => {
@@ -358,6 +442,89 @@ export function registerIpcHandlers(): void {
       currentRoot,
       vhosts.map((v) => ({ name: v.name, domain: v.domain }))
     );
+  });
+
+  ipcMain.handle("devtent:cloudflareLogin", async () => {
+    sendProgress("Cloudflare login…");
+    return await (await loadCore()).loginCloudflare(currentRoot, getManifestsDir(), sendProgress);
+  });
+
+  ipcMain.handle("devtent:cloudflareLoginStatus", async () => {
+    return await (await loadCore()).cloudflareLoginStatus(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listNamedTunnels", async () => {
+    return await (await loadCore()).listNamedTunnels(currentRoot);
+  });
+
+  ipcMain.handle("devtent:createNamedTunnel", async (_e, name: string) => {
+    sendProgress(`Creating tunnel ${name}…`);
+    return await (await loadCore()).createNamedTunnel(currentRoot, getManifestsDir(), name, sendProgress);
+  });
+
+  ipcMain.handle(
+    "devtent:configureNamedTunnel",
+    async (_e, tunnelName: string, siteName: string, hostname: string) => {
+      sendProgress(`Configuring ${tunnelName}…`);
+      return await (await loadCore()).configureNamedTunnel(
+        currentRoot,
+        getManifestsDir(),
+        tunnelName,
+        { siteName, hostname },
+        sendProgress
+      );
+    }
+  );
+
+  ipcMain.handle("devtent:startNamedTunnel", async (_e, tunnelName: string) => {
+    sendProgress(`Starting tunnel ${tunnelName}…`);
+    return await (await loadCore()).startNamedTunnel(
+      currentRoot,
+      getManifestsDir(),
+      tunnelName,
+      sendProgress
+    );
+  });
+
+  ipcMain.handle("devtent:stopNamedTunnel", async (_e, tunnelName: string) => {
+    await (await loadCore()).stopNamedTunnel(tunnelName);
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:deleteNamedTunnel", async (_e, tunnelName: string) => {
+    await (await loadCore()).deleteNamedTunnel(
+      currentRoot,
+      getManifestsDir(),
+      tunnelName,
+      sendProgress
+    );
+    return { ok: true };
+  });
+
+  ipcMain.handle("devtent:getLocalDnsStatus", async () => {
+    return await (await loadCore()).getLocalDnsStatus(currentRoot);
+  });
+
+  ipcMain.handle("devtent:startLocalDns", async () => {
+    return await (await loadCore()).startLocalDns(currentRoot);
+  });
+
+  ipcMain.handle("devtent:stopLocalDns", async () => {
+    return await (await loadCore()).stopLocalDns(currentRoot);
+  });
+
+  ipcMain.handle("devtent:installLocalDnsResolver", async () => {
+    return await (await loadCore()).installLocalDnsResolver(currentRoot);
+  });
+
+  ipcMain.handle("devtent:getMkcertCaStatus", async () => {
+    return await (await loadCore()).getMkcertCaStatus(currentRoot);
+  });
+
+  ipcMain.handle("devtent:trustMkcertCa", async () => {
+    sendProgress("Trusting local CA…");
+    const message = await (await loadCore()).installMkcertCa(currentRoot);
+    return { ok: true, message };
   });
 
   ipcMain.handle("devtent:setTld", async (_e, tld: string) => {
@@ -493,7 +660,14 @@ export function registerIpcHandlers(): void {
         description?: string;
         phpVersion?: string;
         webServer?: "nginx" | "apache";
-        database?: "mysql" | "postgresql" | "none";
+        database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
+        databaseConnection?: {
+          engine: "mysql" | "mariadb" | "postgresql";
+          host: string;
+          port: number;
+          user: string;
+          password?: string;
+        };
         services?: ("redis" | "mailpit")[];
       }
     ) => {
@@ -512,7 +686,14 @@ export function registerIpcHandlers(): void {
         description?: string;
         phpVersion?: string;
         webServer?: "nginx" | "apache";
-        database?: "mysql" | "postgresql" | "none";
+        database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
+        databaseConnection?: {
+          engine: "mysql" | "mariadb" | "postgresql";
+          host: string;
+          port: number;
+          user: string;
+          password?: string;
+        };
         services?: ("redis" | "mailpit")[];
       }
     ) => {

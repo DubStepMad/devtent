@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, writeFile, rm, stat } from "node:fs/promises"
 import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
 import { isServiceRunning } from "./services.js";
+import { binaryName } from "./platform/binary.js";
 
 export const MYSQL_BACKUP_DIR = "data/backups/mysql";
 export const BACKUP_RETENTION_DAYS = 7;
@@ -17,9 +18,10 @@ export interface MysqlBackupInfo {
 }
 
 async function findMysqlBinary(root: string, name: string): Promise<string | null> {
+  const file = binaryName(name);
   const candidates = [
-    resolvePath(root, `bin/mysql/bin/${name}`),
-    resolvePath(root, `bin/mysql/${name}`),
+    resolvePath(root, `bin/mysql/bin/${file}`),
+    resolvePath(root, `bin/mysql/${file}`),
   ];
   for (const candidate of candidates) {
     if (await pathExists(candidate)) return candidate;
@@ -72,9 +74,9 @@ export async function initializeMysql(root: string, onProgress?: (msg: string) =
     return;
   }
 
-  const mysqld = await findMysqlBinary(root, "mysqld.exe");
+  const mysqld = await findMysqlBinary(root, "mysqld");
   if (!mysqld) {
-    throw new Error("mysqld.exe not found — install MySQL via Quick Add first");
+    throw new Error(`${binaryName("mysqld")} not found — install MySQL via Quick Add first`);
   }
 
   await mkdir(resolvePath(root, "data/mysql"), { recursive: true });
@@ -90,9 +92,9 @@ export async function backupMysql(
   onProgress?: (msg: string) => void
 ): Promise<MysqlBackupInfo | null> {
   const log = onProgress ?? (() => {});
-  const mysqldump = await findMysqlBinary(root, "mysqldump.exe");
+  const mysqldump = await findMysqlBinary(root, "mysqldump");
   if (!mysqldump) {
-    log("mysqldump.exe not found — skip backup");
+    log(`${binaryName("mysqldump")} not found — skip backup`);
     return null;
   }
 
@@ -182,9 +184,9 @@ export async function restoreMysql(
     return { success: false, message: `SQL dump missing in backup ${backupId}` };
   }
 
-  const mysql = await findMysqlBinary(root, "mysql.exe");
+  const mysql = await findMysqlBinary(root, "mysql");
   if (!mysql) {
-    return { success: false, message: "mysql.exe not found — install MySQL via Quick Add first" };
+    return { success: false, message: `${binaryName("mysql")} not found — install MySQL via Quick Add first` };
   }
 
   if (!isServiceRunning("mysql")) {

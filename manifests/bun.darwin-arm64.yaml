@@ -1,0 +1,9 @@
+﻿name: bun
+version: "1.2.19"
+description: Bun — fast JavaScript runtime and package manager
+platform: darwin
+arch: arm64
+url: https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-darwin-aarch64.zip
+installPath: bin/bun
+binary: bun
+archiveSubdir: bun-darwin-aarch64

@@ -43,7 +43,7 @@
   <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <span class="logo-sm"><img src="app-icon.png" width="24" height="24" alt=""></span>
+        <span class="logo-sm"><img src="app-icon.png" width="40" height="40" alt=""></span>
         <span>DevTent</span>
       </div>
       <nav class="sidebar-nav">
@@ -61,11 +61,19 @@
           <button class="nav-item" data-view="services">Services</button>
           <button class="nav-item" data-view="logs">Logs</button>
           <button class="nav-item" data-view="tooling">Tooling</button>
+          <button class="nav-item" data-view="mail">Mail</button>
           <button class="nav-item" data-view="dumps">Dumps</button>
+          <button class="nav-item" data-view="database">Database</button>
+          <button class="nav-item" data-view="php-ini">PHP</button>
           <button class="nav-item" data-view="quick-add">Quick Add</button>
         </div>
         <div class="nav-group">
-          <span class="nav-group-label">Config</span>
+          <span class="nav-group-label">Integrations</span>
+          <button class="nav-item" data-view="share">Share</button>
+        </div>
+        <div class="nav-group">
+          <span class="nav-group-label">System</span>
+          <button class="nav-item" data-view="doctor">Doctor</button>
           <button class="nav-item" data-view="profiles">Profiles</button>
           <button class="nav-item" data-view="settings">Settings<span class="nav-update-dot hidden" id="nav-update-dot" aria-hidden="true"></span></button>
         </div>
@@ -85,6 +93,7 @@
           <button type="button" class="btn secondary sm update-available-btn hidden" id="btn-update-available" title="Open update details">
             Update available
           </button>
+          <button type="button" class="btn secondary sm topbar-kbd" id="btn-command-palette" title="Command palette">Ctrl+K</button>
           <button class="btn success" id="btn-start-all">▶ Start All</button>
           <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
         </div>
@@ -113,10 +122,14 @@
           <div class="panel">
             <div class="panel-heading-row">
               <h3>Environment health</h3>
-              <button type="button" class="btn secondary sm" id="btn-run-doctor">Run doctor</button>
+              <button type="button" class="btn secondary sm" id="btn-open-doctor">Open Doctor</button>
             </div>
             <ul id="health-list" class="health-list panel-desc"></ul>
             <p id="doctor-result" class="panel-desc settings-hint hidden"></p>
+          </div>
+          <div class="panel">
+            <h3>Serving</h3>
+            <div id="dashboard-site-chips" class="site-chip-row empty-hint">No sites yet — create one in Quick App or park a folder</div>
           </div>
           <div class="panel">
             <h3>Recent projects</h3>
@@ -125,12 +138,90 @@
           <div class="panel">
             <h3>Getting started</h3>
             <ol class="steps">
-              <li>On first run, enable <strong>Install recommended stack</strong> in setup — or use <strong>Quick Add</strong> manually</li>
+              <li>Install the recommended stack (setup checkbox or <strong>Quick Add</strong>)</li>
               <li>Start services from the toolbar or <strong>Services</strong></li>
-              <li>Create or drop projects in <strong>Projects</strong> / <code>www/</code></li>
-              <li>Sync virtual hosts and open <code>myapp.test</code> in your browser</li>
+              <li>Drop projects in <code>www/</code>, park a folder, or use <strong>Quick App</strong></li>
+              <li>Open <code>myapp.localhost</code> — no hosts-file admin needed</li>
             </ol>
             <button class="btn secondary" id="btn-install-recommended-stack">Install recommended stack</button>
+          </div>
+        </section>
+
+        <section id="view-doctor" class="view-panel hidden">
+          <div class="view-intro">
+            <p>Diagnostics and safe repairs — same checks as <code>devtent doctor</code>. Fix stack config without digging through logs first.</p>
+          </div>
+          <div class="toolbar">
+            <button type="button" class="btn primary" id="btn-doctor-check">Re-check</button>
+            <button type="button" class="btn secondary" id="btn-doctor-fix">Run safe fixes</button>
+          </div>
+          <div class="panel doctor-tools">
+            <h3>Local CA &amp; DNS</h3>
+            <p id="doctor-ca-status" class="panel-desc">Checking mkcert CA…</p>
+            <p id="doctor-dns-status" class="panel-desc">Checking local DNS…</p>
+            <div class="toolbar">
+              <button type="button" class="btn secondary sm" id="btn-doctor-trust-ca">Trust local CA</button>
+              <button type="button" class="btn secondary sm" id="btn-doctor-dns-start">Start local DNS</button>
+              <button type="button" class="btn secondary sm" id="btn-doctor-dns-stop">Stop local DNS</button>
+              <button type="button" class="btn secondary sm" id="btn-doctor-dns-resolver">Install OS resolver</button>
+            </div>
+          </div>
+          <div id="doctor-all-clear" class="panel empty-state hidden">
+            <h3>All clear</h3>
+            <p class="panel-desc">No problems found. Stack configs and health checks look good.</p>
+          </div>
+          <ul id="doctor-findings" class="doctor-findings"></ul>
+          <p id="doctor-page-result" class="panel-desc settings-hint hidden"></p>
+        </section>
+
+        <section id="view-mail" class="view-panel hidden">
+          <div class="view-intro">
+            <p>Catch outgoing mail with <strong>Mailpit</strong> — nothing leaves your machine. Point Laravel at <code>127.0.0.1:1025</code> and preview messages in the web UI.</p>
+          </div>
+          <div class="panel">
+            <h3>Mailpit</h3>
+            <p id="mail-status" class="panel-desc">Checking Mailpit…</p>
+            <div class="toolbar">
+              <button type="button" class="btn primary" id="btn-mail-open">Open Mailpit UI</button>
+              <button type="button" class="btn secondary" id="btn-mail-start">Start Mailpit</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Laravel .env</h3>
+            <p class="panel-desc settings-hint">Paste into your app to capture mail locally.</p>
+            <pre id="mail-env-snippet" class="code-block">MAIL_MAILER=smtp
+MAIL_HOST=127.0.0.1
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS=hello@example.com
+MAIL_FROM_NAME="${APP_NAME}"</pre>
+            <button type="button" class="btn secondary sm" id="btn-mail-copy-env">Copy .env block</button>
+          </div>
+        </section>
+
+        <section id="view-share" class="view-panel hidden">
+          <div class="view-intro">
+            <p>Quick tunnels for one-off demos, or <strong>named Cloudflare tunnels</strong> with a stable hostname. Installs <code>cloudflared</code> on first use.</p>
+          </div>
+          <div class="panel">
+            <h3>Active quick shares</h3>
+            <ul id="share-active-list" class="item-list empty-hint">No active public tunnels</ul>
+          </div>
+          <div class="panel">
+            <h3>Share a site (quick tunnel)</h3>
+            <ul id="share-sites-list" class="project-list"></ul>
+            <p id="share-sites-empty" class="empty-hint hidden">No sites yet — add one under Projects first.</p>
+          </div>
+          <div class="panel">
+            <h3>Named tunnels</h3>
+            <p id="share-cf-status" class="panel-desc">Checking Cloudflare login…</p>
+            <div class="toolbar">
+              <button type="button" class="btn secondary sm" id="btn-share-cf-login">Cloudflare login</button>
+              <button type="button" class="btn secondary sm" id="btn-share-named-create">Create tunnel…</button>
+            </div>
+            <ul id="share-named-list" class="item-list empty-hint">No named tunnels yet</ul>
           </div>
         </section>
 
@@ -177,7 +268,45 @@
           </div>
           <p id="hosts-helper-hint" class="panel-desc hidden"></p>
           <ul id="projects-list" class="project-list"></ul>
-          <p id="projects-empty" class="empty-hint">No sites yet. Create one in Quick App, drop a folder into www/, park a folder, or link an external project.</p>
+          <div id="projects-empty" class="empty-state hidden">
+            <div class="empty-state-icon">◇</div>
+            <p class="empty-state-title">No sites yet</p>
+            <p class="empty-state-desc">Create one in Quick App, drop a folder into <code>www/</code>, park a folder, or link an external project.</p>
+            <button type="button" class="btn primary sm" id="btn-projects-empty-quick-app">Create with Quick App</button>
+          </div>
+
+          <div id="site-drawer" class="site-drawer hidden" aria-hidden="true">
+            <div class="site-drawer-backdrop" id="site-drawer-backdrop"></div>
+            <aside class="site-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="site-drawer-title">
+              <header class="site-drawer-header">
+                <div>
+                  <h3 id="site-drawer-title">Site</h3>
+                  <p id="site-drawer-url" class="panel-desc"></p>
+                </div>
+                <button type="button" class="btn secondary sm" id="site-drawer-close" aria-label="Close">✕</button>
+              </header>
+              <div class="site-drawer-body">
+                <div class="form-row">
+                  <label for="site-drawer-php">PHP version</label>
+                  <select id="site-drawer-php" class="text-input"></select>
+                </div>
+                <p id="site-drawer-telemetry" class="panel-desc settings-hint">Telemetry: —</p>
+                <div class="site-drawer-toggles">
+                  <label class="toggle-row"><input type="checkbox" id="site-drawer-queue"> Queue worker</label>
+                  <label class="toggle-row"><input type="checkbox" id="site-drawer-vite"> Vite worker</label>
+                </div>
+                <div class="site-drawer-actions">
+                  <button type="button" class="btn primary sm" id="site-drawer-open">Open site</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-folder">Folder</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-ssl">Enable SSL</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-share">Share</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-laravel-env">Laravel .env</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-install-telemetry">Install telemetry</button>
+                  <button type="button" class="btn secondary sm" id="site-drawer-create-db">Create matching DB</button>
+                </div>
+              </div>
+            </aside>
+          </div>
 
           <div class="panel sites-panel">
             <h3>Parked folders</h3>
@@ -203,7 +332,7 @@
 
         <section id="view-quick-app" class="view-panel hidden">
           <div class="view-intro">
-            <p>Scaffold a new site in <code>www/</code>. Laravel projects get <strong>automatic SQL query capture</strong> in the Dumps tab.</p>
+            <p>Scaffold a new site in <code>www/</code>. Laravel projects get <strong>automatic telemetry capture</strong> (queries, jobs, views, requests, and more) in the Dumps tab.</p>
           </div>
           <div class="form-row">
             <label>Template</label>
@@ -226,30 +355,117 @@
 
         <section id="view-dumps" class="view-panel hidden">
           <div class="view-intro">
-            <p>Live <code>dump()</code>, <code>dd()</code>, errors, and Laravel queries. SQL is captured automatically for Laravel apps created with Quick App or after running <strong>Run doctor</strong>.</p>
+            <p>Live <code>dump()</code>, errors, and Laravel telemetry (queries, jobs, views, requests, logs, cache, HTTP). Wired via AppServiceProvider listeners — not a native PHP extension. Quick App and <strong>Doctor → safe fixes</strong> install capture automatically.</p>
           </div>
-          <div class="toolbar dumps-toolbar">
+          <div class="toolbar dumps-toolbar dumps-toolbar-filters">
             <div class="chip-group" role="group" aria-label="Filter dumps">
               <button type="button" class="chip active" data-dump-filter="all">All</button>
               <button type="button" class="chip" data-dump-filter="dump">dump</button>
-              <button type="button" class="chip" data-dump-filter="dd">dd</button>
               <button type="button" class="chip" data-dump-filter="query">query</button>
+              <button type="button" class="chip" data-dump-filter="job">job</button>
+              <button type="button" class="chip" data-dump-filter="request">request</button>
+              <button type="button" class="chip" data-dump-filter="view">view</button>
+              <button type="button" class="chip" data-dump-filter="log">log</button>
+              <button type="button" class="chip" data-dump-filter="cache">cache</button>
+              <button type="button" class="chip" data-dump-filter="http">http</button>
               <button type="button" class="chip" data-dump-filter="error">errors</button>
             </div>
+          </div>
+          <div class="toolbar dumps-toolbar">
+            <input type="search" id="dumps-search" class="text-input dumps-search" placeholder="Search dumps…" autocomplete="off">
+            <select id="dumps-site-filter" class="text-input dumps-site-filter" aria-label="Filter by site">
+              <option value="">All sites</option>
+            </select>
             <div class="toolbar-spacer"></div>
+            <button type="button" class="btn secondary sm" id="btn-dumps-clear-type">Clear type</button>
             <button type="button" class="btn secondary sm" id="btn-dumps-refresh">Refresh</button>
-            <button type="button" class="btn secondary sm" id="btn-dumps-clear">Clear</button>
+            <button type="button" class="btn secondary sm" id="btn-dumps-clear">Clear all</button>
             <label class="log-follow">
               <input type="checkbox" id="dumps-follow" checked>
               Follow
             </label>
           </div>
+          <div class="toolbar dumps-toolbar dumps-telemetry-toolbar">
+            <label class="dumps-telemetry-label" for="dumps-telemetry-site">Install Laravel telemetry</label>
+            <select id="dumps-telemetry-site" class="text-input" aria-label="Site for telemetry">
+              <option value="">Select a site…</option>
+            </select>
+            <button type="button" class="btn secondary sm" id="btn-dumps-install-telemetry">Install</button>
+          </div>
           <div id="dumps-viewer" class="log-viewer dumps-viewer" aria-live="polite">
             <div class="empty-state">
               <div class="empty-state-icon">◇</div>
               <p class="empty-state-title">No dumps yet</p>
-              <p class="empty-state-desc">Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly.</p>
+              <p class="empty-state-desc">Visit a site and call <code>dump($var)</code> in PHP — output appears here instantly. For Laravel queries and jobs, install telemetry below.</p>
             </div>
+          </div>
+        </section>
+
+        <section id="view-database" class="view-panel hidden">
+          <div class="view-intro">
+            <p>List and create databases on the active profile engine (managed or external). Backups cover managed MySQL, MariaDB, and PostgreSQL only.</p>
+          </div>
+          <div class="panel">
+            <h3>Status</h3>
+            <p id="database-status" class="panel-desc">Checking database…</p>
+          </div>
+          <div class="panel">
+            <div class="panel-heading-row">
+              <h3>Databases</h3>
+              <button type="button" class="btn secondary sm" id="btn-database-refresh">Refresh</button>
+            </div>
+            <ul id="database-list" class="db-list empty-hint">No databases</ul>
+            <form id="database-create-form" class="form-row inline database-create-form">
+              <input type="text" id="database-create-name" class="text-input" placeholder="database_name" autocomplete="off" required>
+              <button type="submit" class="btn primary sm" id="btn-database-create">Create database</button>
+            </form>
+          </div>
+          <div class="panel">
+            <h3>Backups</h3>
+            <div class="toolbar">
+              <button type="button" class="btn secondary sm" id="btn-backup-mysql-page">Backup MySQL</button>
+              <button type="button" class="btn secondary sm" id="btn-backup-mariadb">Backup MariaDB</button>
+              <button type="button" class="btn secondary sm" id="btn-backup-postgres">Backup PostgreSQL</button>
+            </div>
+            <div class="db-backup-grid">
+              <div>
+                <h4 class="db-backup-heading">MySQL</h4>
+                <ul id="mysql-backups-page-list" class="backup-list panel-desc">No backups yet</ul>
+              </div>
+              <div>
+                <h4 class="db-backup-heading">MariaDB</h4>
+                <ul id="mariadb-backups-list" class="backup-list panel-desc">No backups yet</ul>
+              </div>
+              <div>
+                <h4 class="db-backup-heading">PostgreSQL</h4>
+                <ul id="postgres-backups-list" class="backup-list panel-desc">No backups yet</ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-php-ini" class="view-panel hidden">
+          <div class="view-intro">
+            <p>Edit <code>php.ini</code> and common extensions for each installed PHP version. Restart PHP (or Start All) after changes.</p>
+          </div>
+          <div class="panel">
+            <div class="form-row inline">
+              <label for="php-ini-version">PHP version</label>
+              <select id="php-ini-version" class="text-input" aria-label="PHP version"></select>
+              <span id="php-ini-active-hint" class="panel-desc settings-hint"></span>
+            </div>
+            <p id="php-ini-path" class="panel-desc mono settings-hint"></p>
+          </div>
+          <div class="panel">
+            <h3>Extensions</h3>
+            <div id="php-ini-extensions" class="php-ext-grid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-heading-row">
+              <h3>Raw php.ini</h3>
+              <button type="button" class="btn primary sm" id="btn-php-ini-save">Save</button>
+            </div>
+            <textarea id="php-ini-content" class="code-block php-ini-editor" rows="18" spellcheck="false"></textarea>
           </div>
         </section>
 
@@ -290,7 +506,7 @@
         </section>
 
         <section id="view-profiles" class="view-panel hidden">
-          <p class="panel-desc">Profiles choose which PHP version and services are active. Only one PHP version runs at a time — switch profiles to change it.</p>
+          <p class="panel-desc">Profiles pick your default PHP, web server, and database. You can still pin a different PHP version per site on the Projects page — multiple versions run side by side.</p>
           <div class="toolbar">
             <button type="button" class="btn primary" id="btn-new-profile">New profile</button>
           </div>
@@ -318,11 +534,39 @@
                 <input type="checkbox" id="profile-service-database" checked>
                 <span class="profile-service-label">Database</span>
                 <select id="profile-database-type" class="text-input profile-service-option">
-                  <option value="mysql">MySQL</option>
-                  <option value="mariadb">MariaDB</option>
-                  <option value="postgresql">PostgreSQL</option>
+                  <option value="mysql">MySQL (managed)</option>
+                  <option value="mariadb">MariaDB (managed)</option>
+                  <option value="postgresql">PostgreSQL (managed)</option>
+                  <option value="external">External (NAS / remote)</option>
                 </select>
               </label>
+              <div id="profile-external-db" class="profile-external-db hidden">
+                <p class="panel-desc settings-hint">Connect to a database you already run — e.g. MariaDB on a NAS. DevTent will not start a local database service.</p>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Dialect</span>
+                  <select id="profile-db-engine" class="text-input">
+                    <option value="mariadb">MariaDB</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="postgresql">PostgreSQL</option>
+                  </select>
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Host</span>
+                  <input type="text" id="profile-db-host" class="text-input" placeholder="nas.local or 192.168.1.10" autocomplete="off">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Port</span>
+                  <input type="number" id="profile-db-port" class="text-input" min="1" max="65535" placeholder="3306">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">User</span>
+                  <input type="text" id="profile-db-user" class="text-input" placeholder="root" autocomplete="off">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Password</span>
+                  <input type="password" id="profile-db-password" class="text-input" placeholder="(optional)" autocomplete="new-password">
+                </div>
+              </div>
               <label class="profile-service-toggle">
                 <input type="checkbox" id="profile-service-redis">
                 <span class="profile-service-label">Redis</span>
@@ -354,10 +598,10 @@
               <div class="settings-section active" data-settings-section="general">
                 <div class="panel">
                   <h3>Startup</h3>
-                  <p class="panel-desc">Control how DevTent behaves when you sign in to Windows and when the app opens.</p>
+                  <p class="panel-desc">Control how DevTent behaves when you sign in and when the app opens.</p>
                   <label class="settings-check" id="settings-launch-at-login-wrap">
                     <input type="checkbox" id="settings-launch-at-login">
-                    <span>Start DevTent when Windows starts</span>
+                    <span>Start DevTent when you log in</span>
                   </label>
                   <p class="panel-desc settings-hint" id="settings-launch-at-login-hint">Opens to the system tray only — no dashboard window on boot.</p>
                   <label class="settings-check">
@@ -506,17 +750,25 @@
   <div id="onboarding-overlay" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
     <div class="update-dialog onboarding-dialog">
       <h2 id="onboarding-title">Your first project</h2>
-      <p class="panel-desc">Let's get a site running at <code>demo.test</code>.</p>
+      <p class="panel-desc">Get a site live at <code>demo.localhost</code> — no hosts-file admin required.</p>
       <ol id="onboarding-steps" class="onboarding-steps">
         <li id="onboarding-step-1">Create demo project</li>
         <li id="onboarding-step-2">Sync virtual hosts</li>
-        <li id="onboarding-step-3">Update hosts file</li>
-        <li id="onboarding-step-4">Open in browser</li>
+        <li id="onboarding-step-3">Open in browser</li>
       </ol>
       <div class="update-actions">
         <button class="btn primary" id="btn-onboarding-run">Run setup steps</button>
         <button class="btn secondary" id="btn-onboarding-skip">Skip for now</button>
       </div>
+    </div>
+  </div>
+
+  <div id="command-palette" class="command-palette hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="command-palette-backdrop" id="command-palette-backdrop"></div>
+    <div class="command-palette-panel">
+      <input type="search" id="command-palette-input" class="command-palette-input" placeholder="Jump to a page or run a command…" autocomplete="off" spellcheck="false">
+      <ul id="command-palette-results" class="command-palette-results" role="listbox"></ul>
+      <p class="command-palette-hint"><kbd>Ctrl</kbd><kbd>K</kbd> open · <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Enter</kbd> · <kbd>Esc</kbd> · <kbd>1</kbd>–<kbd>9</kbd> views</p>
     </div>
   </div>
 

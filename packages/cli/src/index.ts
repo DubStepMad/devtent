@@ -52,6 +52,19 @@ import {
   listActiveShares,
   readDumpEvents,
   clearDumpEvents,
+  loginCloudflare,
+  cloudflareLoginStatus,
+  createNamedTunnel,
+  listNamedTunnels,
+  configureNamedTunnel,
+  startNamedTunnel,
+  stopNamedTunnel,
+  deleteNamedTunnel,
+  getLocalDnsStatus,
+  startLocalDns,
+  stopLocalDns,
+  installLocalDnsResolver,
+  getMkcertCaStatus,
 } from "@devtent/core";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -80,21 +93,40 @@ function parseProfileServices(opts: { redis?: boolean; mailpit?: boolean }) {
 }
 
 function openDesktopApp(root: string, view?: string): void {
-  const candidates = [
-    path.join(root, "DevTent.exe"),
-    path.join(path.dirname(root), "DevTent.exe"),
-    process.env.LOCALAPPDATA
-      ? path.join(process.env.LOCALAPPDATA, "Programs", "DevTent", "DevTent.exe")
-      : "",
-  ].filter(Boolean);
-  const exe = candidates.find((p) => existsSync(p));
+  const candidates: string[] = [];
+  if (process.platform === "win32") {
+    candidates.push(
+      path.join(root, "DevTent.exe"),
+      path.join(path.dirname(root), "DevTent.exe")
+    );
+    if (process.env.LOCALAPPDATA) {
+      candidates.push(
+        path.join(process.env.LOCALAPPDATA, "Programs", "DevTent", "DevTent.exe")
+      );
+    }
+  } else if (process.platform === "darwin") {
+    candidates.push(
+      "/Applications/DevTent.app/Contents/MacOS/DevTent",
+      path.join(root, "DevTent.app", "Contents", "MacOS", "DevTent"),
+      path.join(path.dirname(root), "DevTent.app", "Contents", "MacOS", "DevTent")
+    );
+  } else {
+    candidates.push(
+      path.join(root, "DevTent"),
+      path.join(path.dirname(root), "DevTent"),
+      "/usr/bin/devtent-desktop",
+      path.join(process.env.HOME ?? "", "Applications", "DevTent.AppImage")
+    );
+  }
+
+  const exe = candidates.find((p) => p && existsSync(p));
   const args = view ? [`--open=${view}`] : [];
   if (exe) {
     spawn(exe, args, { detached: true, stdio: "ignore" }).unref();
     log(`✓ Opened DevTent${view ? ` (${view})` : ""}`);
     return;
   }
-  log("DevTent.exe not found near your root folder.");
+  log("DevTent desktop app not found near your root folder.");
   log("Install the desktop app, or run: npm start");
 }
 
@@ -413,6 +445,22 @@ sslCmd
     const root = resolveRoot(opts.root);
     const msg = await installMkcertCa(root);
     log(`✓ ${msg}`);
+  });
+
+sslCmd
+  .command("ca")
+  .description("Show local CA status")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--trust", "Run mkcert -install to trust the CA")
+  .action(async (opts: { root?: string; trust?: boolean }) => {
+    const root = resolveRoot(opts.root);
+    if (opts.trust) {
+      const msg = await installMkcertCa(root);
+      log(`✓ ${msg}`);
+      return;
+    }
+    const status = await getMkcertCaStatus(root);
+    log(status.caExists ? `✓ ${status.message}` : `⚠ ${status.message}`);
   });
 
 program
@@ -745,7 +793,7 @@ const shareCmd = program.command("share").description("Public tunnel for a local
 
 shareCmd
   .command("list")
-  .description("List active share tunnels")
+  .description("List active quick-share tunnels")
   .action(() => {
     const sessions = listActiveShares();
     if (!sessions.length) {
@@ -759,15 +807,111 @@ shareCmd
 
 shareCmd
   .command("stop <site>")
-  .description("Stop sharing a site")
+  .description("Stop sharing a site (quick tunnel)")
   .action(async (site: string) => {
     await stopShare(site);
     log(`✓ Stopped sharing ${site}`);
   });
 
 shareCmd
+  .command("login")
+  .description("Link a Cloudflare account for named tunnels")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const result = await loginCloudflare(root, MANIFESTS_DIR, log);
+    log(result.ok ? `✓ ${result.message}` : `✗ ${result.message}`);
+  });
+
+const namedCmd = shareCmd.command("named").description("Persistent Cloudflare named tunnels");
+
+namedCmd
+  .command("list")
+  .description("List named tunnels")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const status = await cloudflareLoginStatus(root);
+    log(status.loggedIn ? "Cloudflare: logged in" : "Cloudflare: not logged in (devtent share login)");
+    const tunnels = await listNamedTunnels(root);
+    if (!tunnels.length) {
+      log("No named tunnels.");
+      return;
+    }
+    for (const t of tunnels) {
+      const host = t.hostname ? ` → ${t.hostname}` : "";
+      const run = t.running ? " (running)" : "";
+      log(`  ${t.name}${host}${run}`);
+    }
+  });
+
+namedCmd
+  .command("create <name>")
+  .description("Create a named tunnel")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (name: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const tunnel = await createNamedTunnel(root, MANIFESTS_DIR, name, log);
+    log(`✓ Created tunnel ${tunnel.name} (${tunnel.id})`);
+  });
+
+namedCmd
+  .command("configure <tunnel>")
+  .description("Point a named tunnel at a local site + public hostname")
+  .requiredOption("--site <name>", "Local site name")
+  .requiredOption("--hostname <host>", "Public hostname (Cloudflare DNS)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (tunnel: string, opts: { site: string; hostname: string; root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const result = await configureNamedTunnel(
+      root,
+      MANIFESTS_DIR,
+      tunnel,
+      { siteName: opts.site, hostname: opts.hostname },
+      log
+    );
+    log(`✓ ${result.name} → ${result.hostname} (${result.localUrl})`);
+  });
+
+namedCmd
+  .command("start <tunnel>")
+  .description("Run a named tunnel")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (tunnel: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const session = await startNamedTunnel(root, MANIFESTS_DIR, tunnel, log);
+    log(`✓ Running ${session.name}${session.hostname ? ` → https://${session.hostname}` : ""}`);
+    log("  Press Ctrl+C to stop");
+    await new Promise<void>((resolve) => {
+      const onExit = () => {
+        void stopNamedTunnel(tunnel).finally(resolve);
+      };
+      process.on("SIGINT", onExit);
+      process.on("SIGTERM", onExit);
+    });
+  });
+
+namedCmd
+  .command("stop <tunnel>")
+  .description("Stop a named tunnel")
+  .action(async (tunnel: string) => {
+    await stopNamedTunnel(tunnel);
+    log(`✓ Stopped ${tunnel}`);
+  });
+
+namedCmd
+  .command("delete <tunnel>")
+  .description("Delete a named tunnel")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (tunnel: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    await deleteNamedTunnel(root, MANIFESTS_DIR, tunnel, log);
+    log(`✓ Deleted ${tunnel}`);
+  });
+
+shareCmd
   .command("<site>")
-  .description("Share site publicly (Ctrl+C to stop)")
+  .description("Share site publicly via quick tunnel (Ctrl+C to stop)")
   .option("-r, --root <path>", "DevTent root directory")
   .action(async (site: string, opts: { root?: string }) => {
     const root = resolveRoot(opts.root);
@@ -783,6 +927,46 @@ shareCmd
       process.on("SIGINT", onExit);
       process.on("SIGTERM", onExit);
     });
+  });
+
+const dnsCmd = program.command("dns").description("Built-in local DNS for custom TLDs (e.g. .test)");
+
+dnsCmd
+  .command("status")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const status = await getLocalDnsStatus(resolveRoot(opts.root));
+    log(status.running ? `✓ Running on ${status.bind}:${status.port}` : "○ Stopped");
+    log(`  TLD: .${status.tld}`);
+    log(`  ${status.message}`);
+    if (status.resolverPath) {
+      log(`  Resolver: ${status.resolverInstalled ? status.resolverPath : "not installed"}`);
+    }
+  });
+
+dnsCmd
+  .command("start")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const status = await startLocalDns(resolveRoot(opts.root));
+    log(`✓ Local DNS listening on ${status.bind}:${status.port} for *.${status.tld}`);
+  });
+
+dnsCmd
+  .command("stop")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    await stopLocalDns(resolveRoot(opts.root));
+    log("✓ Local DNS stopped");
+  });
+
+dnsCmd
+  .command("install-resolver")
+  .description("Install OS resolver for the active TLD (macOS /etc/resolver)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const result = await installLocalDnsResolver(resolveRoot(opts.root));
+    log(result.ok ? `✓ ${result.message}` : `ℹ ${result.message}`);
   });
 
 const dumpsCmd = program.command("dumps").description("Laravel / PHP dump stream");

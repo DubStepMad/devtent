@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
+import { binaryName } from "./platform/binary.js";
 
 export async function writeMariaDbIni(root: string): Promise<void> {
   const iniDir = path.join(root, "etc", "mariadb");
@@ -25,9 +26,10 @@ export async function isMariaDbDataInitialized(root: string): Promise<boolean> {
 }
 
 async function findMariaDbBinary(root: string, name: string): Promise<string | null> {
+  const file = binaryName(name);
   const candidates = [
-    resolvePath(root, `bin/mariadb/bin/${name}`),
-    resolvePath(root, `bin/mariadb/${name}`),
+    resolvePath(root, `bin/mariadb/bin/${file}`),
+    resolvePath(root, `bin/mariadb/${file}`),
   ];
   for (const candidate of candidates) {
     if (await pathExists(candidate)) return candidate;
@@ -45,9 +47,9 @@ export async function initializeMariaDb(
     return;
   }
 
-  const mysqld = await findMariaDbBinary(root, "mysqld.exe");
+  const mysqld = await findMariaDbBinary(root, "mysqld");
   if (!mysqld) {
-    throw new Error("mysqld.exe not found — install MariaDB via Quick Add first");
+    throw new Error(`${binaryName("mysqld")} not found — install MariaDB via Quick Add first`);
   }
 
   await mkdir(resolvePath(root, "data/mariadb"), { recursive: true });

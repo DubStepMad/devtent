@@ -82,7 +82,11 @@ export async function runDoctor(
     repaired.push("Synced Procfile from active profile");
 
     await syncPhpCgiProcfile(root);
-    repaired.push("Synced PHP-CGI processes for active and per-site versions");
+    repaired.push(
+      process.platform === "win32"
+        ? "Synced PHP-CGI processes for active and per-site versions"
+        : "Synced PHP-FPM pools for active and per-site versions"
+    );
 
     await enableCoreServicesIfReady(root);
     repaired.push("Enabled core services in config when runtimes are present");
@@ -120,8 +124,31 @@ export async function runDoctor(
     const laravelCaptureSites = await installLaravelQueryCaptureForSites(root);
     if (laravelCaptureSites.length) {
       repaired.push(
-        `Enabled Laravel query capture for: ${laravelCaptureSites.join(", ")}`
+        `Enabled Laravel telemetry capture for: ${laravelCaptureSites.join(", ")}`
       );
+    }
+
+    try {
+      const { getMkcertCaStatus, installMkcertCa } = await import("./ssl.js");
+      const ca = await getMkcertCaStatus(root);
+      if (ca.mkcertInstalled && !ca.caExists) {
+        await installMkcertCa(root);
+        repaired.push("Trusted local mkcert CA");
+      }
+    } catch {
+      findings.push({
+        id: "mkcert-ca-install",
+        severity: "warn",
+        title: "Could not trust local CA automatically",
+        detail: "Use Doctor → Trust local CA or run mkcert -install",
+      });
+    }
+
+    try {
+      const { ensureLocalDnsFromState } = await import("./local-dns.js");
+      await ensureLocalDnsFromState(root);
+    } catch {
+      // optional
     }
 
     if (options.startServices) {
@@ -154,6 +181,32 @@ export async function runDoctor(
   }
 
   findings.push(...mapHealthToFindings(await getEnvironmentHealth(root)));
+
+  try {
+    const { loadProfile } = await import("./config.js");
+    const {
+      DEFAULT_PHP_VERSION,
+      isPhpVersionInstalled,
+      resolvePhpPaths,
+    } = await import("./profile-runtime.js");
+    const cfg = await loadConfig(root);
+    const profile = await loadProfile(root, cfg.activeProfile);
+    const phpVersion = profile.phpVersion ?? DEFAULT_PHP_VERSION;
+    if (await isPhpVersionInstalled(root, phpVersion)) {
+      const paths = resolvePhpPaths(phpVersion);
+      findings.push({
+        id: "php-backend",
+        severity: "ok",
+        title:
+          paths.backend === "fpm"
+            ? `PHP-FPM ready (${phpVersion})`
+            : `PHP-CGI ready (${phpVersion})`,
+        detail: paths.backend === "fpm" ? paths.fpm : paths.cgi,
+      });
+    }
+  } catch {
+    // Health items already cover missing PHP
+  }
 
   return { findings, repaired };
 }

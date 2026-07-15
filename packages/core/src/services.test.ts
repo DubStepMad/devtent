@@ -4,9 +4,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { initDevTent } from "./config.js";
-import { parseProcfile, startService, parseProcfileCommand } from "./services.js";
+import { parseProcfile, startService, parseProcfileCommand, resolveProcfileServiceNames } from "./services.js";
 import { validateManifestPlatform } from "./quick-add.js";
-import type { QuickAddManifest } from "./types.js";
+import type { QuickAddManifest, ProcfileEntry } from "./types.js";
 
 describe("Services", () => {
   it("throws when starting unknown service", async () => {
@@ -17,6 +17,20 @@ describe("Services", () => {
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
+  });
+
+  it("maps logical php-fpm to versioned php-cgi Procfile names", () => {
+    const entries: ProcfileEntry[] = [
+      { name: "nginx", command: "bin/nginx/nginx.exe" },
+      { name: "php-cgi-8.3", command: "bin/php/php-8.3/php-cgi.exe -b 127.0.0.1:9083" },
+      { name: "php-cgi-8.4", command: "bin/php/php-8.4/php-cgi.exe -b 127.0.0.1:9084" },
+    ];
+    assert.deepEqual(resolveProcfileServiceNames(entries, "php-fpm"), [
+      "php-cgi-8.3",
+      "php-cgi-8.4",
+    ]);
+    assert.deepEqual(resolveProcfileServiceNames(entries, "nginx"), ["nginx"]);
+    assert.deepEqual(resolveProcfileServiceNames(entries, "missing"), []);
   });
 
   it("parses procfile commands with quoted arguments", () => {

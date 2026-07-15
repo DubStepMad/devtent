@@ -7,16 +7,26 @@ import { resolveRootSubpath } from "./security.js";
 const EDITOR_COMMANDS = ["cursor", "code", "code-insiders"] as const;
 
 function resolveEditorCommand(): string | null {
-  for (const cmd of EDITOR_COMMANDS) {
-    if (process.platform === "win32") {
-      const localApp = process.env.LOCALAPPDATA ?? "";
-      const candidates = [
-        path.join(localApp, "Programs", "cursor", "Cursor.exe"),
-        path.join(localApp, "Programs", "Microsoft VS Code", "Code.exe"),
-      ];
-      if (cmd === "cursor" && existsSync(candidates[0])) return `"${candidates[0]}"`;
-      if (cmd === "code" && existsSync(candidates[1])) return `"${candidates[1]}"`;
+  if (process.platform === "win32") {
+    const localApp = process.env.LOCALAPPDATA ?? "";
+    const cursor = path.join(localApp, "Programs", "cursor", "Cursor.exe");
+    const code = path.join(localApp, "Programs", "Microsoft VS Code", "Code.exe");
+    if (existsSync(cursor)) return `"${cursor}"`;
+    if (existsSync(code)) return `"${code}"`;
+  }
+
+  if (process.platform === "darwin") {
+    const apps = [
+      "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+      "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+    ];
+    for (const app of apps) {
+      if (existsSync(app)) return app;
     }
+  }
+
+  for (const cmd of EDITOR_COMMANDS) {
+    return cmd;
   }
   return "cursor";
 }

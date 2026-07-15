@@ -3,7 +3,8 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
-import { normalizeProfile } from "./profile-runtime.js";
+import { normalizeProfile, resolvePhpPaths } from "./profile-runtime.js";
+import { binPath } from "./platform/binary.js";
 import { isManifestInstalled } from "./profile-runtime.js";
 import {
   applyNodeVersionToActiveProfile,
@@ -140,7 +141,8 @@ function withComposerHome(composerHome: string): NodeJS.ProcessEnv {
 async function getActivePhpCli(root: string): Promise<string | undefined> {
   const config = await loadConfig(root);
   const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
-  const phpPath = resolvePath(root, profile.php ?? "bin/php/php-8.3/php.exe");
+  const fallback = resolvePhpPaths(profile.phpVersion ?? "php-8.3").cli;
+  const phpPath = resolvePath(root, profile.php ?? fallback);
   return (await pathExists(phpPath)) ? phpPath : undefined;
 }
 
@@ -157,7 +159,7 @@ async function getManagedComposerVersion(root: string): Promise<string | undefin
 }
 
 async function getManagedBunVersion(root: string): Promise<string | undefined> {
-  const bunExe = resolvePath(root, "bin/bun/bun.exe");
+  const bunExe = resolvePath(root, binPath(["bin", "bun", "bun"]));
   if (!(await pathExists(bunExe))) return undefined;
   const output = await captureCommand(bunExe, ["--version"], root);
   return output?.replace(/^v/i, "");

@@ -1,13 +1,13 @@
 import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
 import { discoverAllVirtualHosts } from "./sites.js";
 import { isPhpVersionInstalled, resolvePhpPaths } from "./profile-runtime.js";
-import { phpCgiProcfileName } from "./php-ports.js";
+import { phpProcfileName } from "./php-ports.js";
 import { parseProcfile } from "./services.js";
 import { writeProcfileRaw } from "./procfile.js";
 import type { ProcfileEntry, VirtualHost } from "./types.js";
 
-function isPhpCgiServiceName(name: string): boolean {
-  return name === "php-fpm" || name.startsWith("php-cgi-");
+function isPhpServiceName(name: string): boolean {
+  return name === "php-fpm" || name.startsWith("php-cgi-") || name.startsWith("php-fpm-");
 }
 
 export async function collectRequiredPhpVersions(
@@ -27,20 +27,25 @@ export async function collectRequiredPhpVersions(
   return [...versions].sort();
 }
 
+/** Sync Procfile PHP entries (php-cgi-* on Windows, php-fpm-* on Unix). */
 export async function syncPhpCgiProcfile(
   root: string,
   vhosts?: VirtualHost[]
 ): Promise<string[]> {
   const versions = await collectRequiredPhpVersions(root, vhosts);
   const entries = await parseProcfile(root);
-  const kept = entries.filter((e) => !isPhpCgiServiceName(e.name));
+  const kept = entries.filter((e) => !isPhpServiceName(e.name));
 
   const phpEntries: ProcfileEntry[] = [];
   for (const version of versions) {
     if (!(await isPhpVersionInstalled(root, version))) continue;
+    if (process.platform !== "win32") {
+      const { ensurePhpFpmPoolConfig } = await import("./profile-runtime.js");
+      await ensurePhpFpmPoolConfig(root, version);
+    }
     const paths = resolvePhpPaths(version);
     phpEntries.push({
-      name: phpCgiProcfileName(version),
+      name: phpProcfileName(version),
       command: paths.procfileCommand,
     });
   }
@@ -57,7 +62,9 @@ export async function syncPhpCgiProcfile(
 
 export async function listInstalledPhpCgiServices(root: string): Promise<string[]> {
   const entries = await parseProcfile(root);
-  return entries.filter((e) => e.name.startsWith("php-cgi-")).map((e) => e.name);
+  return entries
+    .filter((e) => e.name.startsWith("php-cgi-") || e.name.startsWith("php-fpm-"))
+    .map((e) => e.name);
 }
 
 export async function resolvePhpCgiPortForVersion(
@@ -65,7 +72,8 @@ export async function resolvePhpCgiPortForVersion(
   phpVersion: string
 ): Promise<number> {
   const paths = resolvePhpPaths(phpVersion);
-  if (!(await pathExists(resolvePath(root, paths.cgi)))) {
+  const binaryRel = paths.backend === "fpm" ? paths.fpm : paths.cgi;
+  if (!(await pathExists(resolvePath(root, binaryRel)))) {
     throw new Error(`PHP ${phpVersion} is not installed`);
   }
   return paths.cgiPort;

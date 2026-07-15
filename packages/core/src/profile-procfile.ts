@@ -72,7 +72,7 @@ async function buildProfileStackEntries(
   }
 
   const database = profile.database ?? "mysql";
-  if (database !== "none") {
+  if (database !== "none" && database !== "external") {
     const dbPreset = presets.find((p) => p.id === database);
     if (dbPreset && (await isPresetInstalled(root, dbPreset.command))) {
       next.push({ name: database, command: dbPreset.command });

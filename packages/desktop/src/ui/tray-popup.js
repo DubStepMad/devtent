@@ -26,6 +26,24 @@ async function refresh() {
     state.virtualHosts?.length ?? 0
   );
 
+  const doctorBadge = document.getElementById("doctor-badge");
+  if (doctorBadge && api.getEnvironmentHealth) {
+    try {
+      const health = await api.getEnvironmentHealth();
+      const issues = (health || []).filter((h) => h.severity === "warn" || h.severity === "error");
+      if (issues.length) {
+        doctorBadge.textContent = String(issues.length);
+        doctorBadge.classList.add("warn");
+      } else {
+        doctorBadge.textContent = "";
+        doctorBadge.classList.remove("warn");
+      }
+    } catch {
+      doctorBadge.textContent = "";
+      doctorBadge.classList.remove("warn");
+    }
+  }
+
   const profileNote = document.getElementById("profile-services-note");
   if (profileNote) {
     profileNote.textContent = profileServices.length
@@ -111,6 +129,10 @@ function bind() {
 
   document.getElementById("btn-www").onclick = () => api.openPath("www");
   document.getElementById("btn-dashboard").onclick = () => api.openDashboard();
+  document.getElementById("btn-mail")?.addEventListener("click", () => api.openDashboard("mail"));
+  document.getElementById("btn-dumps")?.addEventListener("click", () => api.openDashboard("dumps"));
+  document.getElementById("btn-database")?.addEventListener("click", () => api.openDashboard("database"));
+  document.getElementById("btn-doctor")?.addEventListener("click", () => api.openDashboard("doctor"));
   document.getElementById("btn-services")?.addEventListener("click", () => api.openDashboard("services"));
   document.getElementById("btn-settings").onclick = () => api.openDashboard("settings");
   document.getElementById("btn-terminal").onclick = () => api.openTerminal();

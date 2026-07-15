@@ -8,6 +8,7 @@ import { DEFAULT_PHP_VERSION, normalizeProfile } from "./profile-runtime.js";
 import { ensureApacheConfig } from "./apache-support.js";
 import { hasExistingEnvironment } from "./environment.js";
 import { normalizeTld, ZERO_ADMIN_TLD } from "./domain.js";
+import { binPath } from "./platform/binary.js";
 
 export const CONFIG_FILENAME = "devtent.toml";
 export const DEFAULT_PROFILE = "default";
@@ -78,7 +79,7 @@ export function getDefaultConfig(root: string): DevTentConfig {
     root,
     activeProfile: DEFAULT_PROFILE,
     tld: ZERO_ADMIN_TLD,
-    ssl: { enabled: false, mkcertPath: "bin/mkcert/mkcert.exe" },
+    ssl: { enabled: false, mkcertPath: binPath(["bin", "mkcert", "mkcert"]) },
     paths: {
       www: "www",
       bin: "bin",
@@ -90,13 +91,13 @@ export function getDefaultConfig(root: string): DevTentConfig {
         enabled: true,
         port: 80,
         sslPort: 443,
-        binary: "bin/nginx/nginx.exe",
+        binary: binPath(["bin", "nginx", "nginx"]),
         config: "etc/nginx/nginx.conf",
       },
       mysql: {
         enabled: true,
         port: 3306,
-        binary: "bin/mysql/bin/mysqld.exe",
+        binary: binPath(["bin", "mysql", "bin", "mysqld"]),
         dataDir: "data/mysql",
       },
     },
@@ -360,6 +361,7 @@ export interface CreateProfileInput {
   phpVersion?: string;
   webServer?: Profile["webServer"];
   database?: Profile["database"];
+  databaseConnection?: Profile["databaseConnection"];
   services?: Profile["services"];
   nodeVersion?: Profile["nodeVersion"];
 }
@@ -382,6 +384,7 @@ export async function createProfile(root: string, input: CreateProfileInput): Pr
     phpVersion: input.phpVersion ?? DEFAULT_PHP_VERSION,
     webServer: input.webServer ?? "nginx",
     database: input.database ?? "mysql",
+    databaseConnection: input.databaseConnection,
     services: input.services ?? [],
   });
   await saveProfile(root, profile);
@@ -393,6 +396,7 @@ export interface UpdateProfileInput {
   phpVersion?: string;
   webServer?: Profile["webServer"];
   database?: Profile["database"];
+  databaseConnection?: Profile["databaseConnection"];
   services?: Profile["services"];
   nodeVersion?: Profile["nodeVersion"];
   useExternalNode?: Profile["useExternalNode"];
@@ -509,13 +513,17 @@ async function writeDefaultProcfile(root: string): Promise<void> {
   if (await pathExists(procfilePath)) return;
   if (await hasExistingEnvironment(root)) return;
 
+  const nginxBin = binPath(["bin", "nginx", "nginx"]);
+  const mysqlBin = binPath(["bin", "mysql", "bin", "mysqld"]);
+  const { resolvePhpPaths } = await import("./profile-runtime.js");
+  const phpCmd = resolvePhpPaths("php-8.3").procfileCommand;
   const content = `# DevTent Procfile — one service per line
 # Format: name: command
 # Uncomment after installing runtimes via quick-add
 
-# nginx: bin/nginx/nginx.exe -p . -c etc/nginx/nginx.conf
-# mysql: bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini
-# php-fpm: bin/php/php-8.3/php-cgi.exe -b 127.0.0.1:9000
+# nginx: ${nginxBin} -p . -c etc/nginx/nginx.conf
+# mysql: ${mysqlBin} --defaults-file=etc/mysql/my.ini
+# php: ${phpCmd}
 `;
   await writeFile(procfilePath, content, "utf-8");
 }

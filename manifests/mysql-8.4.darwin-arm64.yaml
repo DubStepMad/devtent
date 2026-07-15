@@ -1,0 +1,9 @@
+﻿name: mysql-8.4
+version: "8.4.4"
+description: MySQL 8.4 Community Server for macOS arm64
+platform: darwin
+arch: arm64
+url: https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.4-macos14-arm64.tar.gz
+installPath: bin/mysql
+binary: bin/mysqld
+downloadType: tar.gz

@@ -1,0 +1,9 @@
+﻿name: php-8.2
+version: "8.2.28"
+description: PHP 8.2 FPM+CLI (static-php.dev common) for macOS arm64
+platform: darwin
+arch: arm64
+url: https://dl.static-php.dev/static-php-cli/common/php-8.2.28-fpm-macos-aarch64.tar.gz
+installPath: bin/php/php-8.2
+binary: sbin/php-fpm
+downloadType: tar.gz

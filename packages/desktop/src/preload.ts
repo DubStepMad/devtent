@@ -31,7 +31,14 @@ const api = {
     description?: string;
     phpVersion?: string;
     webServer?: "nginx" | "apache";
-    database?: "mysql" | "postgresql" | "none";
+    database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
+    databaseConnection?: {
+      engine: "mysql" | "mariadb" | "postgresql";
+      host: string;
+      port: number;
+      user: string;
+      password?: string;
+    };
     services?: ("redis" | "mailpit")[];
   }) => ipcRenderer.invoke("devtent:createProfile", input),
   updateProfile: (
@@ -40,7 +47,14 @@ const api = {
       description?: string;
       phpVersion?: string;
       webServer?: "nginx" | "apache";
-      database?: "mysql" | "postgresql" | "none";
+      database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
+      databaseConnection?: {
+        engine: "mysql" | "mariadb" | "postgresql";
+        host: string;
+        port: number;
+        user: string;
+        password?: string;
+      };
       services?: ("redis" | "mailpit")[];
     }
   ) => ipcRenderer.invoke("devtent:updateProfile", name, patch),
@@ -66,10 +80,44 @@ const api = {
     ipcRenderer.invoke("devtent:setSitePhpVersion", siteName, phpVersion),
   getLaravelCaptureSnippet: () => ipcRenderer.invoke("devtent:getLaravelCaptureSnippet"),
   listDumps: (tail?: number) => ipcRenderer.invoke("devtent:listDumps", tail),
-  clearDumps: () => ipcRenderer.invoke("devtent:clearDumps"),
+  clearDumps: (types?: string[]) => ipcRenderer.invoke("devtent:clearDumps", types),
+  listDatabases: () => ipcRenderer.invoke("devtent:listDatabases"),
+  createDatabase: (name: string) => ipcRenderer.invoke("devtent:createDatabase", name),
+  getDatabaseAdminStatus: () => ipcRenderer.invoke("devtent:getDatabaseAdminStatus"),
+  listInstalledPhpVersions: () => ipcRenderer.invoke("devtent:listInstalledPhpVersions"),
+  getActivePhpVersion: () => ipcRenderer.invoke("devtent:getActivePhpVersion"),
+  readPhpIni: (phpVersion: string) => ipcRenderer.invoke("devtent:readPhpIni", phpVersion),
+  writePhpIni: (phpVersion: string, content: string) =>
+    ipcRenderer.invoke("devtent:writePhpIni", phpVersion, content),
+  setPhpExtension: (phpVersion: string, extensionName: string, enabled: boolean) =>
+    ipcRenderer.invoke("devtent:setPhpExtension", phpVersion, extensionName, enabled),
+  backupMariaDb: () => ipcRenderer.invoke("devtent:backupMariaDb"),
+  listMariaDbBackups: () => ipcRenderer.invoke("devtent:listMariaDbBackups"),
+  backupPostgres: () => ipcRenderer.invoke("devtent:backupPostgres"),
+  listPostgresBackups: () => ipcRenderer.invoke("devtent:listPostgresBackups"),
+  listSiteWorkers: () => ipcRenderer.invoke("devtent:listSiteWorkers"),
+  setSiteWorker: (siteName: string, kind: "queue" | "vite", enabled: boolean) =>
+    ipcRenderer.invoke("devtent:setSiteWorker", siteName, kind, enabled),
+  hasLaravelQueryCapture: (siteName: string) =>
+    ipcRenderer.invoke("devtent:hasLaravelQueryCapture", siteName),
   startShare: (siteName: string) => ipcRenderer.invoke("devtent:startShare", siteName),
   stopShare: (siteName: string) => ipcRenderer.invoke("devtent:stopShare", siteName),
   listShares: () => ipcRenderer.invoke("devtent:listShares"),
+  cloudflareLogin: () => ipcRenderer.invoke("devtent:cloudflareLogin"),
+  cloudflareLoginStatus: () => ipcRenderer.invoke("devtent:cloudflareLoginStatus"),
+  listNamedTunnels: () => ipcRenderer.invoke("devtent:listNamedTunnels"),
+  createNamedTunnel: (name: string) => ipcRenderer.invoke("devtent:createNamedTunnel", name),
+  configureNamedTunnel: (tunnelName: string, siteName: string, hostname: string) =>
+    ipcRenderer.invoke("devtent:configureNamedTunnel", tunnelName, siteName, hostname),
+  startNamedTunnel: (tunnelName: string) => ipcRenderer.invoke("devtent:startNamedTunnel", tunnelName),
+  stopNamedTunnel: (tunnelName: string) => ipcRenderer.invoke("devtent:stopNamedTunnel", tunnelName),
+  deleteNamedTunnel: (tunnelName: string) => ipcRenderer.invoke("devtent:deleteNamedTunnel", tunnelName),
+  getLocalDnsStatus: () => ipcRenderer.invoke("devtent:getLocalDnsStatus"),
+  startLocalDns: () => ipcRenderer.invoke("devtent:startLocalDns"),
+  stopLocalDns: () => ipcRenderer.invoke("devtent:stopLocalDns"),
+  installLocalDnsResolver: () => ipcRenderer.invoke("devtent:installLocalDnsResolver"),
+  getMkcertCaStatus: () => ipcRenderer.invoke("devtent:getMkcertCaStatus"),
+  trustMkcertCa: () => ipcRenderer.invoke("devtent:trustMkcertCa"),
   setTld: (tld: string) => ipcRenderer.invoke("devtent:setTld", tld),
   installLaravelQueryCapture: (siteName: string) =>
     ipcRenderer.invoke("devtent:installLaravelQueryCapture", siteName),

@@ -1,6 +1,6 @@
 {
   "name": "@devtent/desktop",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "DevTent",
   "license": "LicenseRef-DTCL-1.0",
   "author": "DevTent Contributors",
@@ -10,8 +10,9 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/build-preload.mjs && npm run generate-icons && npm run copy-assets",
     "copy-assets": "node scripts/copy-assets.mjs",
     "generate-icons": "node scripts/generate-icons.mjs",
-    "start": "npm run build && electron .",
-    "dev": "npm run build && electron .",
+    "start": "node scripts/dev.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start:once": "npm run build && electron .",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
     "pack": "npm run build && node scripts/ensure-eb-nsis.cjs && electron-builder --dir",
@@ -62,9 +63,29 @@
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "assets/icon.ico",
       "legalTrademarks": "DevTent Contributors",
-      "signAndEditExecutable": true
+      "signAndEditExecutable": true,
+      "artifactName": "DevTent Setup ${version}.${ext}"
     },
-    "artifactName": "DevTent Setup ${version}.${ext}",
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "DevTent-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "category": "Development",
+      "icon": "assets/icon.png",
+      "artifactName": "DevTent-${version}-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,

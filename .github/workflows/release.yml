@@ -10,7 +10,17 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,26 +34,65 @@ jobs:
       - run: npm run lint
       - run: npm test
 
-      - name: Build installer (signed when secrets are configured)
+      - name: Build installer (Windows, signed when secrets are configured)
+        if: matrix.platform == 'win'
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CODE_SIGNING_CERT }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
         run: npm run dist
 
-      - name: Electron E2E smoke
+      - name: Build installer (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: packages/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: node scripts/run-dist.cjs --mac
+
+      - name: Build installer (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: packages/desktop
+        run: node scripts/run-dist.cjs --linux
+
+      - name: Electron E2E smoke (Windows)
+        if: matrix.platform == 'win'
         working-directory: packages/desktop
         run: npx electron . --e2e-smoke
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.platform }}
+          path: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
+            packages/desktop/release/*.AppImage
+            packages/desktop/release/*.deb
+          if-no-files-found: warn
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
-          $installer = Get-ChildItem "packages/desktop/release" -Filter "*.exe" |
-            Where-Object { $_.Name -match '^DevTent( Setup |\.Setup\.)' } |
-            Select-Object -First 1
-          if (-not $installer) { throw "Installer not found in packages/desktop/release" }
-          gh release create "${{ github.ref_name }}" `
-            --title "DevTent $version" `
-            --notes-file CHANGELOG.md `
-            "$($installer.FullName)"
+          version="${GITHUB_REF_NAME#v}"
+          mapfile -t files < <(find release-assets -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' \))
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No installer artifacts found"
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "DevTent $version" \
+            --notes-file CHANGELOG.md \
+            "${files[@]}"

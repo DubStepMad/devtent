@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { loadConfig, resolvePath, pathExists } from "./config.js";
+import { resolvePath, pathExists } from "./config.js";
 import { listVirtualHosts } from "./vhosts.js";
 import { installFromManifest, loadManifest } from "./quick-add.js";
+import { binaryName, binPath } from "./platform/binary.js";
 
 export interface ShareSession {
   siteName: string;
@@ -12,19 +13,29 @@ export interface ShareSession {
 
 const activeShares = new Map<string, { process: ChildProcess; publicUrl: string }>();
 
-async function ensureCloudflared(
+/** Isolate cloudflared credentials under the DevTent root (named tunnels + login). */
+export function cloudflaredHomeEnv(root: string): NodeJS.ProcessEnv {
+  const home = resolvePath(root, "etc/cloudflared");
+  return {
+    ...process.env,
+    DEVTENT_ROOT: root,
+    HOME: home,
+    USERPROFILE: home,
+  };
+}
+
+export async function ensureCloudflared(
   root: string,
   manifestsDir: string,
   onProgress?: (msg: string) => void
 ): Promise<string> {
-  const config = await loadConfig(root);
-  const binary = resolvePath(root, "bin/cloudflared/cloudflared.exe");
+  const binary = resolvePath(root, binPath(["bin", "cloudflared", "cloudflared"]));
   if (await pathExists(binary)) return binary;
 
   const manifest = await loadManifest(manifestsDir, "cloudflared");
   await installFromManifest(root, manifest, onProgress);
   if (!(await pathExists(binary))) {
-    throw new Error("cloudflared install failed");
+    throw new Error(`${binaryName("cloudflared")} install failed`);
   }
   return binary;
 }

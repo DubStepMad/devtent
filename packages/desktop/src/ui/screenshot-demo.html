@@ -43,7 +43,7 @@
   <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <span class="logo-sm"><img src="app-icon.png" width="24" height="24" alt=""></span>
+        <span class="logo-sm"><img src="app-icon.png" width="40" height="40" alt=""></span>
         <span>DevTent</span>
       </div>
       <nav class="sidebar-nav">
@@ -311,11 +311,39 @@
                 <input type="checkbox" id="profile-service-database" checked>
                 <span class="profile-service-label">Database</span>
                 <select id="profile-database-type" class="text-input profile-service-option">
-                  <option value="mysql">MySQL</option>
-                  <option value="mariadb">MariaDB</option>
-                  <option value="postgresql">PostgreSQL</option>
+                  <option value="mysql">MySQL (managed)</option>
+                  <option value="mariadb">MariaDB (managed)</option>
+                  <option value="postgresql">PostgreSQL (managed)</option>
+                  <option value="external">External (NAS / remote)</option>
                 </select>
               </label>
+              <div id="profile-external-db" class="profile-external-db hidden">
+                <p class="panel-desc settings-hint">Connect to a database you already run — e.g. MariaDB on a NAS.</p>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Dialect</span>
+                  <select id="profile-db-engine" class="text-input">
+                    <option value="mariadb">MariaDB</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="postgresql">PostgreSQL</option>
+                  </select>
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Host</span>
+                  <input type="text" id="profile-db-host" class="text-input" placeholder="nas.local" autocomplete="off">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Port</span>
+                  <input type="number" id="profile-db-port" class="text-input" min="1" max="65535" placeholder="3306">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">User</span>
+                  <input type="text" id="profile-db-user" class="text-input" placeholder="root" autocomplete="off">
+                </div>
+                <div class="profile-service-row">
+                  <span class="profile-service-label">Password</span>
+                  <input type="password" id="profile-db-password" class="text-input" placeholder="(optional)" autocomplete="new-password">
+                </div>
+              </div>
               <label class="profile-service-toggle">
                 <input type="checkbox" id="profile-service-redis">
                 <span class="profile-service-label">Redis</span>

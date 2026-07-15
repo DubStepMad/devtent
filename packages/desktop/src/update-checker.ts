@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, shell } from "electron";
 import path from "node:path";
 import { mkdir, unlink } from "node:fs/promises";
 import { createWriteStream } from "node:fs";
@@ -108,7 +108,20 @@ export async function downloadUpdate(
   const dir = updatesDir();
   await mkdir(dir, { recursive: true });
 
-  const fileName = `DevTent Setup ${update.latestVersion}.exe`;
+  const ext =
+    process.platform === "darwin"
+      ? update.downloadUrl.toLowerCase().includes(".zip")
+        ? "zip"
+        : "dmg"
+      : process.platform === "linux"
+        ? update.downloadUrl.toLowerCase().includes(".deb")
+          ? "deb"
+          : "AppImage"
+        : "exe";
+  const fileName =
+    process.platform === "win32"
+      ? `DevTent Setup ${update.latestVersion}.exe`
+      : `DevTent-${update.latestVersion}.${ext}`;
   const dest = path.join(dir, fileName);
 
   try {
@@ -160,10 +173,11 @@ export async function downloadUpdate(
 }
 
 export function launchInstaller(installerPath: string): void {
-  if (process.platform !== "win32") {
-    throw new Error("In-app updates are only supported on Windows");
+  if (process.platform === "win32") {
+    queueInstallerLaunch(installerPath);
+    return;
   }
-  queueInstallerLaunch(installerPath);
+  void shell.openPath(installerPath);
 }
 
 function formatBytes(bytes: number): string {
