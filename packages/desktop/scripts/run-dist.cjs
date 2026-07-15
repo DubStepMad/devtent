@@ -76,7 +76,7 @@ function resolveTargetFlag(argv) {
 function runElectronBuilder(outputDir, targetFlag) {
   const outputName = path.basename(outputDir);
   const builderCli = resolveElectronBuilderCli();
-  const args = [builderCli, targetFlag, `--config.directories.output=${outputName}`];
+  const args = [builderCli, targetFlag, "--publish", "never", `--config.directories.output=${outputName}`];
 
   const result = spawnSync(process.execPath, args, {
     cwd: projectDir,

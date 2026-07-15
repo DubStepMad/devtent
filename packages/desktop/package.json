@@ -3,7 +3,10 @@
   "version": "1.3.0",
   "description": "DevTent",
   "license": "LicenseRef-DTCL-1.0",
-  "author": "DevTent Contributors",
+  "author": {
+    "name": "DevTent Contributors",
+    "email": "support@devtent.dev"
+  },
   "homepage": "https://github.com/DubStepMad/devtent#readme",
   "repository": {
     "type": "git",
@@ -42,6 +45,7 @@
   "build": {
     "appId": "dev.devtent.app",
     "productName": "DevTent",
+    "publish": null,
     "icon": "assets/icon.png",
     "afterPack": "scripts/after-pack.cjs",
     "electronVersion": "35.7.5",

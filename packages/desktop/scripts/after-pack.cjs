@@ -8,7 +8,8 @@ const path = require("node:path");
  * Required when signAndEditExecutable is false (avoids winCodeSign symlink issues).
  */
 exports.default = async function afterPack(context) {
-  if (process.platform !== "win32" && process.platform !== "darwin") {
+  // rcedit only applies to Windows PE executables
+  if (process.platform !== "win32" || context.electronPlatformName !== "win32") {
     return;
   }
 
