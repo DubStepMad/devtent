@@ -1,6 +1,6 @@
 {
   "name": "@devtent/cli",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "DevTent CLI — manage your local dev environment",
   "license": "LicenseRef-DTCL-1.0",
   "type": "module",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@devtent/core": "*",
+    "@devtent/mcp": "*",
     "commander": "^13.1.0"
   },
   "devDependencies": {

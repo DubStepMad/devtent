@@ -4,6 +4,16 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-18
+
+Herd-style MCP server so Cursor, Claude Code, and other agents can manage DevTent.
+
+### Added
+
+- **MCP server** — `@devtent/mcp` stdio server with tools for sites, PHP, services, SSL, doctor, and Laravel `.env` snippets; `site_information` resource and `debug_site` prompt ([docs/MCP.md](docs/MCP.md))
+- **`devtent mcp`** — CLI entry that runs the MCP server (`DEVTENT_ROOT` / `SITE_PATH`)
+- **`disableSsl`** — remove local certs and regenerate HTTP-only vhosts (used by `secure_or_unsecure_site`)
+
 ## [1.3.0] - 2026-07-15
 
 Feature release: multi-platform desktop, richer Database/PHP tooling, external databases, and a refreshed brand.
@@ -237,6 +247,10 @@ First public release.
 - `*.test` domains use the Windows hosts file; DevTent launches an elevated CMD helper when admin is required (app does not need admin)
 - Linux/macOS desktop builds ship via the release matrix (DMG / AppImage / deb)
 
+[1.4.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.4.0
+[1.3.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.3.0
+[1.2.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.2.2
+[1.2.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.2.1
 [1.2.0]: https://github.com/DubStepMad/devtent/releases/tag/v1.2.0
 [1.1.2]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.2
 [1.1.1]: https://github.com/DubStepMad/devtent/releases/tag/v1.1.1

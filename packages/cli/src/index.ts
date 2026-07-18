@@ -1047,4 +1047,18 @@ laravelCmd
     }
   });
 
+program
+  .command("mcp")
+  .description("Start the DevTent MCP server (stdio) for Cursor, Claude Code, etc.")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    if (opts.root) {
+      process.env.DEVTENT_ROOT = resolveRoot(opts.root);
+    } else if (!process.env.DEVTENT_ROOT) {
+      process.env.DEVTENT_ROOT = resolveRoot();
+    }
+    const { runMcpServer } = await import("@devtent/mcp");
+    await runMcpServer();
+  });
+
 program.parse();

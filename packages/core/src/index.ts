@@ -249,6 +249,7 @@ export {
 
 export {
   enableSsl,
+  disableSsl,
   installMkcertCa,
   getMkcertCaStatus,
   hasSslCertificate,

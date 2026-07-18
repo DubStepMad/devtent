@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 
@@ -89,6 +89,46 @@ export async function enableSsl(root: string, domain: string): Promise<SslResult
     keyPath,
     success: true,
     message: `SSL enabled for ${domain}. Open https://${domain}/ in your browser.`,
+  };
+}
+
+/** Remove local cert/key for a domain and regenerate vhosts (HTTP-only). */
+export async function disableSsl(root: string, domain: string): Promise<SslResult> {
+  validateSslDomain(domain);
+  const config = await loadConfig(root);
+  const { certPath, keyPath } = sslCertPaths(root, domain);
+
+  for (const file of [certPath, keyPath]) {
+    if (await pathExists(file)) {
+      await unlink(file);
+    }
+  }
+
+  if (config.ssl.domains?.length) {
+    config.ssl.domains = config.ssl.domains.filter((d) => d !== domain);
+  }
+  if (!config.ssl.domains?.length) {
+    config.ssl.enabled = false;
+  }
+  const { saveConfig } = await import("./config.js");
+  await saveConfig(root, config);
+
+  const { generateVirtualHosts } = await import("./vhosts.js");
+  await generateVirtualHosts(root, { skipHostsSync: true });
+
+  const { restartService, isServiceRunning } = await import("./services.js");
+  if (isServiceRunning("nginx")) {
+    await restartService(root, "nginx");
+  } else if (isServiceRunning("apache")) {
+    await restartService(root, "apache");
+  }
+
+  return {
+    domain,
+    certPath,
+    keyPath,
+    success: true,
+    message: `SSL disabled for ${domain}. Open http://${domain}/ in your browser.`,
   };
 }
 

@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.3.0.exe`
+Output: `packages/desktop/release/DevTent Setup 1.4.0.exe`
 
 ### CLI (optional)
 
@@ -174,6 +174,25 @@ npm run devtent -- stack install
 npm run devtent -- start
 npm run devtent -- mysql backup
 npm run devtent -- migrate import --from C:\\path\\to\\environment
+```
+
+### AI agents (MCP)
+
+Register the stdio MCP server so Cursor / Claude Code can manage sites, PHP, services, and SSL. See **[docs/MCP.md](docs/MCP.md)**.
+
+```json
+{
+  "mcpServers": {
+    "devtent": {
+      "command": "npx",
+      "args": ["-y", "devtent", "mcp"],
+      "env": {
+        "DEVTENT_ROOT": "C:/devtent",
+        "SITE_PATH": "C:/devtent/www/myapp"
+      }
+    }
+  }
+}
 ```
 
 
