@@ -15,7 +15,7 @@ Feature comparison as of DevTent 1.3.x. DevTent started **Windows-first** and no
 | **PHP version per site** | ✓ | ✓ | ✓ | ✓ |
 | **First-class CLI** | ✓ | ✓ | ✓ | ✓ |
 | **Menu-bar / tray GUI** | ✓ | ✓ | ✓ | ✓ |
-| **Database & cache services** | ✓ (Pro) | ✓ | ✓ | ✓ (MySQL, **MariaDB**, PostgreSQL, Redis) |
+| **Database & cache services** | ✓ (Pro) | ✓ | ✓ | ✓ (MySQL, **MariaDB**, PostgreSQL, Redis, **Meilisearch**, **MinIO**) |
 | **Local mail capture** | ✓ (Pro) | ✓ | ✓ | ✓ (Mailpit) |
 | **Laravel dump / query inspector** | ✓ (Pro) | ✓ | ✓ | ✓ (dumps + jobs/views/requests/logs/cache/HTTP) |
 | **Share a site publicly (tunnel)** | ✓ | ✓ | ✓ | ✓ (quick + named cloudflared tunnels) |

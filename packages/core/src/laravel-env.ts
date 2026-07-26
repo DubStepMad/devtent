@@ -79,6 +79,25 @@ export async function buildLaravelEnvSnippet(
     push("");
   }
 
+  if (profile.services?.includes("meilisearch")) {
+    push("SCOUT_DRIVER=meilisearch");
+    push("MEILISEARCH_HOST=http://127.0.0.1:7700");
+    push("MEILISEARCH_KEY=masterKey");
+    push("");
+  }
+
+  if (profile.services?.includes("minio")) {
+    push("FILESYSTEM_DISK=s3");
+    push("AWS_ACCESS_KEY_ID=minioadmin");
+    push("AWS_SECRET_ACCESS_KEY=minioadmin", "AWS_SECRET_ACCESS_KEY=***");
+    push("AWS_DEFAULT_REGION=us-east-1");
+    push("AWS_BUCKET=local");
+    push("AWS_ENDPOINT=http://127.0.0.1:9000");
+    push("AWS_USE_PATH_STYLE_ENDPOINT=true");
+    push("");
+    push("# MinIO console: http://127.0.0.1:9001 (minioadmin / minioadmin)");
+  }
+
   return {
     siteName,
     domain: vhost.domain,

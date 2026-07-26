@@ -98,6 +98,16 @@ export async function getServicePresetsForProfile(
       command: binPath(["bin", "mailpit", "mailpit"]),
     },
     {
+      id: "meilisearch",
+      name: "Meilisearch",
+      command: `${binPath(["bin", "meilisearch", "meilisearch"])} --db-path data/meilisearch --http-addr 127.0.0.1:7700 --master-key masterKey --env development`,
+    },
+    {
+      id: "minio",
+      name: "MinIO",
+      command: `${binPath(["bin", "minio", "minio"])} server data/minio --address 127.0.0.1:9000 --console-address 127.0.0.1:9001`,
+    },
+    {
       id: "php-fpm",
       name: phpLabel,
       command: phpCommand,

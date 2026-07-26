@@ -4,6 +4,25 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-26
+
+Developer productivity release: Xdebug, Meilisearch/MinIO, worker polish, multi-engine backups, and deeper MCP.
+
+### Added
+
+- **Xdebug** — PHP page toggle uses `zend_extension=xdebug` when the DLL/so is present; writes IDE-friendly defaults (port 9003, trigger mode, IDE key `DEVTENT`) and shows a setup hint
+- **Meilisearch & MinIO** — Quick Add manifests (Windows / macOS arm64 / Linux x64); profile optional services; Procfile presets; Laravel `.env` Scout/S3 hints
+- **Scheduler worker** — per-site `schedule:work` toggle alongside queue and Vite
+- **Vite per-site ports** — stable unique ports in the 5173–5272 range (no more shared `--strictPort 5173` collisions)
+- **Workers apply immediately** — enabling/disabling queue, Vite, or schedule starts/stops the Procfile service without a full stack restart
+- **MariaDB & PostgreSQL auto backups** — before-stop dumps and daily scheduled backups (same 7-day retention as MySQL)
+- **MCP deepen** — `list_dumps`, `clear_dumps`, `list_databases`, `create_database`, `backup_database`, `list_site_workers`, `set_site_worker`; connection hints for Meilisearch/MinIO
+
+### Changed
+
+- Site worker commands use managed PHP/Node binaries and run with the project as cwd
+- Quick Add “Cache, mail & SSL” group includes Meilisearch and MinIO
+
 ## [1.4.0] - 2026-07-18
 
 Herd-style MCP server so Cursor, Claude Code, and other agents can manage DevTent.

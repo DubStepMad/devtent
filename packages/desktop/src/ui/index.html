@@ -293,7 +293,9 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
                 <p id="site-drawer-telemetry" class="panel-desc settings-hint">Telemetry: —</p>
                 <div class="site-drawer-toggles">
                   <label class="toggle-row"><input type="checkbox" id="site-drawer-queue"> Queue worker</label>
+                  <label class="toggle-row"><input type="checkbox" id="site-drawer-schedule"> Scheduler</label>
                   <label class="toggle-row"><input type="checkbox" id="site-drawer-vite"> Vite worker</label>
+                  <p id="site-drawer-vite-port" class="panel-desc settings-hint hidden"></p>
                 </div>
                 <div class="site-drawer-actions">
                   <button type="button" class="btn primary sm" id="site-drawer-open">Open site</button>
@@ -458,6 +460,7 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
           </div>
           <div class="panel">
             <h3>Extensions</h3>
+            <p id="php-ini-xdebug-hint" class="panel-desc settings-hint hidden"></p>
             <div id="php-ini-extensions" class="php-ext-grid"></div>
           </div>
           <div class="panel">
@@ -574,6 +577,14 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
               <label class="profile-service-toggle">
                 <input type="checkbox" id="profile-service-mailpit">
                 <span class="profile-service-label">Mailpit</span>
+              </label>
+              <label class="profile-service-toggle">
+                <input type="checkbox" id="profile-service-meilisearch">
+                <span class="profile-service-label">Meilisearch</span>
+              </label>
+              <label class="profile-service-toggle">
+                <input type="checkbox" id="profile-service-minio">
+                <span class="profile-service-label">MinIO</span>
               </label>
             </fieldset>
             <div class="toolbar" style="margin-top: 1rem">

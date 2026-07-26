@@ -39,7 +39,7 @@ const api = {
       user: string;
       password?: string;
     };
-    services?: ("redis" | "mailpit")[];
+    services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
   }) => ipcRenderer.invoke("devtent:createProfile", input),
   updateProfile: (
     name: string,
@@ -55,7 +55,7 @@ const api = {
         user: string;
         password?: string;
       };
-      services?: ("redis" | "mailpit")[];
+      services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
     }
   ) => ipcRenderer.invoke("devtent:updateProfile", name, patch),
   deleteProfile: (name: string) => ipcRenderer.invoke("devtent:deleteProfile", name),
@@ -96,7 +96,7 @@ const api = {
   backupPostgres: () => ipcRenderer.invoke("devtent:backupPostgres"),
   listPostgresBackups: () => ipcRenderer.invoke("devtent:listPostgresBackups"),
   listSiteWorkers: () => ipcRenderer.invoke("devtent:listSiteWorkers"),
-  setSiteWorker: (siteName: string, kind: "queue" | "vite", enabled: boolean) =>
+  setSiteWorker: (siteName: string, kind: "queue" | "vite" | "schedule", enabled: boolean) =>
     ipcRenderer.invoke("devtent:setSiteWorker", siteName, kind, enabled),
   hasLaravelQueryCapture: (siteName: string) =>
     ipcRenderer.invoke("devtent:hasLaravelQueryCapture", siteName),

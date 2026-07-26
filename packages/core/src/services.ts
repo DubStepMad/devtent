@@ -5,12 +5,14 @@ import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
 import { backupMysql, writeMysqlIni } from "./mysql.js";
+import { backupMariaDb, backupPostgres } from "./db-backups.js";
 import { writeMariaDbIni } from "./mariadb.js";
 import { ensureNginxSupportFiles } from "./nginx-support.js";
 import { ensurePhpCaptureForVersion } from "./dump-capture.js";
 import { phpVersionFromProcfileName } from "./php-ports.js";
 import { resolvePhpPaths } from "./profile-runtime.js";
 import { ensureApacheConfig, APACHE_PROCFILE_COMMAND, needsApacheProcfileRepair } from "./apache-support.js";
+import { getPathEntries } from "./path.js";
 
 const runningProcesses = new Map<string, { process: ChildProcess; startedAt: Date }>();
 
@@ -33,7 +35,17 @@ function serviceStartOrder(name: string): number {
   ) {
     return 0;
   }
-  const idx = ["nginx", "apache", "mysql", "mariadb", "postgresql", "redis", "mailpit"].indexOf(name);
+  const idx = [
+    "nginx",
+    "apache",
+    "mysql",
+    "mariadb",
+    "postgresql",
+    "redis",
+    "mailpit",
+    "meilisearch",
+    "minio",
+  ].indexOf(name);
   return idx === -1 ? 500 : idx + 10;
 }
 
@@ -184,6 +196,12 @@ async function prepareServiceStart(
   if (name === "mariadb") {
     await writeMariaDbIni(root);
   }
+  if (name === "meilisearch") {
+    await mkdir(resolvePath(root, "data/meilisearch"), { recursive: true });
+  }
+  if (name === "minio") {
+    await mkdir(resolvePath(root, "data/minio"), { recursive: true });
+  }
   const phpVersion = phpVersionFromProcfileName(name);
   if (phpVersion) {
     await ensurePhpCaptureForVersion(root, phpVersion);
@@ -267,10 +285,34 @@ export async function startService(
   const logFd = openSync(logPath, "a");
 
   const { executable, args } = parseProcfileCommand(entry.command);
-  const exePath = resolvePath(root, executable);
+  let exePath = resolvePath(root, executable);
   if (!(await pathExists(exePath))) {
-    throw new Error(`Service "${name}" binary not found: ${executable}`);
+    if (path.isAbsolute(executable) && (await pathExists(executable))) {
+      exePath = executable;
+    } else {
+      const pathDirs = (process.env.PATH ?? "").split(path.delimiter);
+      const candidates = pathDirs.map((dir) => path.join(dir, executable));
+      if (process.platform === "win32" && !/\.[a-z0-9]+$/i.test(executable)) {
+        for (const dir of pathDirs) {
+          candidates.push(path.join(dir, `${executable}.exe`));
+          candidates.push(path.join(dir, `${executable}.cmd`));
+        }
+      }
+      let resolved: string | undefined;
+      for (const c of candidates) {
+        if (await pathExists(c)) {
+          resolved = c;
+          break;
+        }
+      }
+      if (!resolved) {
+        throw new Error(`Service "${name}" binary not found: ${executable}`);
+      }
+      exePath = resolved;
+    }
   }
+
+  const { isSiteWorkerServiceName, resolveWorkerCwd } = await import("./site-workers.js");
 
   const spawnEnv: NodeJS.ProcessEnv = { ...process.env, DEVTENT_ROOT: root };
   const phpVersion = phpVersionFromProcfileName(name);
@@ -278,9 +320,26 @@ export async function startService(
     const paths = resolvePhpPaths(phpVersion);
     spawnEnv.PHPRC = resolvePath(root, paths.phpRc);
   }
+  if (isSiteWorkerServiceName(name) || name === "minio") {
+    try {
+      const pathEntries = await getPathEntries(root);
+      const sep = path.delimiter;
+      spawnEnv.PATH = `${pathEntries.join(sep)}${sep}${process.env.PATH ?? ""}`;
+    } catch {
+      // keep default PATH
+    }
+  }
+  if (name === "minio") {
+    spawnEnv.MINIO_ROOT_USER = spawnEnv.MINIO_ROOT_USER || "minioadmin";
+    spawnEnv.MINIO_ROOT_PASSWORD = spawnEnv.MINIO_ROOT_PASSWORD || "minioadmin";
+  }
+
+  const workerCwd = isSiteWorkerServiceName(name)
+    ? await resolveWorkerCwd(root, name)
+    : undefined;
 
   const child = spawn(exePath, args, {
-    cwd: root,
+    cwd: workerCwd ?? root,
     shell: false,
     windowsHide: true,
     detached: process.platform !== "win32",
@@ -356,6 +415,20 @@ export async function stopService(name: string, root?: string, options?: { skipB
   if (name === "mysql" && root && !options?.skipBackup) {
     try {
       await backupMysql(root, "before-stop");
+    } catch {
+      // Continue stopping even if backup fails
+    }
+  }
+  if (name === "mariadb" && root && !options?.skipBackup) {
+    try {
+      await backupMariaDb(root, "before-stop");
+    } catch {
+      // Continue stopping even if backup fails
+    }
+  }
+  if (name === "postgresql" && root && !options?.skipBackup) {
+    try {
+      await backupPostgres(root, "before-stop");
     } catch {
       // Continue stopping even if backup fails
     }

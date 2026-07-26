@@ -192,3 +192,23 @@ export async function listPostgresBackups(root: string): Promise<DbBackupInfo[]>
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+
+export async function maybeDailyMariaDbBackup(root: string): Promise<DbBackupInfo | null> {
+  const backups = await listMariaDbBackups(root);
+  const latest = backups[0];
+  if (latest) {
+    const age = Date.now() - new Date(latest.createdAt).getTime();
+    if (age < 24 * 60 * 60 * 1000) return null;
+  }
+  return backupMariaDb(root, "scheduled");
+}
+
+export async function maybeDailyPostgresBackup(root: string): Promise<DbBackupInfo | null> {
+  const backups = await listPostgresBackups(root);
+  const latest = backups[0];
+  if (latest) {
+    const age = Date.now() - new Date(latest.createdAt).getTime();
+    if (age < 24 * 60 * 60 * 1000) return null;
+  }
+  return backupPostgres(root, "scheduled");
+}

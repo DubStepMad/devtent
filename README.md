@@ -47,8 +47,8 @@ npm run screenshots -w @devtent/desktop
 - **Own your stack** — one portable folder (`c:\devtent`); copy, back up, or move it anywhere
 - **Free & open** — DTCL v1.0 copyleft; source stays open in derivatives
 - **Just works on first run** — optional one-click **recommended stack** (PHP, Nginx, MySQL, mkcert) with services auto-started
-- **Database peace of mind** — automatic MySQL backups before stop, daily while the app is open, 7-day retention
-- **Modern full stack** — PostgreSQL, Redis, Mailpit, Node/Bun/Composer tooling, mkcert via Quick Add / Tooling
+- **Database peace of mind** — automatic MySQL / MariaDB / PostgreSQL backups before stop, daily while the app is open, 7-day retention
+- **Modern full stack** — PostgreSQL, Redis, Meilisearch, MinIO, Mailpit, Node/Bun/Composer tooling, mkcert via Quick Add / Tooling
 - **Park & link sites** — serve `www/`, parked folders, or external projects on `*.test`
 - **Developer tooling** — Composer, Node, Bun, and Laravel installer in one **Tooling** tab
 - **Environment doctor** — `devtent doctor --fix` and dashboard health checks with safe repairs
@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.4.0.exe`
+Output: `packages/desktop/release/DevTent Setup 1.5.0.exe`
 
 ### CLI (optional)
 

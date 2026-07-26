@@ -17,7 +17,16 @@ import {
   loadConfig,
   loadProfile,
   readDumpEvents,
+  clearDumpEvents,
+  listDatabases,
+  createDatabase,
+  backupMysql,
+  backupMariaDb,
+  backupPostgres,
+  listSiteWorkers,
+  setSiteWorker,
 } from "@devtent/core";
+import type { SiteWorkerKind } from "@devtent/core";
 import type { McpContext } from "./context.js";
 import { matchSiteFromPath, resolveCurrentSite } from "./context.js";
 
@@ -75,6 +84,16 @@ export async function findAvailableServices(ctx: McpContext) {
     smtpHost: "127.0.0.1",
     smtpPort: 1025,
     ui: "http://127.0.0.1:8025",
+  };
+  serviceHints.meilisearch = {
+    host: "http://127.0.0.1:7700",
+    masterKey: "masterKey",
+  };
+  serviceHints.minio = {
+    endpoint: "http://127.0.0.1:9000",
+    console: "http://127.0.0.1:9001",
+    accessKey: "minioadmin",
+    secretKey: "***",
   };
 
   return textResult({
@@ -266,6 +285,126 @@ export async function getLaravelEnvSnippetTool(
   }
 }
 
+export async function listDumpsTool(ctx: McpContext, tail = 50, siteName?: string) {
+  try {
+    let events = await readDumpEvents(ctx.root, { tail: Math.min(Math.max(tail, 1), 500) });
+    const filterSite = siteName?.trim() || (await resolveSiteName(ctx))?.name;
+    if (filterSite) {
+      events = events.filter(
+        (e) =>
+          !e.site ||
+          e.site === filterSite ||
+          (typeof e.site === "string" && e.site.includes(filterSite))
+      );
+    }
+    return textResult({ count: events.length, siteFilter: filterSite ?? null, events });
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function clearDumpsTool(ctx: McpContext) {
+  try {
+    await clearDumpEvents(ctx.root);
+    return textResult({ ok: true, cleared: true });
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function listDatabasesTool(ctx: McpContext) {
+  try {
+    const result = await listDatabases(ctx.root);
+    return textResult(result);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function createDatabaseTool(ctx: McpContext, name: string) {
+  const dbName = name.trim();
+  if (!dbName) return errorResult("name is required");
+  try {
+    const result = await createDatabase(ctx.root, dbName);
+    return textResult({ ok: true, ...result });
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function backupDatabaseTool(
+  ctx: McpContext,
+  engine?: "mysql" | "mariadb" | "postgresql" | "active"
+) {
+  const target = engine ?? "active";
+  try {
+    if (target === "mysql") {
+      const info = await backupMysql(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "mysql", backup: info });
+    }
+    if (target === "mariadb") {
+      const info = await backupMariaDb(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "mariadb", backup: info });
+    }
+    if (target === "postgresql") {
+      const info = await backupPostgres(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "postgresql", backup: info });
+    }
+    const db = await resolveDatabaseTarget(ctx.root);
+    if (db.engine === "mysql") {
+      const info = await backupMysql(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "mysql", backup: info });
+    }
+    if (db.engine === "mariadb") {
+      const info = await backupMariaDb(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "mariadb", backup: info });
+    }
+    if (db.engine === "postgresql") {
+      const info = await backupPostgres(ctx.root, "manual");
+      return textResult({ ok: Boolean(info), engine: "postgresql", backup: info });
+    }
+    return errorResult(`No managed database engine to back up (active: ${db.engine})`);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function listSiteWorkersTool(ctx: McpContext, siteName?: string) {
+  try {
+    let workers = await listSiteWorkers(ctx.root);
+    const filter = siteName?.trim() || (await resolveSiteName(ctx))?.name;
+    if (filter) workers = workers.filter((w) => w.siteName === filter);
+    return textResult({ workers });
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
+export async function setSiteWorkerTool(
+  ctx: McpContext,
+  kind: SiteWorkerKind,
+  enabled: boolean,
+  siteName?: string
+) {
+  if (kind !== "queue" && kind !== "vite" && kind !== "schedule") {
+    return errorResult('kind must be "queue", "vite", or "schedule"');
+  }
+  const site = await resolveSiteName(ctx, siteName);
+  if (!site) {
+    return errorResult(
+      siteName
+        ? `Site not found: ${siteName}`
+        : "No site matched SITE_PATH; pass siteName explicitly"
+    );
+  }
+  try {
+    const result = await setSiteWorker(ctx.root, site.name, kind, enabled);
+    return textResult(result);
+  } catch (err) {
+    return errorResult(err instanceof Error ? err.message : String(err));
+  }
+}
+
 export async function buildSiteInformationResource(ctx: McpContext) {
   if (!ctx.sitePath) {
     return {
@@ -406,4 +545,11 @@ export function validateIsolateAction(
   action: string
 ): action is "isolate" | "unisolate" {
   return action === "isolate" || action === "unisolate";
+}
+
+/** Validate site worker kind for unit tests. */
+export function validateWorkerKind(
+  kind: string
+): kind is "queue" | "vite" | "schedule" {
+  return kind === "queue" || kind === "vite" || kind === "schedule";
 }

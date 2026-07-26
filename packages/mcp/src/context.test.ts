@@ -13,6 +13,7 @@ import {
   validateIsolateAction,
   validateServiceAction,
   validateSslAction,
+  validateWorkerKind,
 } from "./handlers.js";
 
 describe("path helpers", () => {
@@ -113,5 +114,12 @@ describe("tool argument validation", () => {
     assert.equal(validateIsolateAction("isolate"), true);
     assert.equal(validateIsolateAction("unisolate"), true);
     assert.equal(validateIsolateAction("pin"), false);
+  });
+
+  it("validates worker kinds", () => {
+    assert.equal(validateWorkerKind("queue"), true);
+    assert.equal(validateWorkerKind("vite"), true);
+    assert.equal(validateWorkerKind("schedule"), true);
+    assert.equal(validateWorkerKind("horizon"), false);
   });
 });

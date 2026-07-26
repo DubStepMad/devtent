@@ -1,0 +1,9 @@
+name: meilisearch
+version: "1.50.0"
+description: Meilisearch — fast search engine for Laravel Scout (port 7700)
+platform: darwin
+arch: arm64
+url: https://github.com/meilisearch/meilisearch/releases/download/v1.50.0/meilisearch-macos-apple-silicon
+installPath: bin/meilisearch
+binary: meilisearch
+downloadType: binary

@@ -544,7 +544,7 @@ async function chmodBinariesUnder(dir: string): Promise<void> {
       if (
         !base.includes(".") ||
         base.endsWith(".sh") ||
-        /^(php|php-fpm|php-cgi|nginx|mysqld|mysql|redis-server|postgres|mailpit|mkcert|cloudflared|node|bun)$/i.test(
+        /^(php|php-fpm|php-cgi|nginx|mysqld|mysql|redis-server|postgres|mailpit|meilisearch|minio|mkcert|cloudflared|node|bun)$/i.test(
           base
         )
       ) {

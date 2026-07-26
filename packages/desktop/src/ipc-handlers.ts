@@ -408,7 +408,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     "devtent:setSiteWorker",
-    async (_e, siteName: string, kind: "queue" | "vite", enabled: boolean) => {
+    async (_e, siteName: string, kind: "queue" | "vite" | "schedule", enabled: boolean) => {
       const result = await (await loadCore()).setSiteWorker(currentRoot, siteName, kind, enabled);
       broadcastRefresh();
       return result;
@@ -668,7 +668,7 @@ export function registerIpcHandlers(): void {
           user: string;
           password?: string;
         };
-        services?: ("redis" | "mailpit")[];
+        services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
       }
     ) => {
       const profile = await (await loadCore()).createProfile(currentRoot, input);
@@ -694,7 +694,7 @@ export function registerIpcHandlers(): void {
           user: string;
           password?: string;
         };
-        services?: ("redis" | "mailpit")[];
+        services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
       }
     ) => {
       const profile = await (await loadCore()).updateProfile(currentRoot, name, patch);

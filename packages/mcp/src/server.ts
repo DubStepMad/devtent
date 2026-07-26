@@ -3,8 +3,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { createMcpContext } from "./context.js";
 import {
+  backupDatabaseTool,
   buildDebugSitePrompt,
   buildSiteInformationResource,
+  clearDumpsTool,
+  createDatabaseTool,
   findAvailableServices,
   getAllPhpVersions,
   getAllSites,
@@ -12,8 +15,12 @@ import {
   installPhpVersion,
   installService,
   isolateOrUnisolateSite,
+  listDatabasesTool,
+  listDumpsTool,
+  listSiteWorkersTool,
   runDoctorTool,
   secureOrUnsecureSite,
+  setSiteWorkerTool,
   startOrStopService,
 } from "./handlers.js";
 
@@ -21,19 +28,19 @@ export function createDevTentMcpServer(env: NodeJS.ProcessEnv = process.env): Mc
   const ctx = createMcpContext(env);
   const server = new McpServer({
     name: "devtent",
-    version: "1.4.0",
+    version: "1.5.0",
   });
 
   server.tool(
     "find_available_services",
-    "List Quick Add manifests, running services, and connection env hints (DB/Redis/Mailpit).",
+    "List Quick Add manifests, running services, and connection env hints (DB/Redis/Mailpit/Meilisearch/MinIO).",
     {},
     async () => findAvailableServices(ctx)
   );
 
   server.tool(
     "install_service",
-    "Install a runtime/service from a DevTent Quick Add manifest (e.g. mysql-8.4, redis, mailpit, nginx).",
+    "Install a runtime/service from a DevTent Quick Add manifest (e.g. mysql-8.4, redis, mailpit, meilisearch, minio, nginx).",
     { service: z.string().describe("Manifest name, e.g. redis or php-8.3") },
     async ({ service }) => installService(ctx, service)
   );
@@ -115,7 +122,7 @@ export function createDevTentMcpServer(env: NodeJS.ProcessEnv = process.env): Mc
 
   server.tool(
     "get_laravel_env_snippet",
-    "Laravel .env snippet for APP_URL, DB, mail, Redis. Passwords redacted unless includeSecrets is true.",
+    "Laravel .env snippet for APP_URL, DB, mail, Redis, Meilisearch, MinIO. Passwords redacted unless includeSecrets is true.",
     {
       siteName: z
         .string()
@@ -128,6 +135,78 @@ export function createDevTentMcpServer(env: NodeJS.ProcessEnv = process.env): Mc
     },
     async ({ siteName, includeSecrets }) =>
       getLaravelEnvSnippetTool(ctx, siteName, includeSecrets ?? false)
+  );
+
+  server.tool(
+    "list_dumps",
+    "Read recent dump / Laravel telemetry events from logs/dumps.jsonl.",
+    {
+      tail: z.number().optional().describe("Max events to return (default 50, max 500)"),
+      siteName: z
+        .string()
+        .optional()
+        .describe("Filter by site; defaults to SITE_PATH match when set"),
+    },
+    async ({ tail, siteName }) => listDumpsTool(ctx, tail ?? 50, siteName)
+  );
+
+  server.tool(
+    "clear_dumps",
+    "Clear all dump / Laravel telemetry events.",
+    {},
+    async () => clearDumpsTool(ctx)
+  );
+
+  server.tool(
+    "list_databases",
+    "List databases for the active profile database engine.",
+    {},
+    async () => listDatabasesTool(ctx)
+  );
+
+  server.tool(
+    "create_database",
+    "Create a database on the active profile engine.",
+    { name: z.string().describe("Database name") },
+    async ({ name }) => createDatabaseTool(ctx, name)
+  );
+
+  server.tool(
+    "backup_database",
+    "Run a manual backup for mysql, mariadb, postgresql, or the active managed engine.",
+    {
+      engine: z
+        .enum(["mysql", "mariadb", "postgresql", "active"])
+        .optional()
+        .describe("Engine to back up (default active)"),
+    },
+    async ({ engine }) => backupDatabaseTool(ctx, engine ?? "active")
+  );
+
+  server.tool(
+    "list_site_workers",
+    "List queue / Vite / scheduler worker status for sites.",
+    {
+      siteName: z
+        .string()
+        .optional()
+        .describe("Limit to one site; defaults to SITE_PATH match when set"),
+    },
+    async ({ siteName }) => listSiteWorkersTool(ctx, siteName)
+  );
+
+  server.tool(
+    "set_site_worker",
+    "Enable or disable a queue, Vite, or schedule worker for a site (starts/stops immediately).",
+    {
+      kind: z.enum(["queue", "vite", "schedule"]),
+      enabled: z.boolean(),
+      siteName: z
+        .string()
+        .optional()
+        .describe("Site name; defaults to the site matching SITE_PATH"),
+    },
+    async ({ kind, enabled, siteName }) => setSiteWorkerTool(ctx, kind, enabled, siteName)
   );
 
   server.resource(

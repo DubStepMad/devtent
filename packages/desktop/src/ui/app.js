@@ -68,7 +68,7 @@ const QUICK_ADD_GROUPS = [
     match: (name) =>
       name.startsWith("mysql") || name.startsWith("mariadb") || name.startsWith("postgresql"),
   },
-  { label: "Cache, mail & SSL", match: (name) => ["redis", "mailpit", "mkcert"].includes(name) },
+  { label: "Cache, mail & SSL", match: (name) => ["redis", "mailpit", "mkcert", "meilisearch", "minio"].includes(name) },
   { label: "Other tools", match: () => true },
 ];
 
@@ -1635,11 +1635,23 @@ async function openSiteDrawer(vhost) {
 
   const workers = api.listSiteWorkers ? await api.listSiteWorkers().catch(() => []) : [];
   const queue = workers.find((w) => w.siteName === vhost.name && w.kind === "queue");
+  const schedule = workers.find((w) => w.siteName === vhost.name && w.kind === "schedule");
   const vite = workers.find((w) => w.siteName === vhost.name && w.kind === "vite");
   const queueCb = document.getElementById("site-drawer-queue");
+  const scheduleCb = document.getElementById("site-drawer-schedule");
   const viteCb = document.getElementById("site-drawer-vite");
+  const vitePortHint = document.getElementById("site-drawer-vite-port");
   if (queueCb) queueCb.checked = Boolean(queue?.enabled);
+  if (scheduleCb) scheduleCb.checked = Boolean(schedule?.enabled);
   if (viteCb) viteCb.checked = Boolean(vite?.enabled);
+  if (vitePortHint) {
+    if (vite?.port) {
+      vitePortHint.textContent = `Vite port: ${vite.port}`;
+      vitePortHint.classList.remove("hidden");
+    } else {
+      vitePortHint.classList.add("hidden");
+    }
+  }
 }
 
 async function refreshProjects() {
@@ -1809,6 +1821,16 @@ async function refreshPhpIniPage(preferredVersion) {
   const summary = await api.readPhpIni(selected);
   if (pathEl) pathEl.textContent = summary.iniPath || "";
   if (contentEl) contentEl.value = summary.content || "";
+  const xdebugHint = document.getElementById("php-ini-xdebug-hint");
+  if (xdebugHint) {
+    if (summary.xdebugIdeHint) {
+      xdebugHint.textContent = summary.xdebugIdeHint;
+      xdebugHint.classList.remove("hidden");
+    } else {
+      xdebugHint.textContent = "";
+      xdebugHint.classList.add("hidden");
+    }
+  }
   if (extGrid) {
     if (!summary.extensions?.length) {
       extGrid.innerHTML = '<p class="empty-hint">No extensions detected</p>';
@@ -1935,6 +1957,8 @@ function readProfileServicesFromEditor() {
   const services = [];
   if (document.getElementById("profile-service-redis")?.checked) services.push("redis");
   if (document.getElementById("profile-service-mailpit")?.checked) services.push("mailpit");
+  if (document.getElementById("profile-service-meilisearch")?.checked) services.push("meilisearch");
+  if (document.getElementById("profile-service-minio")?.checked) services.push("minio");
   const result = { database, services };
   if (database === "external") {
     result.databaseConnection = readExternalDbConnectionFromEditor();
@@ -1955,8 +1979,12 @@ function applyProfileServicesToEditor(profile) {
   );
   const redisToggle = document.getElementById("profile-service-redis");
   const mailpitToggle = document.getElementById("profile-service-mailpit");
+  const meiliToggle = document.getElementById("profile-service-meilisearch");
+  const minioToggle = document.getElementById("profile-service-minio");
   if (redisToggle) redisToggle.checked = profile.services?.includes("redis") ?? false;
   if (mailpitToggle) mailpitToggle.checked = profile.services?.includes("mailpit") ?? false;
+  if (meiliToggle) meiliToggle.checked = profile.services?.includes("meilisearch") ?? false;
+  if (minioToggle) minioToggle.checked = profile.services?.includes("minio") ?? false;
   syncProfileDatabaseToggle();
 }
 
@@ -2914,9 +2942,27 @@ async function boot() {
         e.target.checked ? "Enabling queue worker…" : "Disabling queue worker…"
       );
       showToast(
-        e.target.checked ? "Queue worker enabled — restart services to apply" : "Queue worker disabled",
+        e.target.checked ? "Queue worker started" : "Queue worker stopped",
         "success"
       );
+      await openSiteDrawer(siteDrawerVhost);
+    } catch (err) {
+      showToast(err.message || String(err), "error");
+      e.target.checked = !e.target.checked;
+    }
+  });
+  document.getElementById("site-drawer-schedule")?.addEventListener("change", async (e) => {
+    if (!siteDrawerVhost) return;
+    try {
+      await withLoading(
+        () => api.setSiteWorker(siteDrawerVhost.name, "schedule", e.target.checked),
+        e.target.checked ? "Enabling scheduler…" : "Disabling scheduler…"
+      );
+      showToast(
+        e.target.checked ? "Scheduler started" : "Scheduler stopped",
+        "success"
+      );
+      await openSiteDrawer(siteDrawerVhost);
     } catch (err) {
       showToast(err.message || String(err), "error");
       e.target.checked = !e.target.checked;
@@ -2925,14 +2971,17 @@ async function boot() {
   document.getElementById("site-drawer-vite")?.addEventListener("change", async (e) => {
     if (!siteDrawerVhost) return;
     try {
-      await withLoading(
+      const result = await withLoading(
         () => api.setSiteWorker(siteDrawerVhost.name, "vite", e.target.checked),
         e.target.checked ? "Enabling Vite worker…" : "Disabling Vite worker…"
       );
       showToast(
-        e.target.checked ? "Vite worker enabled — restart services to apply" : "Vite worker disabled",
+        e.target.checked
+          ? `Vite worker started on port ${result.port ?? "—"}`
+          : "Vite worker stopped",
         "success"
       );
+      await openSiteDrawer(siteDrawerVhost);
     } catch (err) {
       showToast(err.message || String(err), "error");
       e.target.checked = !e.target.checked;

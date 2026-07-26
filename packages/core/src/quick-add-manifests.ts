@@ -14,7 +14,13 @@ export function getQuickAddCategory(name: string): QuickAddCategory {
   ) {
     return "database";
   }
-  if (name === "redis" || name === "mailpit" || name === "mkcert") {
+  if (
+    name === "redis" ||
+    name === "mailpit" ||
+    name === "mkcert" ||
+    name === "meilisearch" ||
+    name === "minio"
+  ) {
     return "cache-mail";
   }
   return "tools";

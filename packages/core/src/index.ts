@@ -167,6 +167,7 @@ export {
   readPhpIni,
   writePhpIni,
   setPhpExtension,
+  XDEBUG_IDE_HINT,
 } from "./php-ini.js";
 export type { PhpIniSummary, PhpIniExtension } from "./php-ini.js";
 
@@ -175,12 +176,22 @@ export {
   listMariaDbBackups,
   backupPostgres,
   listPostgresBackups,
+  maybeDailyMariaDbBackup,
+  maybeDailyPostgresBackup,
   MARIADB_BACKUP_DIR,
   POSTGRES_BACKUP_DIR,
 } from "./db-backups.js";
 export type { DbBackupInfo } from "./db-backups.js";
 
-export { listSiteWorkers, setSiteWorker } from "./site-workers.js";
+export {
+  listSiteWorkers,
+  setSiteWorker,
+  preferredVitePort,
+  allocateVitePort,
+  parseVitePortFromCommand,
+  isSiteWorkerServiceName,
+  resolveWorkerCwd,
+} from "./site-workers.js";
 export type { SiteWorkerKind, SiteWorkerStatus } from "./site-workers.js";
 
 export { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized } from "./mariadb.js";

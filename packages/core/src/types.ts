@@ -53,7 +53,7 @@ export interface ServiceDefinition extends ServiceConfig {
   name: string;
 }
 
-export type ProfileOptionalService = "redis" | "mailpit";
+export type ProfileOptionalService = "redis" | "mailpit" | "meilisearch" | "minio";
 
 /** Managed profile engines plus external (NAS / remote) and none. */
 export type ProfileDatabase = "mysql" | "mariadb" | "postgresql" | "external" | "none";

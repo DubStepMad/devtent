@@ -231,8 +231,14 @@ app.whenReady().then(async () => {
     const activeRoot = getCurrentRoot();
     if (!activeRoot || !(await isInitialized(activeRoot))) return;
     try {
-      const { maybeDailyMysqlBackup } = await import("@devtent/core");
+      const {
+        maybeDailyMysqlBackup,
+        maybeDailyMariaDbBackup,
+        maybeDailyPostgresBackup,
+      } = await import("@devtent/core");
       await maybeDailyMysqlBackup(activeRoot);
+      await maybeDailyMariaDbBackup(activeRoot);
+      await maybeDailyPostgresBackup(activeRoot);
     } catch {
       // Non-fatal
     }

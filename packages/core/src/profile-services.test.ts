@@ -34,7 +34,7 @@ describe("profile services", () => {
       name: "full",
       webServer: "nginx",
       database: "mysql",
-      services: ["redis", "mailpit"],
+      services: ["redis", "mailpit", "meilisearch", "minio"],
     });
     assert.deepEqual(getProfileServiceIds(withOptional), [
       "php-fpm",
@@ -42,6 +42,8 @@ describe("profile services", () => {
       "mysql",
       "redis",
       "mailpit",
+      "meilisearch",
+      "minio",
     ]);
   });
 

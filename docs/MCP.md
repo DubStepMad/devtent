@@ -77,7 +77,7 @@ Use a different MCP entry (or `SITE_PATH`) per project so the agent targets the 
 
 | Tool | Description |
 | --- | --- |
-| `find_available_services` | Manifests, running services, DB/Redis/Mailpit connection hints |
+| `find_available_services` | Manifests, running services, DB/Redis/Mailpit/Meilisearch/MinIO connection hints |
 | `install_service` | Install from a Quick Add manifest |
 | `start_or_stop_service` | Start or stop one service |
 | `get_all_php_versions` | Installed + available PHP versions |
@@ -87,6 +87,13 @@ Use a different MCP entry (or `SITE_PATH`) per project so the agent targets the 
 | `isolate_or_unisolate_site` | Pin or clear per-site PHP |
 | `run_doctor` | Environment doctor (optional safe repairs) |
 | `get_laravel_env_snippet` | Laravel `.env` block (passwords redacted unless `includeSecrets`) |
+| `list_dumps` | Recent dump / Laravel telemetry events |
+| `clear_dumps` | Clear dump events |
+| `list_databases` | Databases for the active engine |
+| `create_database` | Create a database on the active engine |
+| `backup_database` | Manual backup (mysql / mariadb / postgresql / active) |
+| `list_site_workers` | Queue / Vite / scheduler worker status |
+| `set_site_worker` | Enable/disable queue, Vite, or schedule worker (starts/stops immediately) |
 
 ## Resource & prompt
 

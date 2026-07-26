@@ -31,7 +31,7 @@ DevTent is a **local development environment manager**. It intentionally:
 - Downloads and extracts third-party runtimes from official URLs in manifests
 - May update the system hosts file via an elevated Windows helper when direct write is blocked (DevTent itself does not require admin)
 - Copies data from user-selected environment folders during import
-- Backs up MySQL with `mysqldump` when stopping the service or on schedule (desktop app)
+- Backs up MySQL, MariaDB, and PostgreSQL with engine dump tools when stopping the service or on schedule (desktop app)
 
 Do not run DevTent or edit the Procfile with untrusted content on production machines.
 
