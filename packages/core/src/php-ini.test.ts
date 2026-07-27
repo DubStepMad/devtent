@@ -15,7 +15,7 @@ describe("php-ini xdebug", () => {
       await writeFile(path.join(extDir, "php_xdebug.dll"), "", "utf-8");
       await writeFile(
         path.join(phpRc, "php.ini"),
-        "; DevTent php.ini\nextension=curl\n",
+        "; DevTent php.ini\nextension=curl\n   \n",
         "utf-8"
       );
 
@@ -23,6 +23,7 @@ describe("php-ini xdebug", () => {
       assert.ok(enabled.content.includes("zend_extension=xdebug"));
       assert.ok(enabled.content.includes("xdebug.client_port=9003"));
       assert.ok(enabled.content.includes("xdebug.idekey=DEVTENT"));
+      assert.ok(!enabled.content.endsWith("   \n\n; DevTent Xdebug"));
       assert.equal(enabled.xdebugIdeHint, XDEBUG_IDE_HINT);
       const xdebug = enabled.extensions.find((e) => e.name === "xdebug");
       assert.equal(xdebug?.enabled, true);

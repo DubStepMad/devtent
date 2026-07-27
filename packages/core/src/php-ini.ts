@@ -157,6 +157,32 @@ async function listExtDir(root: string, phpVersion: string): Promise<Set<string>
   return names;
 }
 
+function trimTrailingWhitespace(value: string): string {
+  // Linear trim — avoid /\s+$/ which CodeQL flags as polynomial ReDoS on large ini files.
+  let end = value.length;
+  while (end > 0) {
+    const c = value.charCodeAt(end - 1);
+    if (c !== 32 && c !== 9 && c !== 13 && c !== 10 && c !== 12 && c !== 11) break;
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
+function collapseExtraBlankLines(value: string): string {
+  const out: string[] = [];
+  let blankRun = 0;
+  for (const line of value.split("\n")) {
+    if (line.length === 0) {
+      blankRun += 1;
+      if (blankRun <= 1) out.push(line);
+      continue;
+    }
+    blankRun = 0;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 function applyXdebugSettings(content: string, enabled: boolean): string {
   const lines = content.split(/\r?\n/);
   const settingKeys = new Set(
@@ -166,7 +192,7 @@ function applyXdebugSettings(content: string, enabled: boolean): string {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith(";")) {
       // Keep comments unless they are our exact setting lines commented out.
-      const uncommented = trimmed.replace(/^;\s*/, "");
+      const uncommented = trimmed.startsWith(";") ? trimmed.slice(1).trimStart() : trimmed;
       const key = uncommented.split("=")[0]?.toLowerCase();
       return !key || !settingKeys.has(key);
     }
@@ -175,10 +201,10 @@ function applyXdebugSettings(content: string, enabled: boolean): string {
   });
 
   if (!enabled) {
-    return without.join("\n").replace(/\n{3,}/g, "\n\n");
+    return collapseExtraBlankLines(without.join("\n"));
   }
 
-  const body = without.join("\n").replace(/\s+$/, "");
+  const body = trimTrailingWhitespace(without.join("\n"));
   return `${body}\n\n; DevTent Xdebug defaults\n${XDEBUG_DEFAULT_SETTINGS.join("\n")}\n`;
 }
 

@@ -29,9 +29,15 @@ export async function buildLaravelEnvSnippet(
   const profile = await loadProfile(root, config.activeProfile);
   const lines: string[] = [];
   const redacted: string[] = [];
-  const push = (line: string, logLine = line) => {
+  // Keep public and secret channels separate so password values never alias into redacted output
+  // (CodeQL js/clear-text-logging flags `logLine = line` defaults that can carry secrets).
+  const push = (line: string) => {
     lines.push(line);
-    redacted.push(logLine);
+    redacted.push(line);
+  };
+  const pushSecret = (secretLine: string, redactedLine: string) => {
+    lines.push(secretLine);
+    redacted.push(redactedLine);
   };
 
   const scheme = vhost.ssl ? "https" : "http";
@@ -45,7 +51,7 @@ export async function buildLaravelEnvSnippet(
     push(`DB_PORT=${db.port}`);
     push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
     push(`DB_USERNAME=${db.user}`);
-    push(`DB_PASSWORD=${db.password}`, db.password ? "DB_PASSWORD=***" : "DB_PASSWORD=");
+    pushSecret(`DB_PASSWORD=${db.password}`, "DB_PASSWORD=***");
     push("");
   } else if (db.engine === "postgresql") {
     push("DB_CONNECTION=pgsql");
@@ -53,7 +59,7 @@ export async function buildLaravelEnvSnippet(
     push(`DB_PORT=${db.port}`);
     push(`DB_DATABASE=${siteName.replace(/-/g, "_")}`);
     push(`DB_USERNAME=${db.user}`);
-    push(`DB_PASSWORD=${db.password}`, db.password ? "DB_PASSWORD=***" : "DB_PASSWORD=");
+    pushSecret(`DB_PASSWORD=${db.password}`, "DB_PASSWORD=***");
     push("");
   }
 
@@ -89,7 +95,7 @@ export async function buildLaravelEnvSnippet(
   if (profile.services?.includes("minio")) {
     push("FILESYSTEM_DISK=s3");
     push("AWS_ACCESS_KEY_ID=minioadmin");
-    push("AWS_SECRET_ACCESS_KEY=minioadmin", "AWS_SECRET_ACCESS_KEY=***");
+    pushSecret("AWS_SECRET_ACCESS_KEY=minioadmin", "AWS_SECRET_ACCESS_KEY=***");
     push("AWS_DEFAULT_REGION=us-east-1");
     push("AWS_BUCKET=local");
     push("AWS_ENDPOINT=http://127.0.0.1:9000");

@@ -1035,14 +1035,17 @@ laravelCmd
   .action(async (site: string, opts: { root?: string; secrets?: boolean }) => {
     const root = resolveRoot(opts.root);
     const snippet = await buildLaravelEnvSnippet(root, site);
-    log(`# Paste into .env for ${snippet.domain}`);
+    // Always write via stdout — never route secret or redacted env blocks through console.log
+    // (CodeQL js/clear-text-logging tracks password → log wrapper).
+    process.stdout.write(`# Paste into .env for ${snippet.domain}\n`);
     if (opts.secrets) {
-      // Avoid console.log sinks for clear-text secrets (CodeQL js/clear-text-logging)
       process.stdout.write(`${snippet.envBlock}\n`);
     } else {
-      log(snippet.envBlockRedacted);
+      process.stdout.write(`${snippet.envBlockRedacted}\n`);
       if (snippet.envBlock !== snippet.envBlockRedacted) {
-        log("# Passwords redacted — re-run with --secrets or copy from the desktop site drawer");
+        process.stdout.write(
+          "# Passwords redacted — re-run with --secrets or copy from the desktop site drawer\n"
+        );
       }
     }
   });
