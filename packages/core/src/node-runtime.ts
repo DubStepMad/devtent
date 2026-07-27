@@ -1,10 +1,9 @@
 import path from "node:path";
-import { loadConfig, loadProfile, resolvePath, pathExists, saveProfile, updateProfile } from "./config.js";
-import { normalizeProfile } from "./profile-runtime.js";
-import type { QuickAddManifest } from "./types.js";
-import { isManifestInstalled } from "./profile-runtime.js";
-import { listManifests, loadManifest } from "./quick-add.js";
+import { loadConfig, loadProfile, resolvePath, pathExists } from "./config.js";
+import { normalizeProfile, isManifestInstalled } from "./profile-runtime.js";
+import { listManifests, loadManifest, installFromManifest } from "./quick-add.js";
 import { binaryName, npmLauncher } from "./platform/binary.js";
+import { resolveLatestNodeBuild, nodeMajorFromManifestName } from "./manifest-releases.js";
 
 export interface NodeRuntimePaths {
   nodeVersion: string;
@@ -67,22 +66,30 @@ export async function listNodeVersions(
 ): Promise<NodeVersionInfo[]> {
   const config = await loadConfig(root);
   const profile = normalizeProfile(await loadProfile(root, config.activeProfile));
-  const activeId = profile.useExternalNode ? undefined : profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
+  const activeId = profile.useExternalNode
+    ? undefined
+    : profile.nodeVersion ?? nodeVersionFromLegacyPath(profile.node);
 
   const manifests = (await listManifests(manifestsDir)).filter((m) => m.name.startsWith("node-"));
-  const versions: NodeVersionInfo[] = [];
 
-  for (const manifest of manifests) {
-    const installed = await isManifestInstalled(root, manifest);
-    versions.push({
-      id: manifest.name,
-      version: manifest.version,
-      label: getNodeDisplayLabel(manifest.name, manifest.version),
-      description: manifest.description,
-      installed,
-      active: activeId === manifest.name,
-    });
-  }
+  const versions = await Promise.all(
+    manifests.map(async (manifest) => {
+      const major = nodeMajorFromManifestName(manifest.name);
+      const [installed, latest] = await Promise.all([
+        isManifestInstalled(root, manifest),
+        major ? resolveLatestNodeBuild(major).catch(() => null) : Promise.resolve(null),
+      ]);
+      const version = latest?.version ?? manifest.version;
+      return {
+        id: manifest.name,
+        version,
+        label: getNodeDisplayLabel(manifest.name, version),
+        description: manifest.description,
+        installed,
+        active: activeId === manifest.name,
+      };
+    })
+  );
 
   return versions.sort((a, b) => b.id.localeCompare(a.id));
 }
@@ -101,12 +108,15 @@ export async function installNodeVersion(
   root: string,
   manifestsDir: string,
   nodeVersion: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  options?: { preferLatest?: boolean; reinstall?: boolean }
 ): Promise<string> {
   const manifest = await loadManifest(manifestsDir, nodeVersion);
   if (!manifest.name.startsWith("node-")) {
     throw new Error(`Not a Node manifest: ${nodeVersion}`);
   }
-  const { installFromManifest } = await import("./quick-add.js");
-  return installFromManifest(root, manifest, onProgress);
+  return installFromManifest(root, manifest, onProgress, {
+    preferLatest: options?.preferLatest !== false,
+    reinstall: options?.reinstall,
+  });
 }

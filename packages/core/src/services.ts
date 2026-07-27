@@ -547,6 +547,20 @@ export async function saveProcfileEntry(root: string, entry: ProcfileEntry): Pro
 }
 
 export function isServiceRunning(name: string): boolean {
+  // Services UI / profile use logical "php-fpm"; processes are stored as php-cgi-* / php-fpm-*.
+  if (name === "php-fpm") {
+    let anyAlive = false;
+    for (const [n, { process }] of [...runningProcesses.entries()]) {
+      if (!isPhpStackServiceName(n) || n === "php-fpm") continue;
+      if (isChildAlive(process)) {
+        anyAlive = true;
+      } else {
+        runningProcesses.delete(n);
+      }
+    }
+    return anyAlive;
+  }
+
   const entry = runningProcesses.get(name);
   if (!entry) return false;
   if (!isChildAlive(entry.process)) {
@@ -554,4 +568,39 @@ export function isServiceRunning(name: string): boolean {
     return false;
   }
   return true;
+}
+
+/** Procfile rows plus synthetic php-fpm aggregate for the Services UI. */
+export async function listServicesWithStatus(root: string): Promise<
+  (ProcfileEntry & { running: boolean; pid?: number })[]
+> {
+  const entries = await parseProcfile(root);
+  const statuses = getServiceStatuses();
+  const byName = new Map(statuses.map((s) => [s.name, s]));
+  const mapped = entries.map((entry) => {
+    const status = byName.get(entry.name);
+    return {
+      ...entry,
+      running: isServiceRunning(entry.name),
+      pid: status?.pid,
+    };
+  });
+
+  const hasVersionedPhp = entries.some(
+    (e) => e.name.startsWith("php-cgi-") || e.name.startsWith("php-fpm-")
+  );
+  if (hasVersionedPhp && !mapped.some((e) => e.name === "php-fpm")) {
+    const php = byName.get("php-fpm");
+    const sample = entries.find(
+      (e) => e.name.startsWith("php-cgi-") || e.name.startsWith("php-fpm-")
+    );
+    mapped.push({
+      name: "php-fpm",
+      command: sample?.command ?? "",
+      running: isServiceRunning("php-fpm"),
+      pid: php?.pid,
+    });
+  }
+
+  return mapped;
 }

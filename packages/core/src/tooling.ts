@@ -384,13 +384,13 @@ export async function installTool(
 
   if (toolId === "composer") {
     const manifest = await loadManifest(manifestsDir, "composer");
-    await installFromManifest(root, manifest, log);
+    await installFromManifest(root, manifest, log, { preferLatest: true });
     return;
   }
 
   if (toolId === "bun") {
     const manifest = await loadManifest(manifestsDir, "bun");
-    await installFromManifest(root, manifest, log);
+    await installFromManifest(root, manifest, log, { preferLatest: true });
     return;
   }
 
@@ -453,7 +453,10 @@ export async function updateTool(
     if (!activeId) {
       throw new Error("No active Node version to update.");
     }
-    await installNodeVersion(root, manifestsDir, activeId, onProgress);
+    await installNodeVersion(root, manifestsDir, activeId, onProgress, {
+      preferLatest: true,
+      reinstall: true,
+    });
     return;
   }
 
@@ -463,7 +466,10 @@ export async function updateTool(
     throw new Error(`Cannot update tool: ${toolId}`);
   }
   const manifest = await loadManifest(manifestsDir, manifestId);
-  await installFromManifest(root, manifest, onProgress);
+  await installFromManifest(root, manifest, onProgress, {
+    preferLatest: true,
+    reinstall: true,
+  });
 }
 
 export async function removeTool(

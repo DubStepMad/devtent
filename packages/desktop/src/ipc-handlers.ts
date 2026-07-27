@@ -615,14 +615,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:getServices", async () => {
-    const core = await loadCore();
-    const entries = await core.parseProcfile(currentRoot);
-    const running = core.getServiceStatuses();
-    return entries.map((entry: ProcfileEntry) => ({
-      ...entry,
-      running: core.isServiceRunning(entry.name),
-      pid: running.find((r) => r.name === entry.name)?.pid,
-    }));
+    return await (await loadCore()).listServicesWithStatus(currentRoot);
   });
 
   ipcMain.handle("devtent:syncVhosts", async () => {
@@ -713,25 +706,51 @@ export function registerIpcHandlers(): void {
     return await (await loadCore()).listManifestsWithStatus(currentRoot, getManifestsDir());
   });
 
-  ipcMain.handle("devtent:installManifest", async (_e, name: string) => {
-    const manifest = await (await loadCore()).loadManifest(getManifestsDir(), name);
-    sendProgress(`Installing ${manifest.name}…`);
-    const installPath = await (await loadCore()).installFromManifest(currentRoot, manifest, sendProgress);
+  ipcMain.handle(
+    "devtent:installManifest",
+    async (_e, name: string, options?: { reinstall?: boolean; preferLatest?: boolean }) => {
+      const core = await loadCore();
+      const manifest = await core.loadManifest(getManifestsDir(), name);
+      const reinstall = Boolean(options?.reinstall);
+      const preferLatest = options?.preferLatest !== false;
+      sendProgress(reinstall ? `Updating ${manifest.name}…` : `Installing ${manifest.name}…`);
 
-    if (name.startsWith("php-")) {
-      await (await loadCore()).applyPhpVersionToActiveProfile(currentRoot, name);
-      const toggles = await (await loadCore()).getProcfileToggles(currentRoot);
-      const php = toggles.find((t: ProcfileToggle) => t.id === "php-fpm");
-      if (php?.runtimeInstalled && !php.enabled) {
-        await (await loadCore()).setProcfileToggle(currentRoot, "php-fpm", true);
-      } else if (php?.enabled) {
-        await (await loadCore()).syncPhpProcfileFromProfile(currentRoot);
+      if (reinstall && name.startsWith("php-")) {
+        try {
+          sendProgress("Stopping PHP before update…");
+          await core.stopService("php-fpm", currentRoot, { skipBackup: true });
+        } catch {
+          // Best-effort stop so Windows can replace locked binaries
+        }
+      } else if (reinstall && ["mailpit", "meilisearch", "minio"].includes(name)) {
+        try {
+          sendProgress(`Stopping ${name} before update…`);
+          await core.stopService(name, currentRoot, { skipBackup: true });
+        } catch {
+          // Best-effort
+        }
       }
-    }
 
-    broadcastRefresh();
-    return { name, installPath };
-  });
+      const installPath = await core.installFromManifest(currentRoot, manifest, sendProgress, {
+        preferLatest,
+        reinstall,
+      });
+
+      if (name.startsWith("php-")) {
+        await core.applyPhpVersionToActiveProfile(currentRoot, name);
+        const toggles = await core.getProcfileToggles(currentRoot);
+        const php = toggles.find((t: ProcfileToggle) => t.id === "php-fpm");
+        if (php?.runtimeInstalled && !php.enabled) {
+          await core.setProcfileToggle(currentRoot, "php-fpm", true);
+        } else if (php?.enabled) {
+          await core.syncPhpProcfileFromProfile(currentRoot);
+        }
+      }
+
+      broadcastRefresh();
+      return { name, installPath };
+    }
+  );
 
   ipcMain.handle("devtent:installRecommendedStack", async () => {
     await assertInstallNotInProgress(getDefaultRoot());

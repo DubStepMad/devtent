@@ -6,8 +6,22 @@ import { parse as parseYaml } from "yaml";
 import { resolvePath, pathExists } from "./config.js";
 import { isManifestInstalled } from "./profile-runtime.js";
 import type { QuickAddManifest } from "./types.js";
+import { isPhpManifestName, wipePhpInstallPreservingIni, readPhpRuntimeRecord } from "./php-releases.js";
+import {
+  supportsAutoLatest,
+  resolveManifestToLatest,
+  checkManifestUpdateStatus,
+  writeManifestRuntimeRecord,
+  runtimeSourceForManifest,
+} from "./manifest-releases.js";
+import { wipeInstallPreserving } from "./runtime-record.js";
 
-export type ManifestWithStatus = QuickAddManifest & { installed: boolean };
+export type ManifestWithStatus = QuickAddManifest & {
+  installed: boolean;
+  installedVersion?: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
+};
 
 export function validateManifestPlatform(manifest: QuickAddManifest): void {
   const platform = manifest.platform ?? "all";
@@ -89,80 +103,162 @@ export async function listManifests(manifestsDir: string): Promise<QuickAddManif
 
 export async function listManifestsWithStatus(
   root: string,
-  manifestsDir: string
+  manifestsDir: string,
+  options?: { checkUpdates?: boolean; checkPhpUpdates?: boolean }
 ): Promise<ManifestWithStatus[]> {
   const manifests = await listManifests(manifestsDir);
+  const checkUpdates =
+    options?.checkUpdates !== false && options?.checkPhpUpdates !== false;
+
   return Promise.all(
-    manifests.map(async (manifest) => ({
-      ...manifest,
-      installed: await isManifestInstalled(root, manifest),
-    }))
+    manifests.map(async (manifest) => {
+      if (!checkUpdates || !supportsAutoLatest(manifest.name)) {
+        return {
+          ...manifest,
+          installed: await isManifestInstalled(root, manifest),
+        };
+      }
+
+      try {
+        const status = await checkManifestUpdateStatus(root, manifest);
+        return {
+          ...manifest,
+          installed: status.installed,
+          installedVersion: status.installedVersion,
+          latestVersion: status.latestVersion,
+          updateAvailable: status.updateAvailable,
+          version: status.latestVersion ?? manifest.version,
+        };
+      } catch {
+        return {
+          ...manifest,
+          installed: await isManifestInstalled(root, manifest),
+        };
+      }
+    })
+  );
+}
+
+async function recordInstalledRuntime(
+  root: string,
+  manifest: QuickAddManifest,
+  resolvedFromLatest: boolean
+): Promise<void> {
+  if (!supportsAutoLatest(manifest.name)) return;
+  await writeManifestRuntimeRecord(
+    root,
+    manifest.installPath,
+    manifest.version,
+    runtimeSourceForManifest(manifest.name, resolvedFromLatest)
   );
 }
 
 export async function installFromManifest(
   root: string,
   manifest: QuickAddManifest,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  options?: { preferLatest?: boolean; reinstall?: boolean }
 ): Promise<string> {
   const log = onProgress ?? (() => {});
   validateManifestPlatform(manifest);
 
-  const installPath = resolvePath(root, manifest.installPath);
+  let effective = manifest;
+  let resolvedFromLatest = false;
+  if (supportsAutoLatest(manifest.name) && options?.preferLatest !== false) {
+    const resolved = await resolveManifestToLatest(manifest, {
+      onFallback: (err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log(`Using pinned manifest version (latest lookup failed: ${msg})`);
+      },
+    });
+    effective = resolved;
+    resolvedFromLatest = resolved.resolvedFromLatest;
+    if (effective.version !== manifest.version) {
+      log(`Resolved latest ${manifest.name} → v${effective.version}`);
+    }
+  }
+
+  const installPath = resolvePath(root, effective.installPath);
+
+  if (options?.reinstall) {
+    if (isPhpManifestName(effective.name)) {
+      log(`Updating ${effective.name} — preserving php.ini…`);
+      await wipePhpInstallPreservingIni(root, effective.installPath);
+    } else {
+      log(`Updating ${effective.name}…`);
+      await wipeInstallPreserving(root, effective.installPath);
+    }
+  }
+
   await mkdir(installPath, { recursive: true });
 
   const downloadType =
-    manifest.downloadType ??
-    (manifest.url.toLowerCase().endsWith(".exe")
+    effective.downloadType ??
+    (effective.url.toLowerCase().endsWith(".exe")
       ? "exe"
-      : manifest.url.toLowerCase().endsWith(".tar.xz")
+      : effective.url.toLowerCase().endsWith(".tar.xz")
         ? "tar.xz"
-        : manifest.url.toLowerCase().match(/\.tar\.gz$|\.tgz$/i)
+        : effective.url.toLowerCase().match(/\.tar\.gz$|\.tgz$/i)
           ? "tar.gz"
           : "zip");
 
-  log(`Downloading ${manifest.name} v${manifest.version}...`);
+  log(`Downloading ${effective.name} v${effective.version}...`);
 
   if (downloadType === "system") {
-    await installSystemBinary(installPath, manifest, log);
-    await verifyManifestInstall(root, manifest, installPath);
-    await runPostInstall(root, installPath, manifest, log);
-    log(`✓ ${manifest.name} linked from system into ${manifest.installPath}`);
+    await installSystemBinary(installPath, effective, log);
+    await verifyManifestInstall(root, effective, installPath);
+    await runPostInstall(root, installPath, effective, log);
+    log(`✓ ${effective.name} linked from system into ${effective.installPath}`);
     return installPath;
   }
 
   if (downloadType === "exe" || downloadType === "binary") {
-    const binaryName = manifest.binary ?? path.basename(new URL(manifest.url).pathname);
+    const binaryName = effective.binary ?? path.basename(new URL(effective.url).pathname);
     const destPath = path.join(installPath, binaryName);
-    await downloadFile(manifest.url, destPath, log);
+    await downloadFile(effective.url, destPath, log);
     await validateDownloadedFile(destPath, "binary");
     await chmodIfUnixExecutable(destPath);
-    await verifyManifestInstall(root, manifest, installPath);
-    await runPostInstall(root, installPath, manifest, log);
-    log(`✓ ${manifest.name} installed to ${destPath}`);
+    await verifyManifestInstall(root, effective, installPath);
+    await runPostInstall(root, installPath, effective, log);
+    await recordInstalledRuntime(root, effective, resolvedFromLatest);
+    log(`✓ ${effective.name} installed to ${destPath}`);
     return installPath;
   }
 
   const ext =
     downloadType === "tar.xz" ? "tar.xz" : downloadType === "tar.gz" ? "tar.gz" : "zip";
-  const archivePath = path.join(root, "tmp", `${manifest.name}.${ext}`);
+  const archivePath = path.join(root, "tmp", `${effective.name}.${ext}`);
   await mkdir(path.dirname(archivePath), { recursive: true });
 
-  await downloadFile(manifest.url, archivePath, log);
+  await downloadFile(effective.url, archivePath, log);
   await validateDownloadedFile(archivePath, downloadType === "zip" ? "zip" : "tar");
-  log(`Extracting to ${manifest.installPath}...`);
+  log(`Extracting to ${effective.installPath}...`);
   if (downloadType === "zip") {
     await extractZip(archivePath, installPath, log);
   } else {
     await extractTar(archivePath, installPath, downloadType, log);
   }
-  await normalizeExtractedArchive(installPath, manifest.archiveSubdir);
+  await normalizeExtractedArchive(installPath, effective.archiveSubdir);
   await chmodBinariesUnder(installPath);
-  await verifyManifestInstall(root, manifest, installPath);
-  await runPostInstall(root, installPath, manifest, log);
+  await verifyManifestInstall(root, effective, installPath);
+  await runPostInstall(root, installPath, effective, log);
+  await recordInstalledRuntime(root, effective, resolvedFromLatest);
 
-  log(`✓ ${manifest.name} installed to ${manifest.installPath}`);
+  log(`✓ ${effective.name} installed to ${effective.installPath}`);
   return installPath;
+}
+
+export async function updatePhpFromManifest(
+  root: string,
+  manifest: QuickAddManifest,
+  onProgress?: (msg: string) => void
+): Promise<{ version: string; installPath: string }> {
+  const installPath = await installFromManifest(root, manifest, onProgress, {
+    preferLatest: true,
+    reinstall: true,
+  });
+  const record = await readPhpRuntimeRecord(root, manifest.installPath);
+  return { version: record?.version ?? manifest.version, installPath };
 }
 
 async function normalizeExtractedArchive(
@@ -240,10 +336,13 @@ async function runPostInstall(
       const [src, dest] = step.copy.split("→").map((s) => s.trim());
       const srcPath = path.join(installPath, src);
       const destPath = path.join(installPath, dest);
-      if (await pathExists(srcPath)) {
-        await copyFile(srcPath, destPath);
-        log(`Copied ${src} → ${dest}`);
+      if (!(await pathExists(srcPath))) continue;
+      if (await pathExists(destPath)) {
+        log(`Kept existing ${dest}`);
+        continue;
       }
+      await copyFile(srcPath, destPath);
+      log(`Copied ${src} → ${dest}`);
     } else if ("run" in step) {
       await runShellCommand(root, step.run, log);
     }

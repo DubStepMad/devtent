@@ -34,6 +34,7 @@ export {
   isServiceRunning,
   isPhpStackServiceName,
   resolveProcfileServiceNames,
+  listServicesWithStatus,
 } from "./services.js";
 
 export {
@@ -203,9 +204,33 @@ export {
   listManifests,
   listManifestsWithStatus,
   installFromManifest,
+  updatePhpFromManifest,
   validateManifestPlatform,
 } from "./quick-add.js";
 export type { ManifestWithStatus } from "./quick-add.js";
+
+export {
+  isPhpManifestName,
+  phpMinorFromManifestName,
+  comparePhpVersions,
+  resolveLatestPhpBuild,
+  resolvePhpManifestToLatest,
+  checkPhpUpdateStatus,
+  clearPhpReleasesCache,
+} from "./php-releases.js";
+export type { PhpLatestBuild, PhpUpdateStatus, PhpRuntimeRecord } from "./php-releases.js";
+
+export {
+  supportsAutoLatest,
+  resolveManifestToLatest,
+  resolveLatestManifestBuild,
+  resolveLatestNodeBuild,
+  resolveLatestComposerBuild,
+  checkManifestUpdateStatus,
+  clearManifestReleasesCache,
+  runtimeSourceForManifest,
+} from "./manifest-releases.js";
+export type { ManifestLatestBuild, ManifestUpdateStatus } from "./manifest-releases.js";
 
 export {
   DEFAULT_PHP_VERSION,

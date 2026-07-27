@@ -60,7 +60,8 @@ const api = {
   ) => ipcRenderer.invoke("devtent:updateProfile", name, patch),
   deleteProfile: (name: string) => ipcRenderer.invoke("devtent:deleteProfile", name),
   listManifests: () => ipcRenderer.invoke("devtent:listManifests"),
-  installManifest: (name: string) => ipcRenderer.invoke("devtent:installManifest", name),
+  installManifest: (name: string, options?: { reinstall?: boolean; preferLatest?: boolean }) =>
+    ipcRenderer.invoke("devtent:installManifest", name, options),
   installRecommendedStack: () => ipcRenderer.invoke("devtent:installRecommendedStack"),
   backupMysql: () => ipcRenderer.invoke("devtent:backupMysql"),
   listMysqlBackups: () => ipcRenderer.invoke("devtent:listMysqlBackups"),

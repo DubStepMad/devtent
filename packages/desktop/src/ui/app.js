@@ -110,33 +110,56 @@ async function updateDomainHints(rootStatus) {
 
 function attachManifestInstallButton(card, m) {
   const btn = card.querySelector(".btn-install");
-  if (!btn || m.installed) return;
+  if (!btn) return;
+  if (m.installed && !m.updateAvailable) return;
+
+  const updating = Boolean(m.installed && m.updateAvailable);
   btn.onclick = async () => {
     btn.disabled = true;
-    btn.textContent = "Installing…";
+    btn.textContent = updating ? "Updating…" : "Installing…";
     try {
-      await withLoading(() => api.installManifest(m.name), `Installing ${m.name}…`);
-      showToast(`${m.name} installed`, "success");
+      await withLoading(
+        () =>
+          api.installManifest(m.name, updating ? { reinstall: true, preferLatest: true } : undefined),
+        updating ? `Updating ${m.name}…` : `Installing ${m.name}…`
+      );
+      showToast(
+        updating
+          ? `${m.name} updated${m.latestVersion ? ` to v${m.latestVersion}` : ""}`
+          : `${m.name} installed`,
+        "success"
+      );
       await refreshManifests();
       await refreshServices();
       await refreshProfiles();
       await refreshAll();
     } catch {
       btn.disabled = false;
-      btn.textContent = "Install";
+      btn.textContent = updating ? "Update" : "Install";
     }
   };
 }
 
 function renderManifestCard(m) {
   const card = document.createElement("div");
-  card.className = `manifest-card${m.installed ? " installed" : ""}`;
-  const btnLabel = m.installed ? "Installed" : "Install";
+  card.className = `manifest-card${m.installed ? " installed" : ""}${m.updateAvailable ? " update-available" : ""}`;
+  const updating = Boolean(m.installed && m.updateAvailable);
+  let btnLabel = "Install";
+  if (m.installed && !updating) btnLabel = "Installed";
+  if (updating) btnLabel = "Update";
+
+  let versionLabel = `v${escapeHtml(m.version)}`;
+  if (m.installed && m.installedVersion && m.latestVersion && m.installedVersion !== m.latestVersion) {
+    versionLabel = `v${escapeHtml(m.installedVersion)} → v${escapeHtml(m.latestVersion)}`;
+  } else if (m.installed && m.installedVersion) {
+    versionLabel = `v${escapeHtml(m.installedVersion)}`;
+  }
+
   card.innerHTML = `
     <h4>${escapeHtml(m.name)}</h4>
-    <span class="version">v${escapeHtml(m.version)}</span>
+    <span class="version">${versionLabel}</span>
     <p>${escapeHtml(m.description || "")}</p>
-    <button class="btn primary btn-install" ${m.installed ? "disabled" : ""}>${btnLabel}</button>`;
+    <button class="btn primary btn-install" ${m.installed && !updating ? "disabled" : ""}>${btnLabel}</button>`;
   attachManifestInstallButton(card, m);
   return card;
 }

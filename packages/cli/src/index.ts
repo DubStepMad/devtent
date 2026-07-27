@@ -392,10 +392,15 @@ quickAddCmd
   .command("<name>")
   .description("Install a runtime from manifests/")
   .option("-r, --root <path>", "DevTent root directory")
-  .action(async (name: string, opts: { root?: string }) => {
+  .option("--pinned", "Use the version pinned in the manifest (skip latest PHP lookup)")
+  .option("--reinstall", "Wipe and reinstall (keeps php.ini for PHP updates)")
+  .action(async (name: string, opts: { root?: string; pinned?: boolean; reinstall?: boolean }) => {
     const root = resolveRoot(opts.root);
     const manifest = await loadManifest(MANIFESTS_DIR, name);
-    await installFromManifest(root, manifest, log);
+    await installFromManifest(root, manifest, log, {
+      preferLatest: !opts.pinned,
+      reinstall: Boolean(opts.reinstall),
+    });
   });
 
 const quickAppCmd = program.command("quick-app").description("Scaffold projects from templates");

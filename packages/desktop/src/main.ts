@@ -7,18 +7,16 @@ import { setupTray, hideTrayPopup, setTrayRunning, getIconPath, destroyTray } fr
 import { ensureEnvironmentReady } from "./startup-environment.js";
 import { syncLaunchAtLoginFromSettings } from "./startup-settings.js";
 import { maybeAutoStartServices } from "./auto-start-services.js";
-import { isInitialized } from "./paths.js";
-import { checkForUpdates, shouldRunBackgroundCheck } from "./update-checker.js";
-import { applyWindowMode, registerMainWindow } from "./window-layout.js";
+import { applyWindowMode, registerMainWindow, setSavedDashboardBounds, attachWindowBoundsPersistence, resolveDashboardCreateBounds, DEFAULT_SETUP_SIZE } from "./window-layout.js";
 import { createAppIcon } from "./icon.js";
 import { spawn } from "node:child_process";
 import { takePendingInstallerPath } from "./install-lifecycle.js";
 import { initAppLogger } from "./app-logger.js";
-import { getDefaultRoot, getInstallRootEarly } from "./paths.js";
+import { getDefaultRoot, getInstallRootEarly, loadSettings, saveSettings, isInitialized } from "./paths.js";
 import { isInstallInProgressSync, shouldExitForInstallInProgress } from "./install-lock.js";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-
+import { checkForUpdates, shouldRunBackgroundCheck } from "./update-checker.js";
 /** Delay first scheduled MySQL dump so it does not compete with tray/UI startup. */
 const FIRST_BACKUP_DELAY_MS = 10 * 60 * 1000;
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -102,6 +100,7 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
   }
 
   const isSetup = options?.setup ?? false;
+  const dashboardBounds = isSetup ? null : resolveDashboardCreateBounds();
   const winTitleBar =
     process.platform === "win32"
       ? {
@@ -115,8 +114,10 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
       : {};
 
   mainWindow = new BrowserWindow({
-    width: isSetup ? 500 : 1100,
-    height: isSetup ? 860 : 720,
+    width: isSetup ? DEFAULT_SETUP_SIZE.width : dashboardBounds!.width,
+    height: isSetup ? DEFAULT_SETUP_SIZE.height : dashboardBounds!.height,
+    x: isSetup ? undefined : dashboardBounds!.x,
+    y: isSetup ? undefined : dashboardBounds!.y,
     minWidth: isSetup ? 500 : 900,
     minHeight: isSetup ? 600 : 560,
     maxWidth: isSetup ? 500 : undefined,
@@ -140,6 +141,8 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
         'document.documentElement.classList.add("electron-win")'
       );
     }
+    // currentMode is still null → geometry applies once. Saved bounds are restored;
+    // otherwise defaults + center. Later setWindowMode("dashboard") calls no-op size.
     applyWindowMode(isSetup ? "setup" : "dashboard");
     mainWindow?.show();
     if (openViewArg && !isSetup) {
@@ -152,6 +155,9 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
   });
 
   registerMainWindow(mainWindow);
+  attachWindowBoundsPersistence(mainWindow, (bounds) => {
+    void saveSettings({ windowBounds: bounds });
+  });
   return mainWindow;
 }
 
@@ -190,6 +196,16 @@ app.whenReady().then(async () => {
   }
 
   Menu.setApplicationMenu(null);
+
+  // Restore last dashboard size before any window is created.
+  try {
+    const settings = await loadSettings();
+    if (settings.windowBounds) {
+      setSavedDashboardBounds(settings.windowBounds);
+    }
+  } catch {
+    // Non-fatal
+  }
 
   registerIpcHandlers();
   setRequestQuitHandler(() => requestQuit());

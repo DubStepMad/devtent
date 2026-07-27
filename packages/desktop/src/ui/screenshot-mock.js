@@ -98,9 +98,17 @@
   ];
 
   const FAKE_MANIFESTS = [
-    { name: "php-8.2", version: "8.2.28", description: "PHP 8.2", installed: true },
-    { name: "php-8.3", version: "8.3.20", description: "PHP 8.3", installed: true },
-    { name: "php-8.4", version: "8.4.6", description: "PHP 8.4", installed: true },
+    { name: "php-8.2", version: "8.2.32", description: "PHP 8.2", installed: true, installedVersion: "8.2.32" },
+    {
+      name: "php-8.3",
+      version: "8.3.32",
+      description: "PHP 8.3",
+      installed: true,
+      installedVersion: "8.3.20",
+      latestVersion: "8.3.32",
+      updateAvailable: true,
+    },
+    { name: "php-8.4", version: "8.4.23", description: "PHP 8.4", installed: true, installedVersion: "8.4.23" },
     { name: "nginx", version: "1.27.4", description: "Nginx web server", installed: true },
     { name: "mysql", version: "8.4.4", description: "MySQL database", installed: true },
     { name: "redis", version: "7.4.2", description: "Redis cache", installed: true },

@@ -13,6 +13,8 @@ export interface DesktopSettings {
   skipUpdateVersion?: string;
   lastUpdateCheckAt?: number;
   trayPopupPosition?: { x: number; y: number };
+  /** Last dashboard window position/size (restored on next open). */
+  windowBounds?: { x: number; y: number; width: number; height: number };
   /** Stop services and backup MySQL before quitting. Default true. */
   stopServicesOnQuit?: boolean;
   /** Launch DevTent when Windows starts (tray only). Default false. */

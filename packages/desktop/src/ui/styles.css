@@ -902,6 +902,7 @@ code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-
 .manifest-card p { font-size: 0.82rem; color: var(--muted); flex: 1; }
 .manifest-card .version { font-size: 0.75rem; color: var(--muted); }
 .manifest-card.installed { border-color: rgba(34, 197, 94, 0.45); }
+.manifest-card.update-available { border-color: rgba(234, 179, 8, 0.55); }
 .manifest-card .btn-install:disabled { opacity: 0.85; cursor: default; }
 
 .profile-list li.active-profile { border-color: var(--accent); background: rgba(56, 189, 248, 0.08); }
