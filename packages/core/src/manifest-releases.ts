@@ -1,6 +1,7 @@
 import type { QuickAddManifest } from "./types.js";
 import {
   compareVersionStrings,
+  replaceLiteralVersion,
   readRuntimeRecord,
   writeRuntimeRecord,
 } from "./runtime-record.js";
@@ -468,8 +469,7 @@ function overlayManifest(
     url: latest.url,
     downloadType: latest.downloadType ?? manifest.downloadType,
     archiveSubdir: latest.archiveSubdir ?? manifest.archiveSubdir,
-    description:
-      manifest.description?.replace(/\d+\.\d+\.\d+/, latest.version) ?? manifest.description,
+    description: replaceLiteralVersion(manifest.description, manifest.version, latest.version),
     resolvedFromLatest: true,
   };
 }

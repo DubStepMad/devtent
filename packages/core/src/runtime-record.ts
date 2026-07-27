@@ -40,6 +40,21 @@ export async function writeRuntimeRecord(
   await writeFile(runtimeMarkerPath(root, installPath), JSON.stringify(record, null, 2), "utf-8");
 }
 
+/** Escape a string for safe use inside a RegExp source. */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Replace a known literal version string in text (avoids ReDoS-prone version regexes). */
+export function replaceLiteralVersion(
+  text: string | undefined,
+  fromVersion: string,
+  toVersion: string
+): string | undefined {
+  if (!text || !fromVersion || fromVersion === toVersion) return text;
+  return text.split(fromVersion).join(toVersion);
+}
+
 /** Compare dotted / dated version strings (semver-ish, calendar, YYYY-MM-DD). */
 export function compareVersionStrings(a: string, b: string): number {
   const normalize = (v: string) =>

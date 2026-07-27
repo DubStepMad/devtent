@@ -1,6 +1,8 @@
 import type { QuickAddManifest } from "./types.js";
 import {
   compareVersionStrings,
+  escapeRegExp,
+  replaceLiteralVersion,
   readRuntimeRecord,
   writeRuntimeRecord,
   wipeInstallPreserving,
@@ -138,11 +140,16 @@ export function pickLatestStaticPhpVersionFromListing(
   minor: string,
   osArch: string
 ): string | null {
-  const escapedMinor = minor.replace(/\./g, "\\.");
-  const escapedArch = osArch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`php-(${escapedMinor}\\.\\d+)-fpm-${escapedArch}\\.tar\\.gz`, "gi");
+  // Bound input size and use fixed-width digit classes to keep matching linear-time.
+  const sample = html.length > 2_000_000 ? html.slice(0, 2_000_000) : html;
+  const escapedMinor = escapeRegExp(minor);
+  const escapedArch = escapeRegExp(osArch);
+  const re = new RegExp(
+    `php-(${escapedMinor}\\.\\d{1,3})-fpm-${escapedArch}\\.tar\\.gz`,
+    "gi"
+  );
   let best: string | null = null;
-  for (const match of html.matchAll(re)) {
+  for (const match of sample.matchAll(re)) {
     const version = match[1]!;
     if (!best || comparePhpVersions(version, best) > 0) best = version;
   }
@@ -242,8 +249,7 @@ function withResolvedVersion(
     version,
     url,
     downloadType,
-    description:
-      manifest.description?.replace(/\d+\.\d+\.\d+/, version) ?? manifest.description,
+    description: replaceLiteralVersion(manifest.description, manifest.version, version),
     resolvedFromLatest: true,
   };
 }
