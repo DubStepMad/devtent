@@ -1,4 +1,4 @@
-﻿name: mailpit
+name: mailpit
 version: "1.30.5"
 description: Mailpit — local SMTP testing with web UI (port 8025)
 platform: darwin

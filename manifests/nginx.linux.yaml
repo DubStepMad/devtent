@@ -1,6 +1,6 @@
 name: nginx
 version: "system"
-description: Nginx — links the nginx binary from PATH (brew install nginx / apt install nginx)
+description: Nginx — copies nginx from PATH into the portable tree (apt/dnf install nginx)
 platform: linux
 arch: all
 url: ""

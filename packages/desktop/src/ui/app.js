@@ -68,7 +68,7 @@ const QUICK_ADD_GROUPS = [
     match: (name) =>
       name.startsWith("mysql") || name.startsWith("mariadb") || name.startsWith("postgresql"),
   },
-  { label: "Cache, mail & SSL", match: (name) => ["redis", "mailpit", "mkcert", "meilisearch", "minio"].includes(name) },
+  { label: "Cache, mail & SSL", match: (name) => ["redis", "mailpit", "mkcert", "meilisearch", "minio", "memcached"].includes(name) },
   { label: "Other tools", match: () => true },
 ];
 
@@ -1982,6 +1982,7 @@ function readProfileServicesFromEditor() {
   if (document.getElementById("profile-service-mailpit")?.checked) services.push("mailpit");
   if (document.getElementById("profile-service-meilisearch")?.checked) services.push("meilisearch");
   if (document.getElementById("profile-service-minio")?.checked) services.push("minio");
+  if (document.getElementById("profile-service-memcached")?.checked) services.push("memcached");
   const result = { database, services };
   if (database === "external") {
     result.databaseConnection = readExternalDbConnectionFromEditor();
@@ -2004,10 +2005,12 @@ function applyProfileServicesToEditor(profile) {
   const mailpitToggle = document.getElementById("profile-service-mailpit");
   const meiliToggle = document.getElementById("profile-service-meilisearch");
   const minioToggle = document.getElementById("profile-service-minio");
+  const memcachedToggle = document.getElementById("profile-service-memcached");
   if (redisToggle) redisToggle.checked = profile.services?.includes("redis") ?? false;
   if (mailpitToggle) mailpitToggle.checked = profile.services?.includes("mailpit") ?? false;
   if (meiliToggle) meiliToggle.checked = profile.services?.includes("meilisearch") ?? false;
   if (minioToggle) minioToggle.checked = profile.services?.includes("minio") ?? false;
+  if (memcachedToggle) memcachedToggle.checked = profile.services?.includes("memcached") ?? false;
   syncProfileDatabaseToggle();
 }
 

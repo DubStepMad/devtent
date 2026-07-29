@@ -1,0 +1,9 @@
+name: php-8.3
+version: "8.3.32"
+description: PHP 8.3 FPM+CLI (static-php.dev common) for Linux arm64
+platform: linux
+arch: arm64
+url: https://dl.static-php.dev/static-php-cli/common/php-8.3.32-fpm-linux-aarch64.tar.gz
+installPath: bin/php/php-8.3
+binary: sbin/php-fpm
+downloadType: tar.gz

@@ -1,0 +1,9 @@
+name: mariadb-11.4
+version: "system"
+description: MariaDB 11 — links mariadbd/mysqld from PATH (brew install mariadb)
+platform: darwin
+arch: all
+url: ""
+installPath: bin/mariadb
+binary: bin/mysqld
+downloadType: system

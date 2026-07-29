@@ -1,6 +1,6 @@
 name: redis
 version: "system"
-description: Redis — links redis-server from PATH (brew install redis / apt install redis)
+description: Redis — copies redis-server from PATH into the portable tree (apt/dnf install redis)
 platform: linux
 arch: all
 url: ""

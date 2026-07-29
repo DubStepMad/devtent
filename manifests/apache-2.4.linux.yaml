@@ -1,0 +1,9 @@
+name: apache-2.4
+version: "system"
+description: Apache HTTP Server — links apache2/httpd from PATH (apt install apache2)
+platform: linux
+arch: all
+url: ""
+installPath: bin/apache
+binary: bin/httpd
+downloadType: system

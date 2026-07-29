@@ -6,6 +6,7 @@ export {
   isWindows,
   npmLauncher,
   redisConfigPath,
+  vendorRedisConfigPath,
   type DevTentPlatform,
 } from "./binary.js";
 

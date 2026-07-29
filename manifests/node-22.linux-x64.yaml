@@ -1,4 +1,4 @@
-﻿name: node-22
+name: node-22
 version: "22.23.1"
 description: Node.js 22 LTS for Linux x64
 platform: linux

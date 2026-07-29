@@ -1,0 +1,10 @@
+name: mariadb-11.4
+version: "11.4.7"
+description: MariaDB 11.4 Community Server for Linux x64
+platform: linux
+arch: x64
+url: https://archive.mariadb.org/mariadb-11.4.7/bintar-linux-systemd-x86_64/mariadb-11.4.7-linux-systemd-x86_64.tar.gz
+installPath: bin/mariadb
+binary: bin/mysqld
+downloadType: tar.gz
+archiveSubdir: mariadb-11.4.7-linux-systemd-x86_64

@@ -1,4 +1,4 @@
-﻿name: php-8.4
+name: php-8.4
 version: "8.4.23"
 description: PHP 8.4 FPM+CLI (static-php.dev common) for Linux x64
 platform: linux

@@ -39,7 +39,7 @@ const api = {
       user: string;
       password?: string;
     };
-    services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
+    services?: ("redis" | "mailpit" | "meilisearch" | "minio" | "memcached")[];
   }) => ipcRenderer.invoke("devtent:createProfile", input),
   updateProfile: (
     name: string,
@@ -55,7 +55,7 @@ const api = {
         user: string;
         password?: string;
       };
-      services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
+      services?: ("redis" | "mailpit" | "meilisearch" | "minio" | "memcached")[];
     }
   ) => ipcRenderer.invoke("devtent:updateProfile", name, patch),
   deleteProfile: (name: string) => ipcRenderer.invoke("devtent:deleteProfile", name),

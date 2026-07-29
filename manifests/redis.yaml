@@ -1,8 +1,9 @@
 name: redis
-version: "5.0.14.1"
-description: Redis 5 for Windows (community port)
+version: "8.8.1"
+description: Redis 8 for Windows (redis-windows msys2 build)
 platform: win32
 arch: x64
-url: https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip
+url: https://github.com/redis-windows/redis-windows/releases/download/8.8.1/Redis-8.8.1-Windows-x64-msys2.zip
 installPath: bin/redis
 binary: redis-server.exe
+downloadType: zip

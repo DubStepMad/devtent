@@ -7,6 +7,7 @@ import {
   initDevTent,
   getDefaultInstallRoot,
   loadConfig,
+  loadProfile,
   listProfiles,
   switchProfile,
   createProfile,
@@ -23,6 +24,7 @@ import {
   createFromTemplate,
   writePlainPhpProject,
   enableSsl,
+  disableSsl,
   installMkcertCa,
   writePathScript,
   getState,
@@ -32,6 +34,16 @@ import {
   backupMysql,
   listMysqlBackups,
   restoreMysql,
+  backupMariaDb,
+  listMariaDbBackups,
+  restoreMariaDb,
+  backupPostgres,
+  listPostgresBackups,
+  restorePostgres,
+  listDatabases,
+  createDatabase,
+  listSiteWorkers,
+  setSiteWorker,
   exportEnvironment,
   importEnvironmentBundle,
   getEnvironmentHealth,
@@ -65,6 +77,7 @@ import {
   stopLocalDns,
   installLocalDnsResolver,
   getMkcertCaStatus,
+  writeWordpressProject,
 } from "@devtent/core";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -84,11 +97,19 @@ function log(msg: string): void {
   console.log(msg);
 }
 
-function parseProfileServices(opts: { redis?: boolean; mailpit?: boolean }) {
-  if (opts.redis === undefined && opts.mailpit === undefined) return undefined;
-  const services: ("redis" | "mailpit")[] = [];
-  if (opts.redis) services.push("redis");
-  if (opts.mailpit) services.push("mailpit");
+function parseProfileServices(opts: {
+  redis?: boolean;
+  mailpit?: boolean;
+  meilisearch?: boolean;
+  minio?: boolean;
+  memcached?: boolean;
+}) {
+  const keys = ["redis", "mailpit", "meilisearch", "minio", "memcached"] as const;
+  if (keys.every((k) => opts[k] === undefined)) return undefined;
+  const services: Array<(typeof keys)[number]> = [];
+  for (const k of keys) {
+    if (opts[k]) services.push(k);
+  }
   return services;
 }
 
@@ -257,9 +278,12 @@ profileCmd
   .option("-r, --root <path>", "DevTent root directory")
   .option("--php <version>", "PHP manifest id (e.g. php-8.4)", "php-8.3")
   .option("--web-server <server>", "nginx or apache", "nginx")
-  .option("--database <db>", "mysql, postgresql, or none", "mysql")
+  .option("--database <db>", "mysql, mariadb, postgresql, external, or none", "mysql")
   .option("--redis", "Include Redis in profile services")
   .option("--mailpit", "Include Mailpit in profile services")
+  .option("--meilisearch", "Include Meilisearch in profile services")
+  .option("--minio", "Include MinIO in profile services")
+  .option("--memcached", "Include Memcached in profile services")
   .option("-d, --description <text>", "Profile description")
   .action(
     async (
@@ -268,10 +292,13 @@ profileCmd
         root?: string;
         php?: string;
         webServer?: "nginx" | "apache";
-        database?: "mysql" | "postgresql" | "none";
+        database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
         description?: string;
         redis?: boolean;
         mailpit?: boolean;
+        meilisearch?: boolean;
+        minio?: boolean;
+        memcached?: boolean;
       }
     ) => {
       const root = resolveRoot(opts.root);
@@ -293,9 +320,12 @@ profileCmd
   .option("-r, --root <path>", "DevTent root directory")
   .option("--php <version>", "PHP manifest id (e.g. php-8.4)")
   .option("--web-server <server>", "nginx or apache")
-  .option("--database <db>", "mysql, postgresql, or none")
+  .option("--database <db>", "mysql, mariadb, postgresql, external, or none")
   .option("--redis", "Include Redis in profile services")
   .option("--mailpit", "Include Mailpit in profile services")
+  .option("--meilisearch", "Include Meilisearch in profile services")
+  .option("--minio", "Include MinIO in profile services")
+  .option("--memcached", "Include Memcached in profile services")
   .option("-d, --description <text>", "Profile description")
   .action(
     async (
@@ -304,10 +334,13 @@ profileCmd
         root?: string;
         php?: string;
         webServer?: "nginx" | "apache";
-        database?: "mysql" | "postgresql" | "none";
+        database?: "mysql" | "mariadb" | "postgresql" | "external" | "none";
         description?: string;
         redis?: boolean;
         mailpit?: boolean;
+        meilisearch?: boolean;
+        minio?: boolean;
+        memcached?: boolean;
       }
     ) => {
       const root = resolveRoot(opts.root);
@@ -427,6 +460,10 @@ quickAppCmd
       log(`  Run: devtent vhost sync`);
       return;
     }
+    if (template === "wordpress") {
+      await writeWordpressProject(root, name, log);
+      return;
+    }
     await createFromTemplate(root, template, name, TEMPLATES_DIR, log);
   });
 
@@ -439,6 +476,16 @@ sslCmd
   .action(async (domain: string, opts: { root?: string }) => {
     const root = resolveRoot(opts.root);
     const result = await enableSsl(root, domain);
+    log(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
+  });
+
+sslCmd
+  .command("disable <domain>")
+  .description("Remove local SSL cert and regenerate HTTP-only vhosts")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (domain: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    const result = await disableSsl(root, domain);
     log(result.success ? `✓ ${result.message}` : `✗ ${result.message}`);
   });
 
@@ -649,6 +696,134 @@ mysqlCmd
     }
   });
 
+const dbCmd = program
+  .command("db")
+  .description("Multi-engine database list, create, backup, and restore");
+
+dbCmd
+  .command("list")
+  .description("List databases for the active profile engine")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    try {
+      const { engine, databases } = await listDatabases(root);
+      if (!databases.length) {
+        log(`No databases found for ${engine} (is the engine running?).`);
+        return;
+      }
+      log(`Engine: ${engine}`);
+      for (const db of databases) log(`  ${db.name}`);
+    } catch (err) {
+      log(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+  });
+
+dbCmd
+  .command("create <name>")
+  .description("Create a database on the active profile engine")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (name: string, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    try {
+      const result = await createDatabase(root, name);
+      log(`✓ ${result.message}`);
+    } catch (err) {
+      log(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+  });
+
+dbCmd
+  .command("backup")
+  .description("Back up the active managed engine (mysql / mariadb / postgresql)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--engine <engine>", "mysql, mariadb, or postgresql (default: profile)")
+  .action(async (opts: { root?: string; engine?: string }) => {
+    const root = resolveRoot(opts.root);
+    const config = await loadConfig(root);
+    const profile = await loadProfile(root, config.activeProfile);
+    const engine = (opts.engine ?? profile.database ?? "mysql") as string;
+    if (engine === "mysql") {
+      const backup = await backupMysql(root, "manual", log);
+      if (!backup) {
+        log("No backup created — install MySQL and start the service first.");
+        process.exitCode = 1;
+        return;
+      }
+      log(`✓ Backup: ${backup.path}`);
+      return;
+    }
+    if (engine === "mariadb") {
+      const backup = await backupMariaDb(root, "manual", log);
+      if (!backup) {
+        log("No backup created — install MariaDB and start the service first.");
+        process.exitCode = 1;
+        return;
+      }
+      log(`✓ Backup: ${backup.path}`);
+      return;
+    }
+    if (engine === "postgresql") {
+      const backup = await backupPostgres(root, "manual", log);
+      if (!backup) {
+        log("No backup created — install PostgreSQL and start the service first.");
+        process.exitCode = 1;
+        return;
+      }
+      log(`✓ Backup: ${backup.path}`);
+      return;
+    }
+    log(`Unsupported engine for backup: ${engine}`);
+    process.exitCode = 1;
+  });
+
+dbCmd
+  .command("restore <backupId>")
+  .description("Restore a backup (use --engine when not MySQL)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--engine <engine>", "mysql, mariadb, or postgresql", "mysql")
+  .action(async (backupId: string, opts: { root?: string; engine?: string }) => {
+    const root = resolveRoot(opts.root);
+    const engine = opts.engine ?? "mysql";
+    const result =
+      engine === "mariadb"
+        ? await restoreMariaDb(root, backupId, log)
+        : engine === "postgresql"
+          ? await restorePostgres(root, backupId, log)
+          : await restoreMysql(root, backupId, log);
+    if (!result.success) {
+      log(result.message);
+      process.exitCode = 1;
+      return;
+    }
+    log(`✓ ${result.message}`);
+  });
+
+dbCmd
+  .command("list-backups")
+  .description("List backups for an engine")
+  .option("-r, --root <path>", "DevTent root directory")
+  .option("--engine <engine>", "mysql, mariadb, or postgresql", "mysql")
+  .action(async (opts: { root?: string; engine?: string }) => {
+    const root = resolveRoot(opts.root);
+    const engine = opts.engine ?? "mysql";
+    const backups =
+      engine === "mariadb"
+        ? await listMariaDbBackups(root)
+        : engine === "postgresql"
+          ? await listPostgresBackups(root)
+          : await listMysqlBackups(root);
+    if (!backups.length) {
+      log("No backups found.");
+      return;
+    }
+    for (const b of backups) {
+      log(`  ${b.createdAt}  ${b.reason}  ${Math.round(b.sizeBytes / 1024)} KB  ${b.id}`);
+    }
+  });
+
 async function runMigrateImport(opts: {
   from: string;
   root?: string;
@@ -793,6 +968,58 @@ sitesCmd
     await generateVirtualHosts(root);
     log(`✓ ${name} → ${phpVersion ?? "profile default"}`);
   });
+
+sitesCmd
+  .command("workers [site]")
+  .description("List queue / Vite / schedule workers (optional site filter)")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(async (site: string | undefined, opts: { root?: string }) => {
+    const root = resolveRoot(opts.root);
+    let workers = await listSiteWorkers(root);
+    if (site) workers = workers.filter((w) => w.siteName === site);
+    if (!workers.length) {
+      log("No site workers configured.");
+      return;
+    }
+    for (const w of workers) {
+      const port = w.port ? ` :${w.port}` : "";
+      log(`  ${w.enabled ? "✓" : "○"} ${w.procfileName} (${w.kind})${port}`);
+    }
+  });
+
+sitesCmd
+  .command("worker <site> <kind>")
+  .description("Enable or disable a site worker (queue | vite | schedule)")
+  .option("--on", "Enable the worker")
+  .option("--off", "Disable the worker")
+  .option("-r, --root <path>", "DevTent root directory")
+  .action(
+    async (
+      site: string,
+      kind: string,
+      opts: { root?: string; on?: boolean; off?: boolean }
+    ) => {
+      const root = resolveRoot(opts.root);
+      if (!["queue", "vite", "schedule"].includes(kind)) {
+        log("kind must be queue, vite, or schedule");
+        process.exitCode = 1;
+        return;
+      }
+      if (opts.on && opts.off) {
+        log("Use either --on or --off");
+        process.exitCode = 1;
+        return;
+      }
+      const enabled = opts.off ? false : true;
+      const status = await setSiteWorker(
+        root,
+        site,
+        kind as "queue" | "vite" | "schedule",
+        enabled
+      );
+      log(`✓ ${status.procfileName} ${status.enabled ? "enabled" : "disabled"}`);
+    }
+  );
 
 const shareCmd = program.command("share").description("Public tunnel for a local site (cloudflared)");
 

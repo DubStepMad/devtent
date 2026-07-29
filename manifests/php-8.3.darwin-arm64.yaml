@@ -1,4 +1,4 @@
-﻿name: php-8.3
+name: php-8.3
 version: "8.3.32"
 description: PHP 8.3 FPM+CLI (static-php.dev common) for macOS arm64
 platform: darwin

@@ -19,7 +19,8 @@ export function getQuickAddCategory(name: string): QuickAddCategory {
     name === "mailpit" ||
     name === "mkcert" ||
     name === "meilisearch" ||
-    name === "minio"
+    name === "minio" ||
+    name === "memcached"
   ) {
     return "cache-mail";
   }

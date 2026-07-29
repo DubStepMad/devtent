@@ -63,6 +63,11 @@ export async function createFromTemplate(
     throw new Error(`Project "${projectName}" already exists at ${projectPath}`);
   }
 
+  if (templateName === "wordpress" && template.commands.length === 0) {
+    log(`Creating ${template.name} project: ${projectName}`);
+    return writeWordpressProject(root, projectName, log);
+  }
+
   await mkdir(projectPath, { recursive: true });
   log(`Creating ${template.name} project: ${projectName}`);
 
@@ -131,4 +136,67 @@ phpinfo();
 `,
     "utf-8"
   );
+}
+
+/** Download and extract the latest WordPress release into www/{name}. */
+export async function writeWordpressProject(
+  root: string,
+  name: string,
+  onProgress?: (msg: string) => void
+): Promise<string> {
+  const log = onProgress ?? (() => {});
+  assertSafeProjectName(name);
+  const projectPath = resolvePath(root, `www/${name}`);
+  if (await pathExists(projectPath)) {
+    throw new Error(`Project "${name}" already exists at ${projectPath}`);
+  }
+
+  const tmpDir = resolvePath(root, "tmp");
+  await mkdir(tmpDir, { recursive: true });
+  const archivePath = path.join(tmpDir, `wordpress-${name}.tar.gz`);
+  const extractDir = path.join(tmpDir, `wordpress-extract-${name}`);
+
+  log("Downloading WordPress (wordpress.org/latest.tar.gz)…");
+  const res = await fetch("https://wordpress.org/latest.tar.gz");
+  if (!res.ok) {
+    throw new Error(`Failed to download WordPress (${res.status})`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  await writeFile(archivePath, buf);
+
+  const { rm, rename, readdir } = await import("node:fs/promises");
+  await rm(extractDir, { recursive: true, force: true });
+  await mkdir(extractDir, { recursive: true });
+
+  log("Extracting WordPress…");
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn("tar", ["xzf", archivePath, "-C", extractDir], {
+      shell: false,
+      windowsHide: true,
+      stdio: "inherit",
+    });
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`tar extract failed (${code})`));
+    });
+    proc.on("error", reject);
+  });
+
+  const entries = await readdir(extractDir);
+  const wpRoot = entries.includes("wordpress")
+    ? path.join(extractDir, "wordpress")
+    : extractDir;
+
+  await mkdir(path.dirname(projectPath), { recursive: true });
+  await rename(wpRoot, projectPath);
+  await rm(extractDir, { recursive: true, force: true }).catch(() => undefined);
+  await rm(archivePath, { force: true }).catch(() => undefined);
+
+  const config = await loadConfig(root);
+  const domain = formatSiteDomain(name, config.tld);
+  log(`✓ WordPress created at www/${name}`);
+  log(`  Run: devtent vhost sync`);
+  log(`  URL: http://${domain}`);
+  log(`  Create a database, then open /wp-admin/install.php`);
+  return projectPath;
 }

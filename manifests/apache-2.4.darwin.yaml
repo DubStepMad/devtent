@@ -1,0 +1,9 @@
+name: apache-2.4
+version: "system"
+description: Apache HTTP Server — links httpd from PATH (brew install httpd)
+platform: darwin
+arch: all
+url: ""
+installPath: bin/apache
+binary: bin/httpd
+downloadType: system

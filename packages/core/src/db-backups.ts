@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createReadStream } from "node:fs";
 import { mkdir, readdir, writeFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
@@ -211,4 +212,110 @@ export async function maybeDailyPostgresBackup(root: string): Promise<DbBackupIn
     if (age < 24 * 60 * 60 * 1000) return null;
   }
   return backupPostgres(root, "scheduled");
+}
+
+export async function restoreMariaDb(
+  root: string,
+  backupId: string,
+  onProgress?: (msg: string) => void
+): Promise<{ success: boolean; message: string }> {
+  const log = onProgress ?? (() => {});
+  const backups = await listMariaDbBackups(root);
+  const backup = backups.find((b) => b.id === backupId);
+  if (!backup) {
+    return { success: false, message: `Backup "${backupId}" not found` };
+  }
+
+  const sqlPath = path.join(backup.path, "all-databases.sql");
+  if (!(await pathExists(sqlPath))) {
+    return { success: false, message: `SQL dump missing in backup ${backupId}` };
+  }
+
+  const client =
+    (await findMysqlFamilyBinary(root, "mariadb", "mariadb")) ??
+    (await findMysqlFamilyBinary(root, "mariadb", "mysql"));
+  if (!client) {
+    return {
+      success: false,
+      message: `${binaryName("mysql")} / mariadb client not found — install MariaDB via Quick Add first`,
+    };
+  }
+
+  if (!isServiceRunning("mariadb")) {
+    return { success: false, message: "MariaDB must be running to restore a backup" };
+  }
+
+  log(`Restoring MariaDB from ${backup.id}…`);
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(client, ["-uroot", "-P3307", "-h127.0.0.1"], {
+      cwd: root,
+      shell: false,
+      windowsHide: true,
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    let stderr = "";
+    proc.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `MariaDB restore failed (${code})`));
+    });
+    proc.on("error", reject);
+    createReadStream(sqlPath).pipe(proc.stdin!);
+  });
+
+  return { success: true, message: `Restored MariaDB from ${backupId}` };
+}
+
+export async function restorePostgres(
+  root: string,
+  backupId: string,
+  onProgress?: (msg: string) => void
+): Promise<{ success: boolean; message: string }> {
+  const log = onProgress ?? (() => {});
+  const backups = await listPostgresBackups(root);
+  const backup = backups.find((b) => b.id === backupId);
+  if (!backup) {
+    return { success: false, message: `Backup "${backupId}" not found` };
+  }
+
+  const sqlPath = path.join(backup.path, "all-databases.sql");
+  if (!(await pathExists(sqlPath))) {
+    return { success: false, message: `SQL dump missing in backup ${backupId}` };
+  }
+
+  const psql = await findPostgresBinary(root, "psql");
+  if (!psql) {
+    return { success: false, message: "psql not found — install PostgreSQL via Quick Add first" };
+  }
+
+  if (!isServiceRunning("postgresql")) {
+    return { success: false, message: "PostgreSQL must be running to restore a backup" };
+  }
+
+  log(`Restoring PostgreSQL from ${backup.id}…`);
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(
+      psql,
+      ["-U", "postgres", "-h", "127.0.0.1", "-p", "5432", "-f", sqlPath],
+      {
+        cwd: root,
+        shell: false,
+        windowsHide: true,
+        stdio: ["ignore", "ignore", "pipe"],
+      }
+    );
+    let stderr = "";
+    proc.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `PostgreSQL restore failed (${code})`));
+    });
+    proc.on("error", reject);
+  });
+
+  return { success: true, message: `Restored PostgreSQL from ${backupId}` };
 }

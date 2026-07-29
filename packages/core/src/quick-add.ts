@@ -208,7 +208,7 @@ export async function installFromManifest(
     await installSystemBinary(installPath, effective, log);
     await verifyManifestInstall(root, effective, installPath);
     await runPostInstall(root, installPath, effective, log);
-    log(`✓ ${effective.name} linked from system into ${effective.installPath}`);
+    log(`✓ ${effective.name} installed from system into ${effective.installPath}`);
     return installPath;
   }
 
@@ -329,6 +329,10 @@ async function runPostInstall(
     log("Synced nginx mime.types and fastcgi_params to etc/nginx/");
   }
 
+  if (manifest.name === "redis") {
+    await ensureRedisConfig(root, log);
+  }
+
   if (!manifest.postInstall) return;
 
   for (const step of manifest.postInstall) {
@@ -349,51 +353,80 @@ async function runPostInstall(
   }
 }
 
+async function whichOnPath(names: string[]): Promise<string | null> {
+  const whichCmd = process.platform === "win32" ? "where.exe" : "which";
+  for (const name of names) {
+    const found = await new Promise<string | null>((resolve) => {
+      const proc = spawn(whichCmd, process.platform === "win32" ? [name] : [name], {
+        shell: false,
+      });
+      let out = "";
+      proc.stdout?.on("data", (c) => {
+        out += String(c);
+      });
+      proc.on("close", (code) => {
+        if (code !== 0) return resolve(null);
+        const first = out
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .find(Boolean);
+        resolve(first ?? null);
+      });
+      proc.on("error", () => resolve(null));
+    });
+    if (found) return found;
+  }
+  return null;
+}
+
+function systemBinaryCandidates(manifest: QuickAddManifest): string[] {
+  const bin = manifest.binary ?? manifest.name;
+  const baseName = path.basename(bin);
+  const names = [baseName];
+  if (manifest.name.startsWith("apache")) {
+    names.push("httpd", "apache2");
+  }
+  if (manifest.name.startsWith("mariadb")) {
+    names.push("mysqld", "mariadbd");
+  }
+  if (manifest.name.startsWith("mysql")) {
+    names.push("mysqld", "mariadbd");
+  }
+  return [...new Set(names.filter(Boolean))];
+}
+
 async function installSystemBinary(
   installPath: string,
   manifest: QuickAddManifest,
   log: (msg: string) => void
 ): Promise<void> {
   const bin = manifest.binary ?? manifest.name;
-  const baseName = path.basename(bin);
-  const whichCmd = process.platform === "win32" ? "where.exe" : "which";
-  const found = await new Promise<string | null>((resolve) => {
-    const proc = spawn(whichCmd, process.platform === "win32" ? [baseName] : [baseName], {
-      shell: false,
-    });
-    let out = "";
-    proc.stdout?.on("data", (c) => {
-      out += String(c);
-    });
-    proc.on("close", (code) => {
-      if (code !== 0) return resolve(null);
-      const first = out
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .find(Boolean);
-      resolve(first ?? null);
-    });
-    proc.on("error", () => resolve(null));
-  });
+  const candidates = systemBinaryCandidates(manifest);
+  const found = await whichOnPath(candidates);
 
   if (!found) {
     throw new Error(
-      `${baseName} not found on PATH. Install it with your package manager (e.g. brew install nginx / apt install nginx), then retry Quick Add.`
+      `${candidates.join(" / ")} not found on PATH. Install it with your package manager (e.g. brew install nginx / apt install nginx), then retry Quick Add.`
     );
   }
 
-  const dest = path.join(installPath, baseName);
-  await mkdir(installPath, { recursive: true });
-  // Prefer symlink; fall back to copy
+  // Honor nested binary paths (e.g. bin/mysqld, bin/httpd) so Procfile presets resolve.
+  const relativeDest = bin.includes("/") || bin.includes("\\") ? bin : path.basename(bin);
+  const dest = path.join(installPath, relativeDest);
+  await mkdir(path.dirname(dest), { recursive: true });
+
+  // Prefer copy into the portable tree so the folder can move; fall back to symlink.
   try {
+    const { unlink } = await import("node:fs/promises");
+    await unlink(dest).catch(() => undefined);
+    await copyFile(found, dest);
+    await chmodIfUnixExecutable(dest);
+    log(`Copied ${path.basename(dest)} from ${found}`);
+  } catch {
     const { symlink, unlink } = await import("node:fs/promises");
     await unlink(dest).catch(() => undefined);
     await symlink(found, dest);
-    log(`Symlinked ${baseName} → ${found}`);
-  } catch {
-    await copyFile(found, dest);
-    await chmodIfUnixExecutable(dest);
-    log(`Copied ${baseName} from ${found}`);
+    log(`Symlinked ${path.basename(dest)} → ${found}`);
   }
 }
 
@@ -493,9 +526,11 @@ async function ensurePostgresDataDir(
     return;
   }
 
-  const initdb = path.join(installPath, "bin", "initdb.exe");
+  const { binaryName } = await import("./platform/binary.js");
+  const initdbName = binaryName("initdb");
+  const initdb = path.join(installPath, "bin", initdbName);
   if (!(await pathExists(initdb))) {
-    log("initdb.exe not found — initialize data/postgresql manually after install");
+    log(`${initdbName} not found — initialize data/postgresql manually after install`);
     return;
   }
 
@@ -509,11 +544,47 @@ async function ensurePostgresDataDir(
       { cwd: root, shell: false, windowsHide: true, stdio: "inherit" }
     );
     proc.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`initdb failed (${code})`));
+      if (code === 0) {
+        log("✓ PostgreSQL data directory initialized");
+        resolve();
+      } else {
+        reject(new Error(`initdb failed with code ${code}`));
+      }
     });
     proc.on("error", reject);
   });
+}
+
+async function ensureRedisConfig(root: string, log: (msg: string) => void): Promise<void> {
+  const { vendorRedisConfigPath } = await import("./platform/binary.js");
+  const etcDir = path.join(root, "etc", "redis");
+  const confPath = path.join(etcDir, "redis.conf");
+  await mkdir(etcDir, { recursive: true });
+
+  if (await pathExists(confPath)) {
+    log("Redis config already present at etc/redis/redis.conf");
+    return;
+  }
+
+  const vendor = path.join(root, vendorRedisConfigPath());
+  if (await pathExists(vendor)) {
+    await copyFile(vendor, confPath);
+    log(`Copied Redis config → etc/redis/redis.conf`);
+    return;
+  }
+
+  const content = `# DevTent managed Redis config
+bind 127.0.0.1
+port 6379
+protected-mode yes
+daemonize no
+dir ./data/redis
+dbfilename dump.rdb
+appendonly no
+`;
+  await mkdir(path.join(root, "data", "redis"), { recursive: true });
+  await writeFile(confPath, content, "utf-8");
+  log("Wrote etc/redis/redis.conf");
 }
 
 async function runShellCommand(

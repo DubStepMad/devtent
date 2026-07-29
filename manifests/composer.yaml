@@ -1,4 +1,4 @@
-﻿name: composer
+name: composer
 version: "2.10.2"
 description: Composer — PHP dependency manager (composer.phar)
 platform: all

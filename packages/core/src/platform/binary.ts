@@ -36,7 +36,16 @@ export function npmLauncher(platform = process.platform): string {
   return isWindows(platform) ? "npm.cmd" : "npm";
 }
 
-/** Redis config file shipped with the Windows port vs official Redis. */
+/**
+ * Redis config under the portable tree.
+ * Prefer DevTent-managed `etc/redis/redis.conf` (written on Quick Add);
+ * fall back to the Windows port's redis.windows.conf or a vendor redis.conf.
+ */
 export function redisConfigPath(platform = process.platform): string {
+  return "etc/redis/redis.conf";
+}
+
+/** Legacy vendor config paths (used when generating etc/redis/redis.conf). */
+export function vendorRedisConfigPath(platform = process.platform): string {
   return isWindows(platform) ? "bin/redis/redis.windows.conf" : "bin/redis/redis.conf";
 }

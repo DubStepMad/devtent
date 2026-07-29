@@ -1,0 +1,9 @@
+name: postgresql-16
+version: "16.6.0"
+description: PostgreSQL 16 for Linux arm64 (portable binaries)
+platform: linux
+arch: arm64
+url: https://github.com/theseus-rs/postgresql-binaries/releases/download/16.6.0/postgresql-16.6.0-aarch64-unknown-linux-gnu.tar.gz
+installPath: bin/postgresql
+binary: bin/postgres
+downloadType: tar.gz

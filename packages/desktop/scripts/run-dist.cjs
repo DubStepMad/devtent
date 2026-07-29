@@ -73,10 +73,25 @@ function resolveTargetFlag(argv) {
   return "--win";
 }
 
-function runElectronBuilder(outputDir, targetFlag) {
+function resolveArchFlags(argv) {
+  const flags = [];
+  if (argv.includes("--x64")) flags.push("--x64");
+  if (argv.includes("--arm64")) flags.push("--arm64");
+  if (argv.includes("--universal")) flags.push("--universal");
+  return flags;
+}
+
+function runElectronBuilder(outputDir, targetFlag, archFlags = []) {
   const outputName = path.basename(outputDir);
   const builderCli = resolveElectronBuilderCli();
-  const args = [builderCli, targetFlag, "--publish", "never", `--config.directories.output=${outputName}`];
+  const args = [
+    builderCli,
+    targetFlag,
+    ...archFlags,
+    "--publish",
+    "never",
+    `--config.directories.output=${outputName}`,
+  ];
 
   const result = spawnSync(process.execPath, args, {
     cwd: projectDir,
@@ -127,13 +142,15 @@ function pickOutputDir() {
 }
 
 function main() {
-  const targetFlag = resolveTargetFlag(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const targetFlag = resolveTargetFlag(argv);
+  const archFlags = resolveArchFlags(argv);
   if (targetFlag === "--win") {
     execSync("node scripts/ensure-eb-nsis.cjs", { cwd: projectDir, stdio: "inherit" });
   }
 
   const outputDir = pickOutputDir();
-  runElectronBuilder(outputDir, targetFlag);
+  runElectronBuilder(outputDir, targetFlag, archFlags);
 
   if (outputDir !== releaseDir) {
     copyInstallers(outputDir, releaseDir);

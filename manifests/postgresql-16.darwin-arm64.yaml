@@ -1,0 +1,9 @@
+name: postgresql-16
+version: "16.6.0"
+description: PostgreSQL 16 for macOS arm64 (portable binaries)
+platform: darwin
+arch: arm64
+url: https://github.com/theseus-rs/postgresql-binaries/releases/download/16.6.0/postgresql-16.6.0-aarch64-apple-darwin.tar.gz
+installPath: bin/postgresql
+binary: bin/postgres
+downloadType: tar.gz

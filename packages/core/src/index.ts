@@ -177,6 +177,8 @@ export {
   listMariaDbBackups,
   backupPostgres,
   listPostgresBackups,
+  restoreMariaDb,
+  restorePostgres,
   maybeDailyMariaDbBackup,
   maybeDailyPostgresBackup,
   MARIADB_BACKUP_DIR,
@@ -281,6 +283,7 @@ export {
   listTemplates,
   createFromTemplate,
   writePlainPhpProject,
+  writeWordpressProject,
 } from "./quick-app.js";
 
 export {

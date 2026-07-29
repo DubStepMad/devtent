@@ -661,7 +661,7 @@ export function registerIpcHandlers(): void {
           user: string;
           password?: string;
         };
-        services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
+        services?: ("redis" | "mailpit" | "meilisearch" | "minio" | "memcached")[];
       }
     ) => {
       const profile = await (await loadCore()).createProfile(currentRoot, input);
@@ -687,7 +687,7 @@ export function registerIpcHandlers(): void {
           user: string;
           password?: string;
         };
-        services?: ("redis" | "mailpit" | "meilisearch" | "minio")[];
+        services?: ("redis" | "mailpit" | "meilisearch" | "minio" | "memcached")[];
       }
     ) => {
       const profile = await (await loadCore()).updateProfile(currentRoot, name, patch);
@@ -722,7 +722,7 @@ export function registerIpcHandlers(): void {
         } catch {
           // Best-effort stop so Windows can replace locked binaries
         }
-      } else if (reinstall && ["mailpit", "meilisearch", "minio"].includes(name)) {
+      } else if (reinstall && ["mailpit", "meilisearch", "minio", "memcached"].includes(name)) {
         try {
           sendProgress(`Stopping ${name} before update…`);
           await core.stopService(name, currentRoot, { skipBackup: true });

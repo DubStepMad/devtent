@@ -105,13 +105,13 @@ devtent sites php myapp           # show current version
 
 | MariaDB | ◐ | ✓ | ◐ | **✓** |
 
-Full feature matrix, honest gaps, and roadmap: **[docs/COMPARISON.md](docs/COMPARISON.md)**.
+Full feature matrix: **[docs/COMPARISON.md](docs/COMPARISON.md)**.
 
 
 
 ### Custom services
 
-Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor** in the tray panel once binaries are in `bin/`.
+Any other tool can be added via the **Procfile editor** in the tray panel once binaries are in `bin/`. Apache and Memcached are also available via Quick Add / profile optionals.
 
 ## Quick start
 
@@ -120,7 +120,7 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 ### Prerequisites
 
 - [Node.js 20+](https://nodejs.org/) — developers building from source only
-- Windows 10/11, macOS 12+ (Apple Silicon), or a modern Linux x64 desktop
+- Windows 10/11, macOS 12+ (Apple Silicon or Intel), or a modern Linux desktop (x64 or arm64)
 
 
 
@@ -129,12 +129,12 @@ Any other tool (Apache, Memcached, etc.) can be added via the **Procfile editor*
 Download the installer for your OS from [GitHub Releases](https://github.com/DubStepMad/devtent/releases):
 
 - **Windows:** `DevTent Setup x.y.z.exe`
-- **macOS:** `DevTent-x.y.z-arm64.dmg`
-- **Linux:** `DevTent-x.y.z-x64.AppImage` or `.deb`
+- **macOS:** `DevTent-x.y.z-arm64.dmg` or `DevTent-x.y.z-x64.dmg`
+- **Linux:** `DevTent-x.y.z-x64.AppImage` / `.deb`, or arm64 equivalents
 
-> **Windows SmartScreen:** The Windows installer may be **unsigned**. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for optional code signing.
+> **Windows SmartScreen:** The Windows installer may be **unsigned** unless [SignPath](docs/SIGNING.md) (free for OSS) is configured. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for free signing options.
 
-On macOS/Linux, install **nginx** (and optionally **redis**) via your package manager before Quick Add if you use `downloadType: system` manifests (`brew install nginx`, `apt install nginx`).
+On macOS/Linux, Quick Add can **copy** nginx/redis (and optionally Apache / MariaDB) from your package manager into the portable tree (`brew install nginx redis`, `apt install nginx redis-server`).
 
 
 
@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 1.5.0.exe`
+Output: `packages/desktop/release/DevTent Setup 2.0.0.exe`
 
 ### CLI (optional)
 
@@ -241,11 +241,18 @@ devtent node install <version>     # Install Node (e.g. node-22)
 devtent node use <version>         # Set active Node for profile
 devtent sites link <path>       # Link external project
 devtent sites php <name> <ver> # Per-site PHP (php-8.2, php-8.3, php-8.4)
+devtent sites workers [site]   # List queue / Vite / schedule workers
+devtent sites worker <site> <kind> --on|--off
 devtent share <site>           # Public quick tunnel (Ctrl+C to stop)
 devtent share named list       # Named Cloudflare tunnels
 devtent dns status             # Local DNS for custom TLDs
+devtent dns install-resolver   # OS resolver (macOS / Linux / Windows)
 devtent dumps list             # Live dump / Laravel telemetry
 devtent doctor --fix           # Diagnose and repair environment
+devtent db list                # List databases (active engine)
+devtent db backup              # Backup active managed engine
+devtent db restore <id>        # Restore (--engine mysql|mariadb|postgresql)
+devtent ssl disable <domain>   # Remove local SSL for a site
 ```
 
 `migrate laragon` is a legacy alias for `migrate import`.

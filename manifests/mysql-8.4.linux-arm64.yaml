@@ -1,0 +1,9 @@
+name: mysql-8.4
+version: "system"
+description: MySQL 8.4 — links mysqld from PATH (apt/dnf install mysql-server)
+platform: linux
+arch: arm64
+url: ""
+installPath: bin/mysql
+binary: bin/mysqld
+downloadType: system

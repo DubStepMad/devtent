@@ -108,6 +108,11 @@ export async function getServicePresetsForProfile(
       command: `${binPath(["bin", "minio", "minio"])} server data/minio --address 127.0.0.1:9000 --console-address 127.0.0.1:9001`,
     },
     {
+      id: "memcached",
+      name: "Memcached",
+      command: `${binPath(["bin", "memcached", "memcached"])} -p 11211 -l 127.0.0.1`,
+    },
+    {
       id: "php-fpm",
       name: phpLabel,
       command: phpCommand,

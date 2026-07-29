@@ -1,15 +1,22 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./config.js";
+import { binPath } from "./platform/binary.js";
 
-/** Windows httpd resolves relative -f against its binary directory unless -d sets ServerRoot. */
-export const APACHE_PROCFILE_COMMAND =
-  "bin/apache/bin/httpd.exe -d . -f etc/apache/httpd.conf";
+/** httpd resolves relative -f against its binary directory unless -d sets ServerRoot. */
+export const APACHE_PROCFILE_COMMAND = `${binPath([
+  "bin",
+  "apache",
+  "bin",
+  "httpd",
+])} -d . -f etc/apache/httpd.conf`;
 
 export function needsApacheProcfileRepair(command: string): boolean {
   if (command.includes("-d bin/apache") || command.includes("-d bin\\apache")) return true;
   if (!command.includes("-f etc/apache/httpd.conf")) return true;
   if (!/\s-d\s+(\.|"\.")(\s|$)/.test(command)) return true;
+  // Legacy Windows-only .exe path on Unix (or missing platform-correct binary)
+  if (process.platform !== "win32" && command.includes("httpd.exe")) return true;
   return false;
 }
 

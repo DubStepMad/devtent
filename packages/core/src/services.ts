@@ -176,7 +176,8 @@ async function prepareServiceStart(
     const list = entries ?? (await parseProcfile(root));
     const apache = list.find((e) => e.name === "apache");
     if (apache && needsApacheProcfileRepair(apache.command)) {
-      const httpd = resolvePath(root, "bin/apache/bin/httpd.exe");
+      const { binaryName } = await import("./platform/binary.js");
+      const httpd = resolvePath(root, path.join("bin", "apache", "bin", binaryName("httpd")));
       if (await pathExists(httpd)) {
         await saveProcfileEntry(root, { name: "apache", command: APACHE_PROCFILE_COMMAND });
       }

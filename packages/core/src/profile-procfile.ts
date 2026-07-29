@@ -6,7 +6,13 @@ import { getServicePresets, writeProcfileRaw } from "./procfile.js";
 import { syncPhpCgiProcfile } from "./php-cgi-sync.js";
 import type { ProcfileEntry } from "./types.js";
 
-const OPTIONAL_SERVICE_IDS = new Set(["redis", "mailpit", "meilisearch", "minio"]);
+const OPTIONAL_SERVICE_IDS = new Set([
+  "redis",
+  "mailpit",
+  "meilisearch",
+  "minio",
+  "memcached",
+]);
 
 export type ProfileProcfileSyncMode = "merge" | "replace";
 

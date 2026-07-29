@@ -1,4 +1,4 @@
-﻿name: mkcert
+name: mkcert
 version: "1.4.4"
 description: mkcert — local HTTPS certificates for development
 platform: linux

@@ -8,6 +8,7 @@ import {
   isWindows,
   npmLauncher,
   redisConfigPath,
+  vendorRedisConfigPath,
 } from "./binary.js";
 
 describe("platform/binary", () => {
@@ -35,8 +36,10 @@ describe("platform/binary", () => {
   it("npm launcher and redis config differ by OS", () => {
     assert.equal(npmLauncher("win32"), "npm.cmd");
     assert.equal(npmLauncher("linux"), "npm");
-    assert.equal(redisConfigPath("win32"), "bin/redis/redis.windows.conf");
-    assert.equal(redisConfigPath("darwin"), "bin/redis/redis.conf");
+    assert.equal(redisConfigPath("win32"), "etc/redis/redis.conf");
+    assert.equal(redisConfigPath("darwin"), "etc/redis/redis.conf");
+    assert.equal(vendorRedisConfigPath("win32"), "bin/redis/redis.windows.conf");
+    assert.equal(vendorRedisConfigPath("darwin"), "bin/redis/redis.conf");
   });
 
   it("isWindows / isUnix helpers", () => {

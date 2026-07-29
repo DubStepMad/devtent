@@ -124,6 +124,14 @@ async function writeState(root: string, state: DnsStateFile): Promise<void> {
   await writeFile(resolvePath(root, STATE_FILE), JSON.stringify(state, null, 2) + "\n", "utf-8");
 }
 
+function linuxResolverPath(tld: string): string {
+  return `/etc/systemd/resolved.conf.d/devtent-${tld}.conf`;
+}
+
+function windowsResolverMarker(root: string, tld: string): string {
+  return resolvePath(root, `etc/dns/windows-resolver-${tld}.installed`);
+}
+
 export function isLocalDnsRunning(): boolean {
   return dnsSocket !== null;
 }
@@ -131,16 +139,34 @@ export function isLocalDnsRunning(): boolean {
 export async function getLocalDnsStatus(root: string): Promise<LocalDnsStatus> {
   const config = await loadConfig(root);
   const tld = normalizeTld(config.tld);
-  const resolverPath =
-    process.platform === "darwin" ? `/etc/resolver/${tld}` : undefined;
+  let resolverPath: string | undefined;
   let resolverInstalled = false;
-  if (resolverPath && (await pathExists(resolverPath))) {
-    try {
-      const content = await readFile(resolverPath, "utf-8");
-      resolverInstalled = content.includes("127.0.0.1") && content.includes(String(LOCAL_DNS_PORT));
-    } catch {
-      resolverInstalled = false;
+
+  if (process.platform === "darwin") {
+    resolverPath = `/etc/resolver/${tld}`;
+    if (await pathExists(resolverPath)) {
+      try {
+        const content = await readFile(resolverPath, "utf-8");
+        resolverInstalled =
+          content.includes("127.0.0.1") && content.includes(String(LOCAL_DNS_PORT));
+      } catch {
+        resolverInstalled = false;
+      }
     }
+  } else if (process.platform === "linux") {
+    resolverPath = linuxResolverPath(tld);
+    if (await pathExists(resolverPath)) {
+      try {
+        const content = await readFile(resolverPath, "utf-8");
+        resolverInstalled =
+          content.includes("127.0.0.1") && content.includes(String(LOCAL_DNS_PORT));
+      } catch {
+        resolverInstalled = false;
+      }
+    }
+  } else if (process.platform === "win32") {
+    resolverPath = windowsResolverMarker(root, tld);
+    resolverInstalled = await pathExists(resolverPath);
   }
 
   const running = isLocalDnsRunning();
@@ -207,8 +233,10 @@ export async function stopLocalDns(root: string): Promise<LocalDnsStatus> {
 }
 
 /**
- * macOS: install /etc/resolver/<tld> so the OS asks DevTent DNS for that TLD.
- * Linux/Windows: returns setup guidance (hosts file or systemd-resolved).
+ * Install OS resolver integration so `*.{tld}` queries reach DevTent DNS.
+ * - macOS: `/etc/resolver/{tld}`
+ * - Linux: systemd-resolved drop-in
+ * - Windows: portproxy 53→15353 + NRPT rule (elevated PowerShell)
  */
 export async function installLocalDnsResolver(
   root: string
@@ -251,17 +279,80 @@ export async function installLocalDnsResolver(
   }
 
   if (process.platform === "linux") {
+    const tmpDir = resolvePath(root, "tmp");
+    await mkdir(tmpDir, { recursive: true });
+    const staged = path.join(tmpDir, `devtent-resolved-${tld}.conf`);
+    // systemd 247+ supports address#port; Domains=~tld routes only that TLD.
+    const content = `# DevTent local DNS for *.${tld}
+[Resolve]
+DNS=127.0.0.1:${LOCAL_DNS_PORT}
+Domains=~${tld}
+`;
+    await writeFile(staged, content, "utf-8");
+
+    const dest = linuxResolverPath(tld);
+    const scriptFile = path.join(tmpDir, `devtent-install-resolved-${tld}.sh`);
+    const script = [
+      "#!/bin/sh",
+      "set -e",
+      "mkdir -p /etc/systemd/resolved.conf.d",
+      `cp "${staged}" "${dest}"`,
+      "systemctl try-reload-or-restart systemd-resolved 2>/dev/null || true",
+      `echo "DevTent: installed ${dest}"`,
+      "",
+    ].join("\n");
+    await writeFile(scriptFile, script, "utf-8");
+    await chmod(scriptFile, 0o755);
+    const launched = await launchUnixElevated(scriptFile);
+
     return {
-      ok: false,
-      message:
-        `Start DevTent DNS (port ${LOCAL_DNS_PORT}), then point your resolver at 127.0.0.1:${LOCAL_DNS_PORT} for *.${tld}, or use Update hosts for per-site entries.`,
+      ok: launched,
+      message: launched
+        ? `Approve the admin prompt to install systemd-resolved routing for *.${tld}. Then start local DNS.`
+        : `Could not launch elevation. Install manually: copy ${staged} to ${dest} and reload systemd-resolved.`,
+      scriptFile,
     };
   }
 
+  // Windows: portproxy 53 → DevTent DNS + NRPT for the TLD
+  const tmpDir = resolvePath(root, "tmp");
+  await mkdir(tmpDir, { recursive: true });
+  const marker = windowsResolverMarker(root, tld);
+  const scriptFile = path.join(tmpDir, `devtent-install-dns-${tld}.ps1`);
+  const ps = [
+    "$ErrorActionPreference = 'Stop'",
+    `netsh interface portproxy delete v4tov4 listenport=53 listenaddress=127.0.0.1 2>$null`,
+    `netsh interface portproxy add v4tov4 listenport=53 listenaddress=127.0.0.1 connectport=${LOCAL_DNS_PORT} connectaddress=127.0.0.1`,
+    `Get-DnsClientNrptRule | Where-Object { $_.Namespace -eq '.${tld}' } | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue`,
+    `Add-DnsClientNrptRule -Namespace '.${tld}' -NameServers '127.0.0.1' -ErrorAction Stop`,
+    `Set-Content -Path '${marker.replace(/'/g, "''")}' -Value "installed $(Get-Date -Format o)"`,
+    `Write-Host "DevTent: Windows DNS resolver installed for *.${tld}"`,
+  ].join("\r\n");
+  await writeFile(scriptFile, ps, "utf-8");
+
+  const { spawn } = await import("node:child_process");
+  const launched = await new Promise<boolean>((resolve) => {
+    const child = spawn(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${scriptFile.replace(/'/g, "''")}'`,
+      ],
+      { stdio: "ignore", windowsHide: true }
+    );
+    child.on("close", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
+
   return {
-    ok: false,
-    message:
-      `Windows: use Update hosts (Admin) for *.${tld}, or start DevTent DNS on port ${LOCAL_DNS_PORT} and configure a local resolver that forwards that TLD.`,
+    ok: launched,
+    message: launched
+      ? `Approve the UAC prompt to route *.${tld} via DevTent DNS (portproxy 53→${LOCAL_DNS_PORT} + NRPT). Then start local DNS.`
+      : `Could not launch elevated PowerShell. Run as Admin: ${scriptFile}`,
+    scriptFile,
   };
 }
 

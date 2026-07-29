@@ -1,0 +1,9 @@
+name: memcached
+version: "system"
+description: Memcached — links memcached from PATH (brew/apt/choco install memcached)
+platform: all
+arch: all
+url: ""
+installPath: bin/memcached
+binary: memcached
+downloadType: system

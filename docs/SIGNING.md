@@ -1,46 +1,73 @@
-# Code signing
+# Code signing (free options)
 
-DevTent release builds support **optional Authenticode signing** via electron-builder. When signing secrets are not configured, builds remain unsigned (SmartScreen may show "Windows protected your PC").
+DevTent is free and open source. This document covers **no-cost** signing paths only.
+Paid Authenticode certificates and the Apple Developer Program ($99/yr for notarization) are **not required**.
 
-## CI / release signing
+## Windows — SignPath Foundation (recommended, free for OSS)
 
-Add these GitHub repository secrets:
+[SignPath Foundation](https://signpath.org/) provides free code signing for open-source projects:
+the private key stays on their HSM, and binaries are tied to your GitHub repository.
+
+### Setup
+
+1. Apply at [signpath.org](https://signpath.org/) for the DevTent repository
+2. Create a SignPath project + artifact configuration for the NSIS installer (`.exe`)
+3. Add GitHub Actions secrets:
 
 | Secret | Description |
-|--------|-------------|
-| `WINDOWS_CODE_SIGNING_CERT` | Base64-encoded `.pfx` certificate (or path — see electron-builder docs) |
-| `WINDOWS_CODE_SIGNING_PASSWORD` | Certificate password |
+| --- | --- |
+| `SIGNPATH_API_TOKEN` | API token from SignPath |
+| `SIGNPATH_ORGANIZATION_ID` | Organization UUID |
+| `SIGNPATH_PROJECT_SLUG` | Project slug |
+| `SIGNPATH_SIGNING_POLICY_SLUG` | Policy slug (often `test-signing` or `release-signing`) |
 
-The release workflow passes them as `CSC_LINK` and `CSC_KEY_PASSWORD`. electron-builder signs `DevTent.exe`, the NSIS installer, and the uninstaller when both are set.
+When these secrets are present, the [release workflow](../.github/workflows/release.yml) uploads the
+unsigned installer and submits a SignPath signing request. When they are absent, the release stays unsigned.
 
-## Local signed build
-
-```powershell
-$env:CSC_LINK = "C:\path\to\cert.pfx"
-$env:CSC_KEY_PASSWORD = "your-password"
-npm run dist
-```
-
-`packages/desktop/package.json` has `signAndEditExecutable: true`. Without `CSC_LINK`, electron-builder skips signing and still produces an installer.
-
-## Unsigned builds (no budget for a cert?)
-
-DevTent is **free and open source** — a standard Authenticode certificate often costs hundreds of dollars per year. Unsigned builds are normal for community projects.
-
-What we do instead:
+### Without SignPath (unsigned)
 
 - Installer welcome/finish pages explain **More info → Run anyway** when SmartScreen appears
-- Releases are published on **GitHub** with public source — you can verify what you are installing
-- SmartScreen **reputation improves** as more people run the same signed-or-unsigned binary from the same URL over time
+- Prefer downloads only from [GitHub Releases](https://github.com/DubStepMad/devtent/releases)
+- SmartScreen reputation improves as more people run the same binary from the same URL
 
-### If Windows blocks the installer
+## Windows — optional paid CSC (not free)
 
-1. Click **More info** on the blue SmartScreen dialog
-2. Click **Run anyway**
-3. Prefer downloading only from [GitHub Releases](https://github.com/DubStepMad/devtent/releases) (not random mirrors)
+If you already have a `.pfx` (paid CA), you can still set:
 
-### Optional: local signing later
+| Secret | Description |
+| --- | --- |
+| `WINDOWS_CODE_SIGNING_CERT` | Base64-encoded `.pfx` |
+| `WINDOWS_CODE_SIGNING_PASSWORD` | Certificate password |
 
-When budget allows, use the CI secrets or local `CSC_LINK` flow above — no code changes required.
+electron-builder uses `CSC_LINK` / `CSC_KEY_PASSWORD`. This is optional and separate from SignPath.
 
-`after-pack.cjs` embeds the tent icon via rcedit when signing is skipped.
+## macOS — free / ad-hoc (no Apple Developer account)
+
+Apple **notarization requires a paid Apple Developer Program membership**. Free options:
+
+1. **Unsigned / ad-hoc builds (default in CI)** — `CSC_IDENTITY_AUTO_DISCOVERY=false` and `"identity": null` in electron-builder. Gatekeeper will block first open.
+2. **Open anyway (users)** — Right-click the app → **Open** → **Open**, or:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/DevTent.app
+   ```
+3. **Local ad-hoc sign (developers, free)** — no notarization, slightly clearer Gatekeeper messaging:
+   ```bash
+   codesign --force --deep --sign - "packages/desktop/release/mac-arm64/DevTent.app"
+   ```
+
+There is no free substitute for Apple notarization. Do not commit paid Apple certificates.
+
+## Linux
+
+AppImage and `.deb` builds are not Authenticode-signed. Verify checksums / GitHub release assets.
+AppArmor/Gatekeeper equivalents vary by distro; no paid cert is required for DevTent Linux packages.
+
+## Summary
+
+| Platform | Free path |
+| --- | --- |
+| Windows | SignPath Foundation (OSS) or unsigned + SmartScreen guidance |
+| macOS | Ad-hoc / unsigned + user “Open anyway” (no free notarization) |
+| Linux | Unsigned packages from GitHub Releases |
+
+`after-pack.cjs` still embeds the tent icon via rcedit when Windows Authenticode signing is skipped.

@@ -1,4 +1,4 @@
-﻿name: php-8.2
+name: php-8.2
 version: "8.2.32"
 description: PHP 8.2 FPM+CLI (static-php.dev common) for Linux x64
 platform: linux

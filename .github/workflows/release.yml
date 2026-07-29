@@ -20,6 +20,8 @@ jobs:
             platform: mac
           - os: ubuntu-latest
             platform: linux
+          - os: ubuntu-24.04-arm
+            platform: linux-arm
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -41,17 +43,23 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
         run: npm run dist
 
-      - name: Build installer (macOS)
+      - name: Build installer (macOS arm64 + Intel)
         if: matrix.platform == 'mac'
         working-directory: packages/desktop
         env:
+          # Free/ad-hoc: skip paid Apple Developer identity. Optional SignPath/CSC later.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: node scripts/run-dist.cjs --mac
 
-      - name: Build installer (Linux)
+      - name: Build installer (Linux x64)
         if: matrix.platform == 'linux'
         working-directory: packages/desktop
-        run: node scripts/run-dist.cjs --linux
+        run: node scripts/run-dist.cjs --linux --x64
+
+      - name: Build installer (Linux arm64)
+        if: matrix.platform == 'linux-arm'
+        working-directory: packages/desktop
+        run: node scripts/run-dist.cjs --linux --arm64
 
       - name: Electron E2E smoke (Windows)
         if: matrix.platform == 'win'
@@ -68,6 +76,37 @@ jobs:
             packages/desktop/release/*.zip
             packages/desktop/release/*.AppImage
             packages/desktop/release/*.deb
+          if-no-files-found: warn
+
+      # Optional free OSS signing via SignPath Foundation (https://signpath.org/).
+      # Configure secrets after project approval — skipped when token is absent.
+      - name: Upload unsigned Windows installer for SignPath
+        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' }}
+        id: upload-unsigned-win
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-installer
+          path: packages/desktop/release/*.exe
+          if-no-files-found: warn
+
+      - name: Submit SignPath signing request (Windows, free OSS)
+        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' && steps.upload-unsigned-win.outputs.artifact-id != '' }}
+        uses: signpath/github-action-submit-signing-request@v1.1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-win.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: packages/desktop/release-signed
+
+      - name: Upload SignPath-signed Windows installer
+        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-win-signed
+          path: packages/desktop/release-signed/**
           if-no-files-found: warn
 
   publish:

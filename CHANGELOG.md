@@ -4,6 +4,28 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-29
+
+True cross-platform portable stack: full arch matrix, CLI/desktop/MCP parity, multi-engine DB restore, and free OSS signing path.
+
+### Added
+
+- **Full platform matrix** — desktop installers for macOS Intel (`x64`) and Linux arm64 alongside existing macOS arm64 / Linux x64 / Windows x64; Quick Add manifests for PHP/Node on those arches
+- **Free code signing path** — SignPath Foundation (OSS) integration hooks in the release workflow; macOS stays ad-hoc/unsigned without a paid Apple Developer account ([docs/SIGNING.md](docs/SIGNING.md))
+- **Portable Unix nginx/redis** — system installs copy binaries into the portable tree and write managed `etc/redis/redis.conf`
+- **MariaDB & PostgreSQL on Unix** — Linux MariaDB bintar; PostgreSQL portable binaries (theseus-rs) for macOS/Linux; Homebrew/apt system fallbacks where needed
+- **Apache on macOS/Linux** — Quick Add system manifests + cross-platform Procfile/`httpd` paths
+- **CLI ↔ MCP parity** — `ssl disable`, `devtent db …`, `sites workers` / `sites worker`, full profile optional services (`meilisearch`, `minio`, `memcached`, `mariadb`, `external`)
+- **Multi-engine restore** — `restoreMariaDb` / `restorePostgres` and unified `devtent db backup|restore|list-backups`
+- **Memcached** — Quick Add manifest + profile optional service + Procfile preset
+- **Local DNS on Linux & Windows** — systemd-resolved drop-in (Linux) and portproxy + NRPT (Windows) via `dns install-resolver`
+- **WordPress Quick App** — download latest from wordpress.org (`devtent quick-app wordpress <name>`)
+
+### Changed
+
+- Windows Redis Quick Add updated to Redis 8.8.1 (redis-windows)
+- Security supported-versions table refreshed for the 1.5.x / 2.0 line
+
 ## [1.5.0] - 2026-07-26
 
 Developer productivity release: Xdebug, Meilisearch/MinIO, worker polish, multi-engine backups, and deeper MCP.
