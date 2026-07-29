@@ -78,36 +78,23 @@ jobs:
             packages/desktop/release/*.deb
           if-no-files-found: warn
 
-      # Optional free OSS signing via SignPath Foundation (https://signpath.org/).
-      # Configure secrets after project approval — skipped when token is absent.
-      - name: Upload unsigned Windows installer for SignPath
-        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' }}
-        id: upload-unsigned-win
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-windows-installer
-          path: packages/desktop/release/*.exe
-          if-no-files-found: warn
-
-      - name: Submit SignPath signing request (Windows, free OSS)
-        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' && steps.upload-unsigned-win.outputs.artifact-id != '' }}
-        uses: signpath/github-action-submit-signing-request@v1.1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.upload-unsigned-win.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: packages/desktop/release-signed
-
-      - name: Upload SignPath-signed Windows installer
-        if: ${{ matrix.platform == 'win' && secrets.SIGNPATH_API_TOKEN != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-win-signed
-          path: packages/desktop/release-signed/**
-          if-no-files-found: warn
+      # Optional free OSS signing via SignPath Foundation (docs/SIGNING.md).
+      # Secrets are read into env first — GitHub forbids secrets.* directly in if:.
+      - name: SignPath (Windows, optional)
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+        run: |
+          if [ -z "$SIGNPATH_API_TOKEN" ]; then
+            echo "SignPath secrets not configured — skipping (see docs/SIGNING.md)"
+            exit 0
+          fi
+          echo "SignPath secrets present. Configure artifact upload + signpath/github-action-submit-signing-request in a follow-up once the SignPath project is approved."
+          echo "Installers remain available as unsigned GitHub Release assets."
 
   publish:
     needs: release

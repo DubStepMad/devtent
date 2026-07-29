@@ -21,8 +21,10 @@ the private key stays on their HSM, and binaries are tied to your GitHub reposit
 | `SIGNPATH_PROJECT_SLUG` | Project slug |
 | `SIGNPATH_SIGNING_POLICY_SLUG` | Policy slug (often `test-signing` or `release-signing`) |
 
-When these secrets are present, the [release workflow](../.github/workflows/release.yml) uploads the
-unsigned installer and submits a SignPath signing request. When they are absent, the release stays unsigned.
+When these secrets are present, the [release workflow](../.github/workflows/release.yml) can detect them
+and skip or enable SignPath signing without failing the build. Wire the
+[`signpath/github-action-submit-signing-request`](https://github.com/signpath/github-action-submit-signing-request)
+action after your SignPath project is approved. When secrets are absent, the release stays unsigned.
 
 ### Without SignPath (unsigned)
 
