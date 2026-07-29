@@ -130,7 +130,7 @@ Download the installer for your OS from [GitHub Releases](https://github.com/Dub
 
 - **Windows:** `DevTent Setup x.y.z.exe`
 - **macOS:** `DevTent-x.y.z-arm64.dmg` or `DevTent-x.y.z-x64.dmg`
-- **Linux:** `DevTent-x.y.z-x64.AppImage` / `.deb`, or arm64 equivalents
+- **Linux:** `DevTent-x.y.z-x64.AppImage` / `.deb`, or `DevTent-x.y.z-arm64.AppImage`
 
 > **Windows SmartScreen:** The Windows installer may be **unsigned** unless [SignPath](docs/SIGNING.md) (free for OSS) is configured. The setup wizard explains what to do if Windows shows a warning (**More info → Run anyway**). See [docs/SIGNING.md](docs/SIGNING.md) for free signing options.
 

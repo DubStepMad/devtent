@@ -56,10 +56,11 @@ jobs:
         working-directory: packages/desktop
         run: node scripts/run-dist.cjs --linux --x64
 
-      - name: Build installer (Linux arm64)
+      - name: Build installer (Linux arm64 AppImage)
         if: matrix.platform == 'linux-arm'
         working-directory: packages/desktop
-        run: node scripts/run-dist.cjs --linux --arm64
+        # .deb uses fpm (x86-only) — AppImage only on arm64 runners
+        run: node scripts/run-dist.cjs --linux AppImage --arm64
 
       - name: Electron E2E smoke (Windows)
         if: matrix.platform == 'win'

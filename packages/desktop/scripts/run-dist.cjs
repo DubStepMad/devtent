@@ -73,21 +73,28 @@ function resolveTargetFlag(argv) {
   return "--win";
 }
 
-function resolveArchFlags(argv) {
-  const flags = [];
-  if (argv.includes("--x64")) flags.push("--x64");
-  if (argv.includes("--arm64")) flags.push("--arm64");
-  if (argv.includes("--universal")) flags.push("--universal");
-  return flags;
+/** Extra electron-builder args after the platform flag (e.g. AppImage, --arm64). */
+function resolveExtraBuilderArgs(argv, targetFlag) {
+  const skip = new Set(["--mac", "--macos", "--linux", "--win", "--windows"]);
+  const extras = [];
+  for (const arg of argv) {
+    if (skip.has(arg)) continue;
+    // Arch flags and explicit linux targets (AppImage, deb, …)
+    if (arg.startsWith("--") || /^[A-Za-z][A-Za-z0-9_-]*$/.test(arg)) {
+      extras.push(arg);
+    }
+  }
+  // When an explicit linux target is given (e.g. AppImage), do not also expand package.json multi-targets via arch-only.
+  return extras;
 }
 
-function runElectronBuilder(outputDir, targetFlag, archFlags = []) {
+function runElectronBuilder(outputDir, targetFlag, extraArgs = []) {
   const outputName = path.basename(outputDir);
   const builderCli = resolveElectronBuilderCli();
   const args = [
     builderCli,
     targetFlag,
-    ...archFlags,
+    ...extraArgs,
     "--publish",
     "never",
     `--config.directories.output=${outputName}`,
@@ -144,13 +151,13 @@ function pickOutputDir() {
 function main() {
   const argv = process.argv.slice(2);
   const targetFlag = resolveTargetFlag(argv);
-  const archFlags = resolveArchFlags(argv);
+  const extraArgs = resolveExtraBuilderArgs(argv, targetFlag);
   if (targetFlag === "--win") {
     execSync("node scripts/ensure-eb-nsis.cjs", { cwd: projectDir, stdio: "inherit" });
   }
 
   const outputDir = pickOutputDir();
-  runElectronBuilder(outputDir, targetFlag, archFlags);
+  runElectronBuilder(outputDir, targetFlag, extraArgs);
 
   if (outputDir !== releaseDir) {
     copyInstallers(outputDir, releaseDir);
