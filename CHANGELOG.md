@@ -4,6 +4,10 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **CI** — bump GitHub Actions to Node 24 runtimes (`checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`) to clear Node 20 deprecation warnings
+
 ## [2.1.0] - 2026-08-04
 
 Desktop UX release: clearer navigation, accessible dialogs, refreshed docs and screenshots.
