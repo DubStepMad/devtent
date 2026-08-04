@@ -14,6 +14,7 @@ coverage/
 demo-instance/
 .vscode/
 test-instance/
+.wiki-build/
 packages/desktop/release/
 packages/desktop/release-build/
 packages/desktop/release-*/

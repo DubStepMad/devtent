@@ -4,6 +4,16 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-04
+
+Desktop UX release: clearer navigation, accessible dialogs, refreshed docs and screenshots.
+
+### Changed
+
+- **Desktop IA** — sidebar regrouped into Sites / Stack / Debug / collapsible More (Tooling, PHP, Quick Add, Share) / System; number keys `1`–`9` jump primary views; dashboard quick actions; Settings → Backups points to the Database page; Share empty states; tray adds Services
+- **Desktop UX polish** — styled confirm/prompt dialogs (replacing native browser dialogs), keyboard focus rings, live toasts, status-bar busy indicator, collapsed-sidebar abbreviations, Quick App label associations, and tray quick-panel icons aligned with the dashboard
+- **Docs & screenshots** — regenerated README screenshots for the new UI; user guide under [docs/guide](docs/guide/README.md); GitHub Wiki populated with the same guides and images
+
 ## [2.0.0] - 2026-07-29
 
 True cross-platform portable stack: full arch matrix, CLI/desktop/MCP parity, multi-engine DB restore, and free OSS signing path.

@@ -46,28 +46,44 @@
         <span class="logo-sm"><img src="app-icon.png" width="40" height="40" alt=""></span>
         <span>DevTent</span>
       </div>
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" aria-label="Main">
         <div class="nav-group">
           <span class="nav-group-label">Overview</span>
-          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button type="button" class="nav-item active" data-view="dashboard" data-short="Da" title="Dashboard" aria-label="Dashboard">Dashboard</button>
         </div>
         <div class="nav-group">
           <span class="nav-group-label">Sites</span>
-          <button class="nav-item" data-view="projects">Projects</button>
-          <button class="nav-item" data-view="quick-app">Quick App</button>
+          <button type="button" class="nav-item" data-view="projects" data-short="Pr" title="Projects" aria-label="Projects">Projects</button>
+          <button type="button" class="nav-item" data-view="quick-app" data-short="QA" title="Quick App" aria-label="Quick App">Quick App</button>
         </div>
         <div class="nav-group">
-          <span class="nav-group-label">Developer</span>
-          <button class="nav-item" data-view="services">Services</button>
-          <button class="nav-item" data-view="logs">Logs</button>
-          <button class="nav-item" data-view="tooling">Tooling</button>
-          <button class="nav-item" data-view="dumps">Dumps</button>
-          <button class="nav-item" data-view="quick-add">Quick Add</button>
+          <span class="nav-group-label">Stack</span>
+          <button type="button" class="nav-item" data-view="services" data-short="Sv" title="Services" aria-label="Services">Services</button>
+          <button type="button" class="nav-item" data-view="database" data-short="Db" title="Database" aria-label="Database">Database</button>
+          <button type="button" class="nav-item" data-view="mail" data-short="Ml" title="Mail" aria-label="Mail">Mail</button>
         </div>
         <div class="nav-group">
-          <span class="nav-group-label">Config</span>
-          <button class="nav-item" data-view="profiles">Profiles</button>
-          <button class="nav-item" data-view="settings">Settings</button>
+          <span class="nav-group-label">Debug</span>
+          <button type="button" class="nav-item" data-view="logs" data-short="Lg" title="Logs" aria-label="Logs">Logs</button>
+          <button type="button" class="nav-item" data-view="dumps" data-short="Dp" title="Dumps" aria-label="Dumps">Dumps</button>
+        </div>
+        <div class="nav-group nav-group-more is-expanded" id="nav-group-more">
+          <button type="button" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="true" aria-controls="nav-more-items">
+            <span class="nav-more-label">More</span>
+            <span class="nav-more-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="nav-more-items" id="nav-more-items" role="group" aria-label="More tools">
+            <button type="button" class="nav-item" data-view="tooling" data-short="Tl" title="Tooling" aria-label="Tooling">Tooling</button>
+            <button type="button" class="nav-item" data-view="php-ini" data-short="Ph" title="PHP" aria-label="PHP">PHP</button>
+            <button type="button" class="nav-item" data-view="quick-add" data-short="+" title="Quick Add" aria-label="Quick Add">Quick Add</button>
+            <button type="button" class="nav-item" data-view="share" data-short="Sh" title="Share" aria-label="Share">Share</button>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="nav-group-label">System</span>
+          <button type="button" class="nav-item" data-view="doctor" data-short="Dr" title="Doctor" aria-label="Doctor">Doctor</button>
+          <button type="button" class="nav-item" data-view="profiles" data-short="Pf" title="Profiles" aria-label="Profiles">Profiles</button>
+          <button type="button" class="nav-item" data-view="settings" data-short="Se" title="Settings" aria-label="Settings">Settings</button>
         </div>
       </nav>
       <div class="sidebar-footer">
@@ -82,8 +98,9 @@
           <p id="page-subtitle" class="page-subtitle">Stack health and quick actions</p>
         </div>
         <div class="topbar-actions no-drag">
-          <button class="btn success" id="btn-start-all">▶ Start All</button>
-          <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
+          <button type="button" class="btn secondary sm topbar-kbd" id="btn-command-palette" title="Command palette">Ctrl+K</button>
+          <button type="button" class="btn success" id="btn-start-all" title="Start all profile services (S)">Start All</button>
+          <button type="button" class="btn danger secondary" id="btn-stop-all" title="Stop all services">Stop All</button>
         </div>
       </header>
 
@@ -107,17 +124,31 @@
               <span class="stat-value stat-sm" id="stat-status">Idle</span>
             </div>
           </div>
+          <div class="toolbar dashboard-quick-actions" id="dashboard-quick-actions">
+            <button type="button" class="btn secondary sm" data-dash-nav="quick-app">New site</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="services">Services</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="database">Database</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="logs">Logs</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="doctor">Doctor</button>
+          </div>
           <div class="panel">
             <div class="panel-heading-row">
               <h3>Environment health</h3>
-              <button type="button" class="btn secondary sm" id="btn-run-doctor">Run doctor</button>
+              <button type="button" class="btn secondary sm" id="btn-open-doctor">Open Doctor</button>
             </div>
             <ul id="health-list" class="health-list panel-desc"></ul>
             <p id="doctor-result" class="panel-desc settings-hint hidden"></p>
           </div>
           <div class="panel">
+            <h3>Serving</h3>
+            <div id="dashboard-site-chips" class="site-chip-row empty-hint">No sites yet — create one in Quick App or park a folder</div>
+          </div>
+          <div class="panel">
             <h3>Recent projects</h3>
             <ul id="dashboard-projects" class="item-list empty-hint">No projects yet — create one in Quick App</ul>
+          </div>
+          <div class="panel hidden" id="dashboard-getting-started">
+            <h3>Getting started</h3>
           </div>
           <div class="panel">
             <h3>Getting started</h3>
@@ -483,14 +514,32 @@
         </section>
       </div>
 
-      <footer class="statusbar">
+      <footer class="statusbar" aria-live="polite">
         <span id="statusbar-root"></span>
-        <span id="statusbar-msg">Ready</span>
+        <span class="statusbar-trailing">
+          <span class="statusbar-busy hidden" id="statusbar-busy" aria-hidden="true"></span>
+          <span id="statusbar-msg">Ready</span>
+        </span>
       </footer>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="app-dialog" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+    <div class="update-dialog app-dialog">
+      <h2 id="app-dialog-title">Confirm</h2>
+      <p id="app-dialog-message" class="panel-desc app-dialog-message"></p>
+      <div id="app-dialog-prompt-wrap" class="form-row hidden">
+        <label for="app-dialog-input" id="app-dialog-input-label" class="field-label">Value</label>
+        <input type="text" id="app-dialog-input" class="text-input" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="update-actions app-dialog-actions">
+        <button type="button" class="btn primary" id="app-dialog-confirm">Confirm</button>
+        <button type="button" class="btn secondary" id="app-dialog-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <div id="update-overlay" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-title">
     <div class="update-dialog">

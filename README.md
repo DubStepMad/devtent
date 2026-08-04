@@ -12,7 +12,7 @@ DevTent is a portable local stack for PHP, Nginx, MySQL, and more — with profi
 
 > Built by developers, for developers. Fork it, extend it, ship features the community needs.
 
-
+**Docs:** [User guide](docs/guide/README.md) · [GitHub Wiki](https://github.com/DubStepMad/devtent/wiki) · [Comparison](docs/COMPARISON.md) · [MCP](docs/MCP.md)
 
 ## Screenshots
 
@@ -34,7 +34,7 @@ Screenshots use **fictional demo data** (`bookstore.test`, `api-demo.test`, etc.
 | --- |
 | [![DevTent tray quick panel](docs/screenshots/tray.png)](docs/screenshots/tray.png) |
 
-The **dashboard** is your home base — stack health, recent sites, and quick actions. **Projects** covers sites, per-site PHP, SSL, park/link, and share. Under **Developer** you get **Services**, **Logs**, **Tooling**, and live **Dumps**. **Profiles** switch your PHP / web server / database stack. The **tray quick panel** keeps start/stop and sites one click away.
+The **dashboard** is home base — health, serving chips, and quick actions. **Projects** covers sites, PHP, SSL, park/link. **Stack** has Services, Database, and Mail; **Debug** has Logs and Dumps. **More** holds Tooling, PHP.ini, Quick Add, and Share. **Profiles** switch your PHP / web server / database stack. The **tray** keeps start/stop and shortcuts one click away.
 
 Regenerate screenshots after UI changes:
 
@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 2.0.0.exe`
+Output: `packages/desktop/release/DevTent Setup 2.1.0.exe`
 
 ### CLI (optional)
 

@@ -30,42 +30,47 @@
     <div class="popup-body">
     <section class="section">
       <h2 class="section-title">Quick Access</h2>
-      <button class="row-btn" id="btn-sites">
-        <span class="row-icon">🌐</span>
+      <button type="button" class="row-btn" id="btn-sites">
+        <span class="row-icon" aria-hidden="true">S</span>
         <span class="row-label">Sites</span>
         <span class="row-meta" id="sites-count">0</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-www">
-        <span class="row-icon">📁</span>
+      <button type="button" class="row-btn" id="btn-services">
+        <span class="row-icon" aria-hidden="true">Sv</span>
+        <span class="row-label">Services</span>
+        <span class="chevron" aria-hidden="true">›</span>
+      </button>
+      <button type="button" class="row-btn" id="btn-www">
+        <span class="row-icon" aria-hidden="true">W</span>
         <span class="row-label">Open www/</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-mail">
-        <span class="row-icon">✉</span>
+      <button type="button" class="row-btn" id="btn-mail">
+        <span class="row-icon" aria-hidden="true">M</span>
         <span class="row-label">Mail</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-dumps">
-        <span class="row-icon">◇</span>
+      <button type="button" class="row-btn" id="btn-dumps">
+        <span class="row-icon" aria-hidden="true">D</span>
         <span class="row-label">Dumps</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-database">
-        <span class="row-icon">🗄</span>
+      <button type="button" class="row-btn" id="btn-database">
+        <span class="row-icon" aria-hidden="true">Db</span>
         <span class="row-label">Database</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-doctor">
-        <span class="row-icon">🩺</span>
+      <button type="button" class="row-btn" id="btn-doctor">
+        <span class="row-icon" aria-hidden="true">Dr</span>
         <span class="row-label">Doctor</span>
         <span class="row-meta" id="doctor-badge"></span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
-      <button class="row-btn" id="btn-dashboard">
-        <span class="row-icon">📊</span>
+      <button type="button" class="row-btn" id="btn-dashboard">
+        <span class="row-icon" aria-hidden="true">≡</span>
         <span class="row-label">Full Dashboard</span>
-        <span class="chevron">›</span>
+        <span class="chevron" aria-hidden="true">›</span>
       </button>
     </section>
 
@@ -74,15 +79,15 @@
     <section class="section">
       <div class="section-head">
         <h2 class="section-title">Profile services</h2>
-        <button class="text-btn" id="btn-stop-all" title="Stop all">⏸ Stop</button>
+        <button type="button" class="text-btn" id="btn-stop-all" title="Stop all">Stop</button>
       </div>
       <p class="section-note" id="profile-services-note"></p>
       <ul class="service-list" id="service-list">
         <li class="empty">No services in active profile</li>
       </ul>
-      <button class="row-btn accent" id="btn-start-all">
-        <span class="row-icon">▶</span>
-        <span class="row-label">Start all services</span>
+      <button type="button" class="row-btn accent" id="btn-start-all">
+        <span class="row-icon" aria-hidden="true">▶</span>
+        <span class="row-label" id="start-all-label">Start all services</span>
       </button>
     </section>
 
@@ -91,11 +96,11 @@
     <section class="section collapsible hidden" id="advanced-section">
       <div class="section-head">
         <h2 class="section-title">Advanced — Procfile</h2>
-        <button class="text-btn" id="btn-edit-procfile">Edit raw</button>
+        <button type="button" class="text-btn" id="btn-edit-procfile">Edit raw</button>
       </div>
       <div class="procfile-editor hidden" id="procfile-editor">
         <textarea id="procfile-raw" rows="5" spellcheck="false"></textarea>
-        <button class="row-btn accent" id="btn-save-procfile">Save Procfile</button>
+        <button type="button" class="row-btn accent" id="btn-save-procfile">Save Procfile</button>
       </div>
     </section>
 
@@ -113,10 +118,10 @@
     </div>
 
     <footer class="popup-footer">
-      <button class="footer-btn" id="btn-terminal" title="Terminal">⌨</button>
-      <button class="footer-btn" id="btn-logs" title="Logs">📋</button>
-      <button class="footer-btn" id="btn-settings" title="Settings">⚙</button>
-      <button class="footer-btn danger" id="btn-quit" title="Quit">⏻</button>
+      <button type="button" class="footer-btn" id="btn-terminal" title="Terminal" aria-label="Terminal">T</button>
+      <button type="button" class="footer-btn" id="btn-logs" title="Logs" aria-label="Logs">L</button>
+      <button type="button" class="footer-btn" id="btn-settings" title="Settings" aria-label="Settings">S</button>
+      <button type="button" class="footer-btn danger" id="btn-quit" title="Quit" aria-label="Quit">⏻</button>
     </footer>
   </div>
 

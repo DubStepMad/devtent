@@ -57,8 +57,29 @@ let lastDumpsSignature = "";
 let siteDrawerVhost = null;
 let phpIniSelectedVersion = "";
 let refreshInFlight = null;
+let loadingDepth = 0;
+let appDialogResolver = null;
+let appDialogPreviousFocus = null;
 
 const QUICK_ADD_HIDDEN = new Set(["composer", "bun", "cloudflared"]);
+
+/** Views tucked under the sidebar "More" group */
+const MORE_NAV_VIEWS = new Set(["tooling", "php-ini", "quick-add", "share"]);
+
+/** Number-key shortcuts (1–9) — primary destinations only */
+const SHORTCUT_VIEWS = [
+  "dashboard",
+  "projects",
+  "services",
+  "database",
+  "mail",
+  "logs",
+  "dumps",
+  "doctor",
+  "settings",
+];
+
+const MORE_NAV_STORAGE_KEY = "devtent.nav.moreExpanded";
 
 const QUICK_ADD_GROUPS = [
   { label: "PHP runtimes", match: (name) => name.startsWith("php-") },
@@ -234,10 +255,182 @@ function formatPath(p) {
 
 function showToast(msg, type = "", durationMs = 4000) {
   const el = document.getElementById("toast");
+  if (!el) return;
   el.textContent = msg;
   el.className = "toast" + (type ? ` ${type}` : "");
+  el.classList.remove("hidden");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add("hidden"), durationMs);
+}
+
+/**
+ * @param {{
+ *   title?: string,
+ *   message: string,
+ *   confirmLabel?: string,
+ *   cancelLabel?: string,
+ *   danger?: boolean,
+ *   prompt?: boolean,
+ *   defaultValue?: string,
+ *   inputLabel?: string,
+ * }} options
+ * @returns {Promise<boolean | string | null>}
+ */
+function showAppDialog(options) {
+  const {
+    title = "Confirm",
+    message,
+    confirmLabel = "Confirm",
+    cancelLabel = "Cancel",
+    danger = false,
+    prompt = false,
+    defaultValue = "",
+    inputLabel = "Value",
+  } = options;
+
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("app-dialog");
+    const titleEl = document.getElementById("app-dialog-title");
+    const messageEl = document.getElementById("app-dialog-message");
+    const promptWrap = document.getElementById("app-dialog-prompt-wrap");
+    const input = document.getElementById("app-dialog-input");
+    const inputLabelEl = document.getElementById("app-dialog-input-label");
+    const confirmBtn = document.getElementById("app-dialog-confirm");
+    const cancelBtn = document.getElementById("app-dialog-cancel");
+    if (!overlay || !confirmBtn || !cancelBtn) {
+      resolve(prompt ? null : false);
+      return;
+    }
+
+    if (appDialogResolver) {
+      appDialogResolver(prompt ? null : false);
+      appDialogResolver = null;
+    }
+
+    appDialogPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    appDialogResolver = resolve;
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    confirmBtn.classList.toggle("danger", danger);
+    confirmBtn.classList.toggle("primary", !danger);
+    promptWrap.classList.toggle("hidden", !prompt);
+    if (prompt) {
+      inputLabelEl.textContent = inputLabel;
+      input.value = defaultValue;
+    }
+
+    const finish = (value) => {
+      if (!appDialogResolver) return;
+      const resolver = appDialogResolver;
+      appDialogResolver = null;
+      overlay.classList.add("hidden");
+      document.removeEventListener("keydown", onKeyDown, true);
+      confirmBtn.onclick = null;
+      cancelBtn.onclick = null;
+      if (appDialogPreviousFocus && document.contains(appDialogPreviousFocus)) {
+        appDialogPreviousFocus.focus();
+      }
+      appDialogPreviousFocus = null;
+      resolver(value);
+    };
+
+    const onKeyDown = (e) => {
+      if (overlay.classList.contains("hidden")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        finish(prompt ? null : false);
+        return;
+      }
+      if (e.key === "Enter" && prompt && document.activeElement === input) {
+        e.preventDefault();
+        const value = input.value.trim();
+        finish(value || null);
+      }
+    };
+
+    confirmBtn.onclick = () => {
+      if (prompt) {
+        const value = input.value.trim();
+        finish(value || null);
+        return;
+      }
+      finish(true);
+    };
+    cancelBtn.onclick = () => finish(prompt ? null : false);
+    document.addEventListener("keydown", onKeyDown, true);
+    overlay.classList.remove("hidden");
+    requestAnimationFrame(() => {
+      if (prompt) input.focus();
+      else confirmBtn.focus();
+    });
+  });
+}
+
+/** @param {string} message @param {{ title?: string, confirmLabel?: string, cancelLabel?: string, danger?: boolean }} [opts] */
+async function confirmAction(message, opts = {}) {
+  return Boolean(
+    await showAppDialog({
+      title: opts.title || "Confirm",
+      message,
+      confirmLabel: opts.confirmLabel || "Confirm",
+      cancelLabel: opts.cancelLabel || "Cancel",
+      danger: Boolean(opts.danger),
+    })
+  );
+}
+
+/**
+ * @param {string} message
+ * @param {string} [defaultValue]
+ * @param {{ title?: string, confirmLabel?: string, inputLabel?: string }} [opts]
+ * @returns {Promise<string | null>}
+ */
+async function promptValue(message, defaultValue = "", opts = {}) {
+  const result = await showAppDialog({
+    title: opts.title || "Enter value",
+    message,
+    confirmLabel: opts.confirmLabel || "Continue",
+    cancelLabel: "Cancel",
+    prompt: true,
+    defaultValue,
+    inputLabel: opts.inputLabel || "Value",
+  });
+  return typeof result === "string" ? result : null;
+}
+
+function setBusy(busy) {
+  document.body.classList.toggle("app-busy", busy);
+  const spinner = document.getElementById("statusbar-busy");
+  if (spinner) {
+    spinner.classList.toggle("hidden", !busy);
+    spinner.setAttribute("aria-hidden", busy ? "false" : "true");
+  }
+}
+
+function setStatus(msg) {
+  document.getElementById("statusbar-msg").textContent = msg;
+}
+
+async function withLoading(fn, msg = "Working…") {
+  loadingDepth += 1;
+  setBusy(true);
+  setStatus(msg);
+  try {
+    return await fn();
+  } catch (err) {
+    showToast(err.message || String(err), "error");
+    throw err;
+  } finally {
+    loadingDepth = Math.max(0, loadingDepth - 1);
+    if (loadingDepth === 0) {
+      setBusy(false);
+      setStatus("Ready");
+    }
+  }
 }
 
 function formatUpdateNotes(notes) {
@@ -368,22 +561,6 @@ async function runUpdateCheck({ showDialogOnAvailable = false, respectSkip = fal
   return result;
 }
 
-function setStatus(msg) {
-  document.getElementById("statusbar-msg").textContent = msg;
-}
-
-async function withLoading(fn, msg = "Working…") {
-  setStatus(msg);
-  try {
-    return await fn();
-  } catch (err) {
-    showToast(err.message || String(err), "error");
-    throw err;
-  } finally {
-    setStatus("Ready");
-  }
-}
-
 function handleHostsSyncResult(result) {
   const hosts = result?.hosts;
   if (hosts?.updated) {
@@ -428,8 +605,95 @@ function showView(name) {
   const subtitle = document.getElementById("page-subtitle");
   if (subtitle) subtitle.textContent = SUBTITLES[name] || "";
   document.querySelectorAll(".nav-item").forEach((n) => {
-    n.classList.toggle("active", n.dataset.view === name);
+    const active = n.dataset.view === name;
+    n.classList.toggle("active", active);
+    if (active) n.setAttribute("aria-current", "page");
+    else n.removeAttribute("aria-current");
   });
+  syncMoreNavForView(name);
+}
+
+function isMoreNavExpanded() {
+  const toggle = document.getElementById("nav-more-toggle");
+  return toggle?.getAttribute("aria-expanded") === "true";
+}
+
+function setMoreNavExpanded(expanded, { persist = true } = {}) {
+  const toggle = document.getElementById("nav-more-toggle");
+  const items = document.getElementById("nav-more-items");
+  const group = document.getElementById("nav-group-more");
+  if (!toggle || !items) return;
+  toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  items.classList.toggle("hidden", !expanded);
+  group?.classList.toggle("is-expanded", expanded);
+  if (persist) {
+    try {
+      localStorage.setItem(MORE_NAV_STORAGE_KEY, expanded ? "1" : "0");
+    } catch {
+      // ignore quota / private mode
+    }
+  }
+}
+
+function syncMoreNavForView(name) {
+  const group = document.getElementById("nav-group-more");
+  const inMore = MORE_NAV_VIEWS.has(name);
+  group?.classList.toggle("has-active-child", inMore);
+  if (inMore) setMoreNavExpanded(true, { persist: false });
+}
+
+function initMoreNav() {
+  let expanded = false;
+  try {
+    expanded = localStorage.getItem(MORE_NAV_STORAGE_KEY) === "1";
+  } catch {
+    expanded = false;
+  }
+  setMoreNavExpanded(expanded, { persist: false });
+  document.getElementById("nav-more-toggle")?.addEventListener("click", () => {
+    setMoreNavExpanded(!isMoreNavExpanded());
+  });
+}
+
+async function navigateToView(view) {
+  showView(view);
+  if (view === "services") await refreshServices();
+  if (view === "logs") {
+    await refreshLogs();
+    startLogFollow();
+    startLogListRefresh();
+  } else {
+    stopLogFollow();
+    stopLogListRefresh();
+  }
+  if (view === "tooling") await refreshTooling();
+  if (view === "dumps") {
+    await refreshDumps();
+    startDumpsFollow();
+  } else {
+    stopDumpsFollow();
+  }
+  if (view === "projects") await refreshProjects();
+  if (view === "quick-add") await refreshManifests();
+  if (view === "quick-app") await refreshTemplates();
+  if (view === "doctor") await refreshDoctorPage({ repair: false });
+  if (view === "mail") await refreshMailPage();
+  if (view === "share") await refreshSharePage();
+  if (view === "database") await refreshDatabasePage();
+  if (view === "php-ini") await refreshPhpIniPage();
+  if (view === "profiles") {
+    await refreshProfiles();
+    hideProfileEditor();
+  }
+  if (view === "settings") {
+    const { root } = await api.getRoot();
+    showSettingsSection(updateBadgeVisible ? "updates" : "general");
+    await refreshSettings(root);
+  }
+  if (view === "dashboard") {
+    const state = await api.getState();
+    await refreshDashboard(state);
+  }
 }
 
 function showSetup(show) {
@@ -494,7 +758,7 @@ async function refreshDashboard(state) {
   const list = document.getElementById("dashboard-projects");
   list.innerHTML = "";
   if (!state.virtualHosts?.length) {
-    list.innerHTML = '<li class="empty-hint">No projects yet</li>';
+    list.innerHTML = '<li class="empty-hint">No projects yet — create one in Quick App</li>';
   } else {
     state.virtualHosts.slice(0, 5).forEach((v) => {
       const li = document.createElement("li");
@@ -504,6 +768,10 @@ async function refreshDashboard(state) {
       list.appendChild(li);
     });
   }
+
+  document
+    .getElementById("dashboard-getting-started")
+    ?.classList.toggle("hidden", (state.virtualHosts?.length ?? 0) > 0);
 
   await refreshHealth();
 }
@@ -623,6 +891,7 @@ async function refreshMailPage() {
 
 async function refreshSharePage() {
   const activeList = document.getElementById("share-active-list");
+  const activeEmpty = document.getElementById("share-active-empty");
   const sitesList = document.getElementById("share-sites-list");
   const empty = document.getElementById("share-sites-empty");
   if (!sitesList) return;
@@ -633,29 +902,27 @@ async function refreshSharePage() {
 
   if (activeList) {
     activeList.innerHTML = "";
-    activeList.classList.toggle("empty-hint", shares.length === 0);
-    if (!shares.length) {
-      activeList.textContent = "No active public tunnels";
-    } else {
-      shares.forEach((s) => {
-        const li = document.createElement("li");
-        li.innerHTML = `<button type="button" class="link-btn">${escapeHtml(s.publicUrl)}</button>
-          <span class="panel-desc"> · ${escapeHtml(s.siteName)}</span>
-          <button type="button" class="btn sm danger btn-stop-share">Stop</button>`;
-        li.querySelector(".link-btn").onclick = () => api.openExternal(s.publicUrl);
-        li.querySelector(".btn-stop-share").onclick = async () => {
-          await withLoading(() => api.stopShare(s.siteName), `Stopping share for ${s.siteName}…`);
-          showToast(`Stopped public share for ${s.siteName}`, "success");
-          await refreshSharePage();
-        };
-        activeList.appendChild(li);
-      });
-    }
+    activeEmpty?.classList.toggle("hidden", shares.length > 0);
+    activeList.classList.toggle("hidden", shares.length === 0);
+    shares.forEach((s) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<button type="button" class="link-btn">${escapeHtml(s.publicUrl)}</button>
+        <span class="panel-desc"> · ${escapeHtml(s.siteName)}</span>
+        <button type="button" class="btn sm danger btn-stop-share">Stop</button>`;
+      li.querySelector(".link-btn").onclick = () => api.openExternal(s.publicUrl);
+      li.querySelector(".btn-stop-share").onclick = async () => {
+        await withLoading(() => api.stopShare(s.siteName), `Stopping share for ${s.siteName}…`);
+        showToast(`Stopped public share for ${s.siteName}`, "success");
+        await refreshSharePage();
+      };
+      activeList.appendChild(li);
+    });
   }
 
   const vhosts = state?.virtualHosts ?? [];
   sitesList.innerHTML = "";
   empty?.classList.toggle("hidden", vhosts.length > 0);
+  sitesList.classList.toggle("hidden", vhosts.length === 0);
   vhosts.forEach((v) => {
     const active = shareMap.get(v.name);
     const li = document.createElement("li");
@@ -720,11 +987,10 @@ async function refreshNamedTunnels(vhosts = []) {
 
   const tunnels = await api.listNamedTunnels().catch(() => []);
   listEl.innerHTML = "";
-  listEl.classList.toggle("empty-hint", tunnels.length === 0);
+  const namedEmpty = document.getElementById("share-named-empty");
+  namedEmpty?.classList.toggle("hidden", tunnels.length > 0);
+  listEl.classList.toggle("hidden", tunnels.length === 0);
   if (!tunnels.length) {
-    listEl.textContent = loggedIn
-      ? "No named tunnels yet — create one above."
-      : "No named tunnels yet";
     return;
   }
 
@@ -744,9 +1010,21 @@ async function refreshNamedTunnels(vhosts = []) {
         <button type="button" class="btn sm danger btn-named-delete">Delete</button>
       </div>`;
     li.querySelector(".btn-named-configure").onclick = async () => {
-      const siteName = prompt("Local site name:", t.siteName || vhosts[0]?.name || "");
+      const siteName = await promptValue("Local site name:", t.siteName || vhosts[0]?.name || "", {
+        title: "Configure tunnel",
+        inputLabel: "Site name",
+        confirmLabel: "Next",
+      });
       if (!siteName) return;
-      const hostname = prompt("Public hostname (must be on your Cloudflare zone):", t.hostname || "");
+      const hostname = await promptValue(
+        "Public hostname (must be on your Cloudflare zone):",
+        t.hostname || "",
+        {
+          title: "Configure tunnel",
+          inputLabel: "Hostname",
+          confirmLabel: "Save",
+        }
+      );
       if (!hostname) return;
       try {
         await withLoading(
@@ -774,7 +1052,15 @@ async function refreshNamedTunnels(vhosts = []) {
       }
     };
     li.querySelector(".btn-named-delete").onclick = async () => {
-      if (!confirm(`Delete named tunnel "${t.name}"?`)) return;
+      if (
+        !(await confirmAction(`Delete named tunnel "${t.name}"?`, {
+          title: "Delete tunnel",
+          confirmLabel: "Delete",
+          danger: true,
+        }))
+      ) {
+        return;
+      }
       try {
         await withLoading(() => api.deleteNamedTunnel(t.name), `Deleting ${t.name}…`);
         showToast(`Deleted ${t.name}`, "success");
@@ -807,9 +1093,7 @@ async function refreshHealth() {
     .join("");
   list.querySelectorAll(".health-action").forEach((btn) => {
     btn.onclick = () => {
-      showView(btn.dataset.view);
-      if (btn.dataset.view === "services") void refreshServices();
-      if (btn.dataset.view === "settings") void api.getRoot().then((r) => refreshSettings(r.root));
+      void navigateToView(btn.dataset.view);
     };
   });
 }
@@ -1201,7 +1485,15 @@ async function refreshNodeVersions(nodeVersions, externalNode) {
       removeBtn.className = "btn sm danger secondary";
       removeBtn.textContent = "Remove";
       removeBtn.onclick = async () => {
-        if (!confirm(`Remove ${v.label} from DevTent?`)) return;
+        if (
+          !(await confirmAction(`Remove ${v.label} from DevTent?`, {
+            title: "Remove Node version",
+            confirmLabel: "Remove",
+            danger: true,
+          }))
+        ) {
+          return;
+        }
         try {
           await withLoading(
             () => api.removeTool("node", { nodeVersion: v.id }),
@@ -1337,7 +1629,15 @@ function renderToolingActions(tool, cell) {
     removeBtn.className = "btn sm danger secondary";
     removeBtn.textContent = "Remove";
     removeBtn.onclick = async () => {
-      if (!confirm(`Remove ${tool.name} from DevTent?`)) return;
+      if (
+        !(await confirmAction(`Remove ${tool.name} from DevTent?`, {
+          title: "Remove tool",
+          confirmLabel: "Remove",
+          danger: true,
+        }))
+      ) {
+        return;
+      }
       try {
         await withLoading(() => api.removeTool(tool.id), `Removing ${tool.name}…`);
         showToast(`${tool.name} removed`, "success");
@@ -1421,7 +1721,14 @@ async function confirmAndSwitchProfile(targetName) {
   if (preview.runningToStop.length) {
     message += `\n\nThese running services are not in that profile and will be stopped:\n${preview.runningToStop.join(", ")}`;
   }
-  if (!confirm(message)) return false;
+  if (
+    !(await confirmAction(message, {
+      title: "Switch profile",
+      confirmLabel: "Switch",
+    }))
+  ) {
+    return false;
+  }
 
   const result = await withLoading(() => api.switchProfile(targetName), "Switching profile…");
   if (result.stoppedServices?.length) {
@@ -2155,7 +2462,15 @@ async function refreshProfiles() {
     };
 
     li.querySelector(".btn-delete-profile").onclick = async () => {
-      if (!confirm(`Delete profile "${p.name}"?`)) return;
+      if (
+        !(await confirmAction(`Delete profile "${p.name}"?`, {
+          title: "Delete profile",
+          confirmLabel: "Delete",
+          danger: true,
+        }))
+      ) {
+        return;
+      }
       try {
         await api.deleteProfile(p.name);
         showToast(`Profile "${p.name}" deleted`, "success");
@@ -2208,7 +2523,6 @@ async function refreshSettings(root) {
   }
   await updateDomainHints(rootStatus);
 
-  await refreshMysqlBackups();
   await refreshAppRollback();
   await refreshAboutVersion();
 }
@@ -2241,34 +2555,6 @@ async function refreshAppRollback() {
   const when = new Date(latest.createdAt).toLocaleString();
   status.textContent = `Latest backup: v${latest.version} from ${when}. Restoring will restart DevTent.`;
   btn.disabled = false;
-}
-
-async function refreshMysqlBackups() {
-  const list = document.getElementById("mysql-backups-list");
-  if (!list || !api?.listMysqlBackups) return;
-  const backups = await api.listMysqlBackups();
-  if (!backups.length) {
-    list.innerHTML = "<li>No backups yet.</li>";
-    return;
-  }
-  list.innerHTML = backups
-    .slice(0, 8)
-    .map((b) => {
-      const when = new Date(b.createdAt).toLocaleString();
-      const sizeKb = Math.max(1, Math.round(b.sizeBytes / 1024));
-      return `<li class="backup-row">${when} · ${b.reason} · ${sizeKb} KB <button type="button" class="link-btn btn-restore-mysql" data-id="${escapeHtml(b.id)}">Restore</button></li>`;
-    })
-    .join("");
-  list.querySelectorAll(".btn-restore-mysql").forEach((btn) => {
-    btn.onclick = async () => {
-      if (!confirm(`Restore MySQL from backup ${btn.dataset.id}? This overwrites current database data.`)) return;
-      const result = await withLoading(
-        () => api.restoreMysql(btn.dataset.id),
-        "Restoring MySQL…"
-      );
-      showToast(result.message, result.success ? "success" : "error");
-    };
-  });
 }
 
 async function refreshAll(options = {}) {
@@ -2496,20 +2782,7 @@ async function boot() {
   });
   api.onUpdateDownloadProgress(({ percent, message }) => setUpdateProgress(percent, message));
   api.onNavigate?.((view) => {
-    showView(view);
-    if (view === "tooling") void refreshTooling();
-    else if (view === "dumps") void refreshDumps().then(startDumpsFollow);
-    else if (view === "logs") void refreshLogs().then(startLogFollow);
-    else if (view === "doctor") void refreshDoctorPage({ repair: false });
-    else if (view === "mail") void refreshMailPage();
-    else if (view === "share") void refreshSharePage();
-    else if (view === "database") void refreshDatabasePage();
-    else if (view === "php-ini") void refreshPhpIniPage();
-    else if (view === "projects") void refreshProjects();
-    else {
-      stopDumpsFollow();
-      stopLogFollow();
-    }
+    void navigateToView(view);
   });
 
   const defaultRoot = await api.getDefaultRoot();
@@ -2632,43 +2905,33 @@ async function boot() {
 
   document.querySelectorAll(".nav-item").forEach((btn) => {
     btn.onclick = async () => {
-      const view = btn.dataset.view;
-      showView(view);
-      if (view === "services") await refreshServices();
-      if (view === "logs") {
-        await refreshLogs();
-        startLogFollow();
-        startLogListRefresh();
-      } else {
-        stopLogFollow();
-        stopLogListRefresh();
-      }
-      if (view === "tooling") await refreshTooling();
-      if (view === "dumps") {
-        await refreshDumps();
-        startDumpsFollow();
-      } else {
-        stopDumpsFollow();
-      }
-      if (view === "projects") await refreshProjects();
-      if (view === "quick-add") await refreshManifests();
-      if (view === "quick-app") await refreshTemplates();
-      if (view === "doctor") await refreshDoctorPage({ repair: false });
-      if (view === "mail") await refreshMailPage();
-      if (view === "share") await refreshSharePage();
-      if (view === "database") await refreshDatabasePage();
-      if (view === "php-ini") await refreshPhpIniPage();
-      if (view === "profiles") {
-        await refreshProfiles();
-        hideProfileEditor();
-      }
-      if (view === "settings") {
-        const { root } = await api.getRoot();
-        showSettingsSection(updateBadgeVisible ? "updates" : "general");
-        await refreshSettings(root);
-      }
+      await navigateToView(btn.dataset.view);
     };
   });
+
+  document.getElementById("dashboard-quick-actions")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-dash-nav]");
+    if (!btn) return;
+    void navigateToView(btn.dataset.dashNav);
+  });
+
+  document.getElementById("btn-settings-open-database")?.addEventListener("click", () => {
+    void navigateToView("database");
+  });
+
+  document.getElementById("btn-share-empty-projects")?.addEventListener("click", () => {
+    void navigateToView("projects");
+  });
+
+  document.getElementById("btn-services-empty-quick-add")?.addEventListener("click", () => {
+    void navigateToView("quick-add");
+  });
+
+  document.getElementById("btn-services-empty-profiles")?.addEventListener("click", () => {
+    void navigateToView("profiles");
+  });
+
+  initMoreNav();
 
   document.getElementById("btn-start-all").onclick = async () => {
     const results = await withLoading(() => api.startAll(), "Starting services…");
@@ -2750,8 +3013,7 @@ async function boot() {
   document.getElementById("btn-open-root").onclick = () => api.openPath(".");
   document.getElementById("btn-open-www-settings").onclick = () => api.openPath("www");
   document.getElementById("btn-open-logs").onclick = () => {
-    showView("logs");
-    void refreshLogs().then(startLogFollow);
+    void navigateToView("logs");
   };
 
   document.getElementById("log-file-select")?.addEventListener("change", async (e) => {
@@ -2839,8 +3101,7 @@ async function boot() {
   });
 
   document.getElementById("btn-projects-empty-quick-app")?.addEventListener("click", () => {
-    showView("quick-app");
-    void refreshTemplates();
+    void navigateToView("quick-app");
   });
 
   const isMacPalette =
@@ -3091,7 +3352,15 @@ async function boot() {
 
   document.getElementById("btn-rollback-app")?.addEventListener("click", async () => {
     const btn = document.getElementById("btn-rollback-app");
-    if (!confirm("Restore the previous DevTent version? The app will restart.")) return;
+    if (
+      !(await confirmAction("Restore the previous DevTent version? The app will restart.", {
+        title: "Restore previous version",
+        confirmLabel: "Restore",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
     btn.disabled = true;
     try {
       await api.rollbackApp();
@@ -3144,16 +3413,6 @@ async function boot() {
     await refreshManifests();
   });
 
-  document.getElementById("btn-backup-mysql")?.addEventListener("click", async () => {
-    const backup = await withLoading(() => api.backupMysql(), "Backing up MySQL…");
-    if (backup) {
-      showToast(`Backup saved (${Math.round(backup.sizeBytes / 1024)} KB)`, "success");
-    } else {
-      showToast("MySQL is not running — start it first to back up", "error");
-    }
-    await refreshMysqlBackups();
-  });
-
   document.getElementById("btn-open-mysql-backups")?.addEventListener("click", () => {
     api.openPath("data/backups/mysql");
   });
@@ -3177,7 +3436,11 @@ async function boot() {
     const projectPath = await api.pickLaragonRoot();
     if (!projectPath) return;
     const defaultName = projectPath.split(/[/\\]/).filter(Boolean).pop() ?? "site";
-    const name = prompt("Site name (used for the local domain):", defaultName);
+    const name = await promptValue("Site name (used for the local domain):", defaultName, {
+      title: "Link project",
+      inputLabel: "Site name",
+      confirmLabel: "Link",
+    });
     if (!name) return;
     await withLoading(() => api.linkProject(projectPath, name), "Linking project…");
     handleHostsSyncResult(await api.syncVhosts());
@@ -3187,8 +3450,7 @@ async function boot() {
   });
 
   document.getElementById("btn-open-doctor")?.addEventListener("click", () => {
-    showView("doctor");
-    void refreshDoctorPage({ repair: false });
+    void navigateToView("doctor");
   });
 
   document.getElementById("btn-doctor-check")?.addEventListener("click", async () => {
@@ -3197,8 +3459,12 @@ async function boot() {
   });
 
   document.getElementById("btn-doctor-fix")?.addEventListener("click", async () => {
-    const ok = confirm(
-      "Run DevTent doctor with automatic repairs?\n\nThis syncs Procfile, regenerates vhosts, and verifies configs."
+    const ok = await confirmAction(
+      "Run DevTent doctor with automatic repairs?\n\nThis syncs Procfile, regenerates vhosts, and verifies configs.",
+      {
+        title: "Run safe fixes",
+        confirmLabel: "Run fixes",
+      }
     );
     if (!ok) return;
     await refreshDoctorPage({ repair: true });
@@ -3257,7 +3523,11 @@ async function boot() {
   });
 
   document.getElementById("btn-share-named-create")?.addEventListener("click", async () => {
-    const name = prompt("Tunnel name (letters, numbers, hyphens):", "devtent");
+    const name = await promptValue("Tunnel name (letters, numbers, hyphens):", "devtent", {
+      title: "Create named tunnel",
+      inputLabel: "Tunnel name",
+      confirmLabel: "Create",
+    });
     if (!name) return;
     try {
       const tunnel = await withLoading(() => api.createNamedTunnel(name), `Creating ${name}…`);
@@ -3346,7 +3616,14 @@ async function boot() {
   document.getElementById("btn-export-environment")?.addEventListener("click", async () => {
     const dest = await api.pickExportFolder();
     if (!dest) return;
-    const includeBin = confirm("Include bin/ runtimes? (Large — usually reinstall via Quick Add instead)");
+    const includeBin = await confirmAction(
+      "Include bin/ runtimes?\n\nLarge — usually reinstall via Quick Add instead.",
+      {
+        title: "Export environment",
+        confirmLabel: "Include bin/",
+        cancelLabel: "Skip bin/",
+      }
+    );
     const result = await withLoading(
       () => api.exportEnvironment(dest, { includeBin }),
       "Exporting environment…"
@@ -3358,7 +3635,14 @@ async function boot() {
   document.getElementById("btn-import-environment")?.addEventListener("click", async () => {
     const bundle = await api.pickImportBundle();
     if (!bundle) return;
-    if (!confirm("Import will merge bundle contents into your DevTent folder. Continue?")) return;
+    if (
+      !(await confirmAction("Import will merge bundle contents into your DevTent folder. Continue?", {
+        title: "Import environment",
+        confirmLabel: "Import",
+      }))
+    ) {
+      return;
+    }
     const result = await withLoading(
       () => api.importEnvironmentBundle(bundle),
       "Importing bundle…"
@@ -3453,17 +3737,17 @@ async function boot() {
 const PALETTE_VIEWS = [
   "dashboard",
   "projects",
+  "quick-app",
   "services",
+  "database",
+  "mail",
   "logs",
   "dumps",
-  "database",
-  "php-ini",
   "tooling",
-  "mail",
+  "php-ini",
+  "quick-add",
   "share",
   "doctor",
-  "quick-add",
-  "quick-app",
   "profiles",
   "settings",
 ];
@@ -3472,23 +3756,18 @@ let paletteIndex = 0;
 let paletteCommands = [];
 
 function buildPaletteCommands() {
-  const nav = PALETTE_VIEWS.map((view, i) => ({
-    id: `nav-${view}`,
-    label: TITLES[view] || view,
-    hint: i < 9 ? String(i + 1) : "",
-    group: "Navigate",
-    run: () => {
-      showView(view);
-      if (view === "dumps") void refreshDumps().then(startDumpsFollow);
-      else if (view === "share") void refreshSharePage();
-      else if (view === "doctor") void refreshDoctorPage({ repair: false });
-      else if (view === "mail") void refreshMailPage();
-      else if (view === "services") void refreshServices();
-      else if (view === "projects") void refreshProjects();
-      else if (view === "database") void refreshDatabasePage();
-      else if (view === "php-ini") void refreshPhpIniPage();
-    },
-  }));
+  const nav = PALETTE_VIEWS.map((view) => {
+    const shortcutIdx = SHORTCUT_VIEWS.indexOf(view);
+    return {
+      id: `nav-${view}`,
+      label: TITLES[view] || view,
+      hint: shortcutIdx >= 0 ? String(shortcutIdx + 1) : MORE_NAV_VIEWS.has(view) ? "More" : "",
+      group: "Navigate",
+      run: () => {
+        void navigateToView(view);
+      },
+    };
+  });
 
   const siteCommands = [];
   // Sites are loaded asynchronously when opening the palette
@@ -3508,8 +3787,7 @@ function buildPaletteCommands() {
       hint: "drawer",
       group: "Sites",
       run: () => {
-        showView("projects");
-        void openSiteDrawer(v);
+        void navigateToView("projects").then(() => openSiteDrawer(v));
       },
     });
   }
@@ -3554,8 +3832,7 @@ function buildPaletteCommands() {
       hint: "D",
       group: "Actions",
       run: async () => {
-        showView("doctor");
-        await refreshDoctorPage({ repair: false });
+        await navigateToView("doctor");
       },
     },
     {
@@ -3694,10 +3971,10 @@ function setupKeyboardShortcuts() {
     if (typing || mod || e.altKey) return;
 
     if (e.key >= "1" && e.key <= "9") {
-      const view = PALETTE_VIEWS[Number(e.key) - 1];
+      const view = SHORTCUT_VIEWS[Number(e.key) - 1];
       if (view) {
         e.preventDefault();
-        showView(view);
+        void navigateToView(view);
       }
       return;
     }
@@ -3714,8 +3991,7 @@ function setupKeyboardShortcuts() {
       });
     } else if (key === "d") {
       e.preventDefault();
-      showView("doctor");
-      void refreshDoctorPage({ repair: false });
+      void navigateToView("doctor");
     } else if (key === "/") {
       e.preventDefault();
       openCommandPalette();

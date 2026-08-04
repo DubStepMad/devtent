@@ -53,18 +53,24 @@ async function refresh() {
 
   const svcList = document.getElementById("service-list");
   svcList.innerHTML = "";
+  let installedCount = 0;
+  let runningInstalled = 0;
   if (!profileServices.length) {
     svcList.innerHTML = '<li class="empty">No services in active profile — edit in Profiles</li>';
   } else {
     profileServices.forEach((svc) => {
       const isRunning = runningMap.get(svc.id)?.running;
+      if (svc.runtimeInstalled) {
+        installedCount += 1;
+        if (isRunning) runningInstalled += 1;
+      }
       const li = document.createElement("li");
       li.className = isRunning ? "running" : "";
       const disabled = !svc.runtimeInstalled ? "disabled" : "";
       li.innerHTML = `
         <span class="svc-dot"></span>
         <span class="svc-name">${svc.name}${svc.runtimeInstalled ? "" : " (not installed)"}</span>
-        <button class="svc-action" ${disabled}>${isRunning ? "Stop" : "Start"}</button>`;
+        <button type="button" class="svc-action" ${disabled}>${isRunning ? "Stop" : "Start"}</button>`;
       const btn = li.querySelector(".svc-action");
       if (svc.runtimeInstalled) {
         btn.onclick = async (e) => {
@@ -78,13 +84,23 @@ async function refresh() {
     });
   }
 
+  const startAllBtn = document.getElementById("btn-start-all");
+  const startAllLabel = document.getElementById("start-all-label");
+  const allRunning = installedCount > 0 && runningInstalled === installedCount;
+  if (startAllLabel) {
+    startAllLabel.textContent = allRunning ? "Restart all services" : "Start all services";
+  }
+  startAllBtn?.classList.toggle("is-restart", allRunning);
+
   const siteList = document.getElementById("site-list");
   siteList.innerHTML = "";
   (state.virtualHosts ?? []).forEach((v) => {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     const url = v.ssl ? `https://${v.domain}` : `http://${v.domain}`;
+    btn.type = "button";
     btn.textContent = v.ssl ? `${v.domain} 🔒` : v.domain;
+    btn.title = url;
     btn.onclick = () => api.openExternal(url);
     li.appendChild(btn);
     siteList.appendChild(li);
@@ -98,6 +114,7 @@ async function refresh() {
     const php = p.phpVersion ? p.phpVersion.replace(/^php-/, "PHP ") : "";
     const label = [p.name, php, p.description].filter(Boolean).join(" · ");
     li.textContent = label;
+    li.title = label;
     if (p.name !== active) {
       li.onclick = async () => {
         await api.switchProfile(p.name);

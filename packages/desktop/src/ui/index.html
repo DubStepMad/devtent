@@ -20,7 +20,7 @@
       </div>
 
       <div id="setup-body">
-      <div class="logo"><img src="app-icon.png" width="72" height="72" alt=""></div>
+      <div class="logo"><img src="app-icon.png" width="72" height="72" alt="DevTent"></div>
       <h1>Welcome to DevTent</h1>
       <p class="subtitle">Click below to finish setup — no folders to pick.</p>
       <div class="setup-callout">
@@ -46,36 +46,44 @@
         <span class="logo-sm"><img src="app-icon.png" width="40" height="40" alt=""></span>
         <span>DevTent</span>
       </div>
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" aria-label="Main">
         <div class="nav-group">
           <span class="nav-group-label">Overview</span>
-          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button type="button" class="nav-item active" data-view="dashboard" data-short="Da" title="Dashboard" aria-label="Dashboard">Dashboard</button>
         </div>
         <div class="nav-group">
           <span class="nav-group-label">Sites</span>
-          <button class="nav-item" data-view="projects">Projects</button>
-          <button class="nav-item" data-view="quick-app">Quick App</button>
+          <button type="button" class="nav-item" data-view="projects" data-short="Pr" title="Projects" aria-label="Projects">Projects</button>
+          <button type="button" class="nav-item" data-view="quick-app" data-short="QA" title="Quick App" aria-label="Quick App">Quick App</button>
         </div>
         <div class="nav-group">
-          <span class="nav-group-label">Developer</span>
-          <button class="nav-item" data-view="services">Services</button>
-          <button class="nav-item" data-view="logs">Logs</button>
-          <button class="nav-item" data-view="tooling">Tooling</button>
-          <button class="nav-item" data-view="mail">Mail</button>
-          <button class="nav-item" data-view="dumps">Dumps</button>
-          <button class="nav-item" data-view="database">Database</button>
-          <button class="nav-item" data-view="php-ini">PHP</button>
-          <button class="nav-item" data-view="quick-add">Quick Add</button>
+          <span class="nav-group-label">Stack</span>
+          <button type="button" class="nav-item" data-view="services" data-short="Sv" title="Services" aria-label="Services">Services</button>
+          <button type="button" class="nav-item" data-view="database" data-short="Db" title="Database" aria-label="Database">Database</button>
+          <button type="button" class="nav-item" data-view="mail" data-short="Ml" title="Mail" aria-label="Mail">Mail</button>
         </div>
         <div class="nav-group">
-          <span class="nav-group-label">Integrations</span>
-          <button class="nav-item" data-view="share">Share</button>
+          <span class="nav-group-label">Debug</span>
+          <button type="button" class="nav-item" data-view="logs" data-short="Lg" title="Logs" aria-label="Logs">Logs</button>
+          <button type="button" class="nav-item" data-view="dumps" data-short="Dp" title="Dumps" aria-label="Dumps">Dumps</button>
+        </div>
+        <div class="nav-group nav-group-more" id="nav-group-more">
+          <button type="button" class="nav-more-toggle" id="nav-more-toggle" aria-expanded="false" aria-controls="nav-more-items">
+            <span class="nav-more-label">More</span>
+            <span class="nav-more-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="nav-more-items hidden" id="nav-more-items" role="group" aria-label="More tools">
+            <button type="button" class="nav-item" data-view="tooling" data-short="Tl" title="Tooling" aria-label="Tooling">Tooling</button>
+            <button type="button" class="nav-item" data-view="php-ini" data-short="Ph" title="PHP" aria-label="PHP">PHP</button>
+            <button type="button" class="nav-item" data-view="quick-add" data-short="+" title="Quick Add" aria-label="Quick Add">Quick Add</button>
+            <button type="button" class="nav-item" data-view="share" data-short="Sh" title="Share" aria-label="Share">Share</button>
+          </div>
         </div>
         <div class="nav-group">
           <span class="nav-group-label">System</span>
-          <button class="nav-item" data-view="doctor">Doctor</button>
-          <button class="nav-item" data-view="profiles">Profiles</button>
-          <button class="nav-item" data-view="settings">Settings<span class="nav-update-dot hidden" id="nav-update-dot" aria-hidden="true"></span></button>
+          <button type="button" class="nav-item" data-view="doctor" data-short="Dr" title="Doctor" aria-label="Doctor">Doctor</button>
+          <button type="button" class="nav-item" data-view="profiles" data-short="Pf" title="Profiles" aria-label="Profiles">Profiles</button>
+          <button type="button" class="nav-item" data-view="settings" data-short="Se" title="Settings" aria-label="Settings">Settings<span class="nav-update-dot hidden" id="nav-update-dot" aria-hidden="true"></span></button>
         </div>
       </nav>
       <div class="sidebar-footer">
@@ -94,8 +102,8 @@
             Update available
           </button>
           <button type="button" class="btn secondary sm topbar-kbd" id="btn-command-palette" title="Command palette">Ctrl+K</button>
-          <button class="btn success" id="btn-start-all">▶ Start All</button>
-          <button class="btn danger secondary" id="btn-stop-all">■ Stop All</button>
+          <button type="button" class="btn success" id="btn-start-all" title="Start all profile services (S)">Start All</button>
+          <button type="button" class="btn danger secondary" id="btn-stop-all" title="Stop all services">Stop All</button>
         </div>
       </header>
 
@@ -119,6 +127,13 @@
               <span class="stat-value stat-sm" id="stat-status">Idle</span>
             </div>
           </div>
+          <div class="toolbar dashboard-quick-actions" id="dashboard-quick-actions">
+            <button type="button" class="btn secondary sm" data-dash-nav="quick-app">New site</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="services">Services</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="database">Database</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="logs">Logs</button>
+            <button type="button" class="btn secondary sm" data-dash-nav="doctor">Doctor</button>
+          </div>
           <div class="panel">
             <div class="panel-heading-row">
               <h3>Environment health</h3>
@@ -135,7 +150,7 @@
             <h3>Recent projects</h3>
             <ul id="dashboard-projects" class="item-list empty-hint">No projects yet — create one in Quick App</ul>
           </div>
-          <div class="panel">
+          <div class="panel" id="dashboard-getting-started">
             <h3>Getting started</h3>
             <ol class="steps">
               <li>Install the recommended stack (setup checkbox or <strong>Quick Add</strong>)</li>
@@ -143,7 +158,7 @@
               <li>Drop projects in <code>www/</code>, park a folder, or use <strong>Quick App</strong></li>
               <li>Open <code>myapp.localhost</code> — no hosts-file admin needed</li>
             </ol>
-            <button class="btn secondary" id="btn-install-recommended-stack">Install recommended stack</button>
+            <button type="button" class="btn secondary" id="btn-install-recommended-stack">Install recommended stack</button>
           </div>
         </section>
 
@@ -207,12 +222,20 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
           </div>
           <div class="panel">
             <h3>Active quick shares</h3>
+            <div id="share-active-empty" class="empty-state empty-state-compact hidden">
+              <p class="empty-state-title">No active tunnels</p>
+              <p class="empty-state-desc">Start a quick share from a site below for a temporary public URL.</p>
+            </div>
             <ul id="share-active-list" class="item-list empty-hint">No active public tunnels</ul>
           </div>
           <div class="panel">
             <h3>Share a site (quick tunnel)</h3>
             <ul id="share-sites-list" class="project-list"></ul>
-            <p id="share-sites-empty" class="empty-hint hidden">No sites yet — add one under Projects first.</p>
+            <div id="share-sites-empty" class="empty-state empty-state-compact hidden">
+              <p class="empty-state-title">No sites to share</p>
+              <p class="empty-state-desc">Add a project first, then come back to open a tunnel.</p>
+              <button type="button" class="btn primary sm" id="btn-share-empty-projects">Go to Projects</button>
+            </div>
           </div>
           <div class="panel">
             <h3>Named tunnels</h3>
@@ -221,7 +244,11 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
               <button type="button" class="btn secondary sm" id="btn-share-cf-login">Cloudflare login</button>
               <button type="button" class="btn secondary sm" id="btn-share-named-create">Create tunnel…</button>
             </div>
-            <ul id="share-named-list" class="item-list empty-hint">No named tunnels yet</ul>
+            <div id="share-named-empty" class="empty-state empty-state-compact">
+              <p class="empty-state-title">No named tunnels yet</p>
+              <p class="empty-state-desc">Create a tunnel for a stable hostname on your Cloudflare zone.</p>
+            </div>
+            <ul id="share-named-list" class="item-list"></ul>
           </div>
         </section>
 
@@ -235,7 +262,14 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
           </div>
           <ul id="services-list" class="service-list"></ul>
           <div class="panel muted-panel">
-            <p id="services-empty" class="empty-hint hidden">Install runtimes via Quick Add for this profile's stack.</p>
+            <div id="services-empty" class="empty-state empty-state-compact hidden">
+              <p class="empty-state-title">No services for this profile</p>
+              <p class="empty-state-desc">Install runtimes via Quick Add, or edit the profile stack.</p>
+              <div class="toolbar">
+                <button type="button" class="btn primary sm" id="btn-services-empty-quick-add">Open Quick Add</button>
+                <button type="button" class="btn secondary sm" id="btn-services-empty-profiles">Edit Profiles</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -337,20 +371,21 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
             <p>Scaffold a new site in <code>www/</code>. Laravel projects get <strong>automatic telemetry capture</strong> (queries, jobs, views, requests, and more) in the Dumps tab.</p>
           </div>
           <div class="form-row">
-            <label>Template</label>
+            <label for="template-select">Template</label>
             <select id="template-select"></select>
           </div>
           <div class="form-row">
-            <label>Project name</label>
-            <input type="text" id="project-name" placeholder="myapp">
+            <label for="project-name">Project name</label>
+            <input type="text" id="project-name" placeholder="myapp" autocomplete="off">
           </div>
-          <button class="btn primary" id="btn-create-project">Create Project</button>
+          <button type="button" class="btn primary" id="btn-create-project">Create Project</button>
           <div class="panel" style="margin-top:1.5rem">
             <h3>Plain PHP</h3>
             <p class="panel-desc">Quick phpinfo() project — no Composer required.</p>
             <div class="form-row inline">
-              <input type="text" id="php-project-name" placeholder="demo">
-              <button class="btn secondary" id="btn-create-php">Create PHP project</button>
+              <label class="sr-only" for="php-project-name">PHP project name</label>
+              <input type="text" id="php-project-name" placeholder="demo" autocomplete="off">
+              <button type="button" class="btn secondary" id="btn-create-php">Create PHP project</button>
             </div>
           </div>
         </section>
@@ -669,13 +704,13 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
 
               <div class="settings-section hidden" data-settings-section="backups">
                 <div class="panel">
-                  <h3>MySQL backups</h3>
-                  <p class="panel-desc">Automatic backups run daily while DevTent is open, and before MySQL stops. Backups are kept for 7 days in <code>data/backups/mysql/</code>.</p>
+                  <h3>Database backups</h3>
+                  <p class="panel-desc">Automatic backups run daily while DevTent is open, and before managed databases stop. Retention is 7 days under <code>data/backups/</code>.</p>
+                  <p class="panel-desc settings-hint">Create, list, and restore MySQL, MariaDB, and PostgreSQL backups on the <strong>Database</strong> page.</p>
                   <div class="toolbar">
-                    <button class="btn secondary" id="btn-backup-mysql">Backup now</button>
-                    <button class="btn secondary" id="btn-open-mysql-backups">Open backups folder</button>
+                    <button type="button" class="btn primary" id="btn-settings-open-database">Open Database</button>
+                    <button type="button" class="btn secondary" id="btn-open-mysql-backups">Open backups folder</button>
                   </div>
-                  <ul id="mysql-backups-list" class="backup-list panel-desc"></ul>
                 </div>
               </div>
 
@@ -733,14 +768,32 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
         </section>
       </div>
 
-      <footer class="statusbar">
+      <footer class="statusbar" aria-live="polite">
         <span id="statusbar-root"></span>
-        <span id="statusbar-msg">Ready</span>
+        <span class="statusbar-trailing">
+          <span class="statusbar-busy hidden" id="statusbar-busy" aria-hidden="true"></span>
+          <span id="statusbar-msg">Ready</span>
+        </span>
       </footer>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="app-dialog" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+    <div class="update-dialog app-dialog">
+      <h2 id="app-dialog-title">Confirm</h2>
+      <p id="app-dialog-message" class="panel-desc app-dialog-message"></p>
+      <div id="app-dialog-prompt-wrap" class="form-row hidden">
+        <label for="app-dialog-input" id="app-dialog-input-label" class="field-label">Value</label>
+        <input type="text" id="app-dialog-input" class="text-input" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="update-actions app-dialog-actions">
+        <button type="button" class="btn primary" id="app-dialog-confirm">Confirm</button>
+        <button type="button" class="btn secondary" id="app-dialog-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <div id="update-overlay" class="update-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-title">
     <div class="update-dialog">
@@ -783,7 +836,7 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
     <div class="command-palette-panel">
       <input type="search" id="command-palette-input" class="command-palette-input" placeholder="Jump to a page or run a command…" autocomplete="off" spellcheck="false">
       <ul id="command-palette-results" class="command-palette-results" role="listbox"></ul>
-      <p class="command-palette-hint"><kbd>Ctrl</kbd><kbd>K</kbd> open · <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Enter</kbd> · <kbd>Esc</kbd> · <kbd>1</kbd>–<kbd>9</kbd> views</p>
+      <p class="command-palette-hint"><kbd>Ctrl</kbd><kbd>K</kbd> open · <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Enter</kbd> · <kbd>Esc</kbd> · <kbd>1</kbd>–<kbd>9</kbd> primary views</p>
     </div>
   </div>
 

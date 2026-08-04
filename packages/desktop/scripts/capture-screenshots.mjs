@@ -98,6 +98,17 @@ async function loadPlaywright() {
 }
 
 async function switchView(page, view) {
+  const moreViews = new Set(["tooling", "php-ini", "quick-add", "share"]);
+  if (moreViews.has(view)) {
+    await page.evaluate(() => {
+      const items = document.getElementById("nav-more-items");
+      const toggle = document.getElementById("nav-more-toggle");
+      const group = document.getElementById("nav-group-more");
+      if (items) items.classList.remove("hidden");
+      if (toggle) toggle.setAttribute("aria-expanded", "true");
+      group?.classList.add("is-expanded", "has-active-child");
+    });
+  }
   await page.locator(`.nav-item[data-view="${view}"]`).click({ force: true });
   await page.evaluate((viewName) => {
     document.querySelectorAll(".view-panel").forEach((p) => p.classList.add("hidden"));
@@ -105,6 +116,18 @@ async function switchView(page, view) {
     document.querySelectorAll(".nav-item").forEach((n) => {
       n.classList.toggle("active", n.dataset.view === viewName);
     });
+    const title = document.getElementById("page-title");
+    if (title) {
+      const labels = {
+        dashboard: "Dashboard",
+        projects: "Projects",
+        services: "Services",
+        tooling: "Tooling",
+        dumps: "Dumps",
+        profiles: "Profiles",
+      };
+      title.textContent = labels[viewName] || viewName;
+    }
   }, view);
   await page.waitForTimeout(600);
 }
