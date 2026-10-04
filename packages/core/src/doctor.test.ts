@@ -15,5 +15,7 @@ describe("doctor", () => {
     const report = await runDoctor(tmp, { repair: true });
     assert.ok(report.repaired.length > 0);
     assert.ok(report.findings.some((f) => f.id === "projects" || f.id === "no-projects"));
+    assert.ok(report.repaired.some((msg) => /PATH script/i.test(msg)));
+    assert.ok(report.repaired.some((msg) => /my\.ini/i.test(msg)));
   });
 });

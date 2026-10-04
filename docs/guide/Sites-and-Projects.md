@@ -21,7 +21,9 @@ Then click **Sync virtual hosts** so Nginx/Apache configs match.
 
 ## Site details drawer
 
-On **Projects**, open **Details** on a site to:
+On **Projects**, each site has **Open site**, **Terminal**, and **Details**. **Terminal** opens a shell in that project folder with that site’s PHP version first on `PATH` (so `php` and `composer` use DevTent’s copies).
+
+**Details** also lets you:
 
 - Open the URL or project folder
 - Choose **PHP version** (multiple versions can run side by side)

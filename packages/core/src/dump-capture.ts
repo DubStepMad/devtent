@@ -128,13 +128,13 @@ auto_prepend_file = "${capturePath}"
   }
 
   const phpIni = path.join(phpDir, "php.ini");
+  const { ensurePhpRuntimeIni } = await import("./php-ini.js");
+  await ensurePhpRuntimeIni(root, phpVersion);
   if (await pathExists(phpIni)) {
     const ini = await readFile(phpIni, "utf-8");
     if (!ini.includes("devtent.ini")) {
       await appendFile(phpIni, `\n; DevTent\ninclude="devtent.ini"\n`, "utf-8");
     }
-  } else {
-    await writeFile(phpIni, `; DevTent PHP config\ninclude="devtent.ini"\n`, "utf-8");
   }
 
   phpCaptureReady.add(key);

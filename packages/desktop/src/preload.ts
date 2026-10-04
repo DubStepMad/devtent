@@ -172,7 +172,8 @@ const api = {
   }) => ipcRenderer.invoke("devtent:downloadAndInstallUpdate", update),
   listAppBackups: () => ipcRenderer.invoke("devtent:listAppBackups"),
   rollbackApp: () => ipcRenderer.invoke("devtent:rollbackApp"),
-  openTerminal: () => ipcRenderer.invoke("devtent:openTerminal"),
+  openTerminal: (options?: { siteName?: string }) =>
+    ipcRenderer.invoke("devtent:openTerminal", options),
   listTooling: () => ipcRenderer.invoke("devtent:listTooling"),
   getPathEntries: () => ipcRenderer.invoke("devtent:getPathEntries"),
   installTool: (toolId: string) => ipcRenderer.invoke("devtent:installTool", toolId),

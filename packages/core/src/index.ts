@@ -168,6 +168,7 @@ export {
   readPhpIni,
   writePhpIni,
   setPhpExtension,
+  ensurePhpRuntimeIni,
   XDEBUG_IDE_HINT,
 } from "./php-ini.js";
 export type { PhpIniSummary, PhpIniExtension } from "./php-ini.js";
@@ -197,7 +198,7 @@ export {
 } from "./site-workers.js";
 export type { SiteWorkerKind, SiteWorkerStatus } from "./site-workers.js";
 
-export { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized } from "./mariadb.js";
+export { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized, mariadbIniContent } from "./mariadb.js";
 
 export type { CreateProfileInput, UpdateProfileInput, SwitchProfileResult } from "./config.js";
 
@@ -301,7 +302,9 @@ export {
   generatePathScript,
   writePathScript,
   getShellCommand,
+  getDevTentProcessEnv,
 } from "./path.js";
+export type { PathScriptOptions } from "./path.js";
 
 export {
   readProcfileRaw,
@@ -342,6 +345,7 @@ export type { ProfileService } from "./profile-services.js";
 
 export {
   writeMysqlIni,
+  mysqlIniContent,
   isMysqlDataInitialized,
   initializeMysql,
   backupMysql,

@@ -2025,10 +2025,14 @@ async function refreshProjects() {
       <div class="project-actions">
         <div class="project-actions-primary">
           <button class="btn sm primary btn-open">Open site</button>
+          <button class="btn sm secondary btn-terminal">Terminal</button>
           <button class="btn sm secondary btn-details">Details</button>
         </div>
       </div>`;
     li.querySelector(".btn-open").onclick = () => api.openExternal(url);
+    li.querySelector(".btn-terminal")?.addEventListener("click", () => {
+      api.openTerminal({ siteName: v.name });
+    });
     li.querySelector(".project-url-link")?.addEventListener("click", (e) => {
       e.preventDefault();
       api.openExternal(url);
@@ -3117,6 +3121,10 @@ async function boot() {
   document.getElementById("site-drawer-open")?.addEventListener("click", () => {
     if (!siteDrawerVhost) return;
     api.openExternal(projectUrl(siteDrawerVhost));
+  });
+  document.getElementById("site-drawer-terminal")?.addEventListener("click", () => {
+    if (!siteDrawerVhost) return;
+    api.openTerminal({ siteName: siteDrawerVhost.name });
   });
   document.getElementById("site-drawer-folder")?.addEventListener("click", () => {
     if (!siteDrawerVhost) return;

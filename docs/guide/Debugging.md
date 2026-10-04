@@ -41,7 +41,7 @@ Open the Mailpit UI from the page (or tray) once the service is running.
 **System → Doctor** runs the same checks as `devtent doctor`:
 
 - Re-check environment health
-- **Run safe fixes** (sync Procfile, regenerate vhosts, verify configs)
+- **Run safe fixes** (sync Procfile, regenerate vhosts, verify configs, rewrite `devtent-path` / `my.ini` / `php.ini` for portable Windows paths)
 - Trust mkcert CA
 - Start/stop local DNS and install the OS resolver for custom TLDs
 

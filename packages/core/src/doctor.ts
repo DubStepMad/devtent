@@ -1,5 +1,5 @@
 import path from "node:path";
-import { repairDevTentEnvironment, loadConfig, pathExists } from "./config.js";
+import { repairDevTentEnvironment, loadConfig, pathExists, resolvePath } from "./config.js";
 import { getEnvironmentHealth, type HealthItem } from "./health.js";
 import {
   generateVirtualHosts,
@@ -149,6 +149,75 @@ export async function runDoctor(
       await ensureLocalDnsFromState(root);
     } catch {
       // optional
+    }
+
+    const { writePathScript } = await import("./path.js");
+    await writePathScript(root);
+    repaired.push("Rewrote DevTent PATH script");
+
+    const { writeMysqlIni, initializeMysql, isMysqlDataInitialized } = await import("./mysql.js");
+    const { writeMariaDbIni, initializeMariaDb, isMariaDbDataInitialized } = await import(
+      "./mariadb.js"
+    );
+    const { binaryName } = await import("./platform/binary.js");
+    if (
+      (await pathExists(resolvePath(root, "bin/mysql"))) ||
+      (await pathExists(resolvePath(root, "data/mysql")))
+    ) {
+      await writeMysqlIni(root);
+      repaired.push("Wrote MySQL my.ini with absolute data paths");
+      const mysqld = resolvePath(root, path.join("bin", "mysql", "bin", binaryName("mysqld")));
+      if ((await pathExists(mysqld)) && !(await isMysqlDataInitialized(root))) {
+        try {
+          await initializeMysql(root);
+          repaired.push("Initialized MySQL data directory");
+        } catch {
+          findings.push({
+            id: "mysql-init",
+            severity: "warn",
+            title: "Could not initialize MySQL data directory",
+            detail: "Start MySQL from Services after installing the runtime, or check logs/mysql.log",
+          });
+        }
+      }
+    }
+    if (
+      (await pathExists(resolvePath(root, "bin/mariadb"))) ||
+      (await pathExists(resolvePath(root, "data/mariadb")))
+    ) {
+      await writeMariaDbIni(root);
+      repaired.push("Wrote MariaDB my.ini with absolute data paths");
+      const mariadbd =
+        (await pathExists(
+          resolvePath(root, path.join("bin", "mariadb", "bin", binaryName("mysqld")))
+        )) ||
+        (await pathExists(
+          resolvePath(root, path.join("bin", "mariadb", "bin", binaryName("mariadbd")))
+        ));
+      if (mariadbd && !(await isMariaDbDataInitialized(root))) {
+        try {
+          await initializeMariaDb(root);
+          repaired.push("Initialized MariaDB data directory");
+        } catch {
+          findings.push({
+            id: "mariadb-init",
+            severity: "warn",
+            title: "Could not initialize MariaDB data directory",
+            detail:
+              "Start MariaDB from Services after installing the runtime, or check logs/mariadb.log",
+          });
+        }
+      }
+    }
+
+    const { listInstalledPhpVersions, ensurePhpRuntimeIni } = await import("./php-ini.js");
+    const { ensurePhpCaptureForVersion } = await import("./dump-capture.js");
+    for (const version of await listInstalledPhpVersions(root)) {
+      await ensurePhpCaptureForVersion(root, version);
+      const result = await ensurePhpRuntimeIni(root, version);
+      if (result.changed) {
+        repaired.push(`Repaired php.ini for ${version} (extension_dir / opcache)`);
+      }
     }
 
     if (options.startServices) {

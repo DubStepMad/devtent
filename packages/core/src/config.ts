@@ -44,6 +44,7 @@ export const DEFAULT_DIRS = [
   "etc/apache/sites",
   "etc/ssl",
   "data/mysql",
+  "data/mariadb",
   "data/postgresql",
   "logs",
   "profiles",
@@ -99,6 +100,18 @@ export function getDefaultConfig(root: string): DevTentConfig {
         port: 3306,
         binary: binPath(["bin", "mysql", "bin", "mysqld"]),
         dataDir: "data/mysql",
+      },
+      mariadb: {
+        enabled: false,
+        port: 3307,
+        binary: binPath(["bin", "mariadb", "bin", "mysqld"]),
+        dataDir: "data/mariadb",
+      },
+      postgresql: {
+        enabled: false,
+        port: 5432,
+        binary: binPath(["bin", "postgresql", "bin", "postgres"]),
+        dataDir: "data/postgresql",
       },
     },
   };

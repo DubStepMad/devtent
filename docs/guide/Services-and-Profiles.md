@@ -34,6 +34,6 @@ On macOS/Linux, some packages can be **copied from Homebrew/apt** into the porta
 
 ![Tooling](../screenshots/tooling.png)
 
-**More → Tooling** manages Composer, Node, Bun, and the Laravel installer, plus PATH preview. Always open a **DevTent terminal** so binaries resolve correctly.
+**More → Tooling** manages Composer, Node, Bun, and the Laravel installer, plus PATH preview. Always open a **DevTent terminal** so bundled binaries take precedence over copies on your system `PATH`. Per-project **Terminal** on **Projects** uses that site’s PHP version.
 
 Next: **[Debugging](Debugging.md)**

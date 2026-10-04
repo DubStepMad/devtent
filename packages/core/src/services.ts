@@ -4,9 +4,9 @@ import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { ProcfileEntry, ServiceStatus } from "./types.js";
-import { backupMysql, writeMysqlIni } from "./mysql.js";
+import { backupMysql, initializeMysql, writeMysqlIni } from "./mysql.js";
 import { backupMariaDb, backupPostgres } from "./db-backups.js";
-import { writeMariaDbIni } from "./mariadb.js";
+import { initializeMariaDb, writeMariaDbIni } from "./mariadb.js";
 import { ensureNginxSupportFiles } from "./nginx-support.js";
 import { ensurePhpCaptureForVersion } from "./dump-capture.js";
 import { phpVersionFromProcfileName } from "./php-ports.js";
@@ -187,15 +187,35 @@ async function prepareServiceStart(
     const list = entries ?? (await parseProcfile(root));
     const mysql = list.find((e) => e.name === "mysql");
     if (mysql && !mysql.command.includes("--defaults-file=")) {
+      const { binPath } = await import("./platform/binary.js");
       await saveProcfileEntry(root, {
         name: "mysql",
-        command: "bin/mysql/bin/mysqld.exe --defaults-file=etc/mysql/my.ini --console",
+        command: `${binPath(["bin", "mysql", "bin", "mysqld"])} --defaults-file=etc/mysql/my.ini --console`,
       });
     }
     await writeMysqlIni(root);
+    try {
+      await initializeMysql(root);
+    } catch {
+      // Start still attempts; logs will show if the data directory is missing.
+    }
   }
   if (name === "mariadb") {
+    const list = entries ?? (await parseProcfile(root));
+    const mariadb = list.find((e) => e.name === "mariadb");
+    if (mariadb && !mariadb.command.includes("--defaults-file=")) {
+      const { binPath } = await import("./platform/binary.js");
+      await saveProcfileEntry(root, {
+        name: "mariadb",
+        command: `${binPath(["bin", "mariadb", "bin", "mysqld"])} --defaults-file=etc/mariadb/my.ini --console`,
+      });
+    }
     await writeMariaDbIni(root);
+    try {
+      await initializeMariaDb(root);
+    } catch {
+      // Start still attempts; logs will show if the data directory is missing.
+    }
   }
   if (name === "meilisearch") {
     await mkdir(resolvePath(root, "data/meilisearch"), { recursive: true });

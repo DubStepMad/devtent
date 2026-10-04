@@ -3,6 +3,12 @@ import path from "node:path";
 import { resolvePath, pathExists, loadConfig, loadProfile } from "./config.js";
 import { DEFAULT_PHP_VERSION, resolvePhpPaths } from "./profile-runtime.js";
 import { ensurePhpCaptureForVersion } from "./dump-capture.js";
+import {
+  quoteIniValue,
+  toIniFilePath,
+  upsertIniDirective,
+  trimIniTrailingWhitespace,
+} from "./ini-file.js";
 
 export interface PhpIniExtension {
   name: string;
@@ -46,7 +52,7 @@ const COMMON_EXTENSIONS = [
 ];
 
 /** Extensions that must use zend_extension= (not extension=). */
-const ZEND_EXTENSIONS = new Set(["xdebug"]);
+const ZEND_EXTENSIONS = new Set(["xdebug", "opcache"]);
 
 const XDEBUG_DEFAULT_SETTINGS = [
   "xdebug.mode=debug,develop",
@@ -208,8 +214,104 @@ function applyXdebugSettings(content: string, enabled: boolean): string {
   return `${body}\n\n; DevTent Xdebug defaults\n${XDEBUG_DEFAULT_SETTINGS.join("\n")}\n`;
 }
 
+function fixOpcacheZendDirective(content: string): string {
+  const lines = content.split(/\r?\n/);
+  return lines
+    .map((line) => {
+      const trimmed = line.trim();
+      const commented = trimmed.startsWith(";");
+      const uncommented = commented ? trimmed.slice(1).trim() : trimmed;
+      const eq = uncommented.indexOf("=");
+      if (eq === -1) return line;
+      const key = uncommented.slice(0, eq).trim().toLowerCase();
+      if (key !== "extension") return line;
+      const raw = uncommented
+        .slice(eq + 1)
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .replace(/^php_/i, "")
+        .replace(/\.(dll|so)$/i, "")
+        .toLowerCase();
+      if (raw !== "opcache") return line;
+      const indent = line.slice(0, line.length - line.trimStart().length);
+      return `${indent}${commented ? ";" : ""}zend_extension=opcache`;
+    })
+    .join("\n");
+}
+
+async function resolvePhpExtDir(root: string, phpVersion: string): Promise<string | null> {
+  const paths = resolvePhpPaths(phpVersion);
+  const candidates = [
+    resolvePath(root, path.join(paths.phpRc, "ext")),
+    resolvePath(root, path.join(paths.phpRc, "lib", "php", "extensions")),
+  ];
+  for (const dir of candidates) {
+    if (await pathExists(dir)) return dir;
+  }
+  return null;
+}
+
+/**
+ * Seed php.ini from php.ini-development when missing, set a portable
+ * extension_dir, and ensure opcache uses zend_extension=.
+ */
+export async function ensurePhpRuntimeIni(
+  root: string,
+  phpVersion: string
+): Promise<{ changed: boolean; iniPath: string }> {
+  const paths = resolvePhpPaths(phpVersion);
+  const phpDir = resolvePath(root, paths.phpRc);
+  const iniPath = path.join(phpDir, "php.ini");
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(phpDir, { recursive: true });
+
+  let content: string;
+  let changed = false;
+  if (await pathExists(iniPath)) {
+    content = await readFile(iniPath, "utf-8");
+  } else {
+    const development = path.join(phpDir, "php.ini-development");
+    if (await pathExists(development)) {
+      content = await readFile(development, "utf-8");
+    } else {
+      content = `; DevTent php.ini for ${phpVersion}\n`;
+    }
+    changed = true;
+  }
+
+  const extDir = await resolvePhpExtDir(root, phpVersion);
+  if (extDir) {
+    const next = upsertIniDirective(
+      content,
+      "extension_dir",
+      quoteIniValue(toIniFilePath(extDir))
+    );
+    if (next !== content) {
+      content = next;
+      changed = true;
+    }
+  }
+
+  const withOpcache = fixOpcacheZendDirective(content);
+  if (withOpcache !== content) {
+    content = withOpcache;
+    changed = true;
+  }
+
+  if (!content.includes("devtent.ini")) {
+    content = `${trimIniTrailingWhitespace(content)}\n; DevTent\ninclude="devtent.ini"\n`;
+    changed = true;
+  }
+
+  if (changed) {
+    await writeFile(iniPath, content.replace(/\r?\n/g, "\n"), "utf-8");
+  }
+  return { changed, iniPath };
+}
+
 export async function readPhpIni(root: string, phpVersion: string): Promise<PhpIniSummary> {
   await ensurePhpCaptureForVersion(root, phpVersion);
+  await ensurePhpRuntimeIni(root, phpVersion);
   const iniPath = iniPathFor(root, phpVersion);
   const exists = await pathExists(iniPath);
   const content = exists ? await readFile(iniPath, "utf-8") : "";

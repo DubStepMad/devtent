@@ -1,6 +1,6 @@
 {
   "name": "@devtent/mcp",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "DevTent MCP server — manage sites, PHP, services, and SSL from AI agents",
   "license": "LicenseRef-DTCL-1.0",
   "type": "module",

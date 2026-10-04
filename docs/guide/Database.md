@@ -10,6 +10,8 @@
 
 ## Backups
 
+On Windows, DevTent writes `etc/mysql/my.ini` and `etc/mariadb/my.ini` with **absolute** `datadir` / `basedir` paths so the server does not look under `bin/mysql/data` or `bin/mariadb/data`. **Doctor → Run safe fixes** regenerates those files for the current DevTent root.
+
 Managed engines get:
 
 - Automatic backup **before stop**

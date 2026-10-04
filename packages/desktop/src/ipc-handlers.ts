@@ -836,18 +836,53 @@ export function registerIpcHandlers(): void {
     broadcastRefresh();
   });
 
-  ipcMain.handle("devtent:openTerminal", async () => {
-    const { writePathScript } = await import("@devtent/core");
-    const script = await writePathScript(currentRoot);
-    if (process.platform === "win32") {
-      const { spawn } = await import("node:child_process");
-      spawn("cmd.exe", ["/k", script], { detached: true, shell: true });
-    } else {
-      const { spawn } = await import("node:child_process");
-      spawn("x-terminal-emulator", ["-e", `bash -c 'source "${script}" && exec bash'`], {
-        detached: true,
-      });
+  ipcMain.handle("devtent:openTerminal", async (_e, options?: { siteName?: string }) => {
+    const core = await loadCore();
+    let cwd = currentRoot;
+    let phpVersion: string | undefined;
+    let outputPath: string | undefined;
+
+    if (options?.siteName && typeof options.siteName === "string") {
+      const vhosts = await core.listVirtualHosts(currentRoot);
+      const site = vhosts.find((v) => v.name === options.siteName);
+      if (!site) {
+        throw new Error(`Unknown site: ${options.siteName}`);
+      }
+      cwd = site.projectPath || path.join(currentRoot, "www", site.name);
+      phpVersion = site.phpVersion;
+      const { mkdir } = await import("node:fs/promises");
+      const tmpDir = path.join(currentRoot, "tmp");
+      await mkdir(tmpDir, { recursive: true });
+      const safe = options.siteName.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "site";
+      outputPath = path.join(
+        tmpDir,
+        process.platform === "win32" ? `devtent-path-${safe}.bat` : `devtent-path-${safe}.sh`
+      );
     }
+
+    const script = await core.writePathScript(currentRoot, { phpVersion, outputPath });
+    const env = await core.getDevTentProcessEnv(currentRoot, { phpVersion });
+    const { spawn } = await import("node:child_process");
+    if (process.platform === "win32") {
+      const child = spawn("cmd.exe", ["/k", script], {
+        cwd,
+        env,
+        detached: true,
+        stdio: "ignore",
+        windowsHide: false,
+        shell: false,
+      });
+      child.unref();
+    } else {
+      const child = spawn("x-terminal-emulator", ["-e", `bash -c 'source "${script}" && exec bash'`], {
+        cwd,
+        env,
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+    }
+    return { ok: true, cwd };
   });
 
   ipcMain.handle("devtent:listTooling", async () => {

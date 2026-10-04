@@ -4,6 +4,18 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-04
+
+Windows portability release: absolute MySQL/MariaDB data paths, PHP `php.ini` / PATH fixes, and per-project terminals.
+
+### Fixed
+
+- **Windows portability** — MySQL/MariaDB `my.ini` now uses absolute `datadir`/`basedir` (relative paths were resolved against `basedir` and looked in `bin/…/data`). PATH scripts are valid `cmd` (`REM` instead of `#`), PHP `extension_dir` is set to the bundled `ext/` folder, and `opcache` is loaded as `zend_extension=`.
+
+### Added
+
+- **Per-project Terminal** on Projects (and the site drawer) opens a shell in the project folder with that site’s PHP version, `PHPRC`, and `COMPOSER_HOME` so Composer uses DevTent’s tools.
+
 ## [2.2.0] - 2026-08-04
 
 CI hygiene release: GitHub Actions on Node 24 runtimes.

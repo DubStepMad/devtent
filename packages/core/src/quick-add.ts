@@ -312,15 +312,40 @@ async function runPostInstall(
     await ensurePostgresDataDir(root, installPath, log);
   }
 
+  if (manifest.name.startsWith("mariadb")) {
+    try {
+      const { initializeMariaDb } = await import("./mariadb.js");
+      await initializeMariaDb(root, log);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`MariaDB init: ${msg}`);
+    }
+  }
+
+  if (manifest.name.startsWith("mysql")) {
+    try {
+      const { initializeMysql } = await import("./mysql.js");
+      await initializeMysql(root, log);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`MySQL init: ${msg}`);
+    }
+  }
+
   if (manifest.name === "composer") {
     await ensureComposerWrapper(installPath, log);
   }
 
-  if (manifest.name.startsWith("php-") && process.platform !== "win32") {
-    await ensureStaticPhpUnixLayout(installPath, manifest, log);
-    const { ensurePhpFpmPoolConfig } = await import("./profile-runtime.js");
-    const conf = await ensurePhpFpmPoolConfig(root, manifest.name);
-    if (conf) log(`Wrote php-fpm pool config ${conf}`);
+  if (manifest.name.startsWith("php-")) {
+    if (process.platform !== "win32") {
+      await ensureStaticPhpUnixLayout(installPath, manifest, log);
+      const { ensurePhpFpmPoolConfig } = await import("./profile-runtime.js");
+      const conf = await ensurePhpFpmPoolConfig(root, manifest.name);
+      if (conf) log(`Wrote php-fpm pool config ${conf}`);
+    }
+    const { ensurePhpCaptureForVersion } = await import("./dump-capture.js");
+    await ensurePhpCaptureForVersion(root, manifest.name);
+    log("Wrote portable php.ini (extension_dir, DevTent capture)");
   }
 
   if (manifest.name === "nginx") {

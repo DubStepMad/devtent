@@ -5,6 +5,7 @@ import path from "node:path";
 import { resolvePath, pathExists } from "./config.js";
 import { isServiceRunning } from "./services.js";
 import { binaryName } from "./platform/binary.js";
+import { quoteIniValue, toIniFilePath } from "./ini-file.js";
 
 export const MYSQL_BACKUP_DIR = "data/backups/mysql";
 export const BACKUP_RETENTION_DAYS = 7;
@@ -29,19 +30,23 @@ async function findMysqlBinary(root: string, name: string): Promise<string | nul
   return null;
 }
 
-export async function writeMysqlIni(root: string): Promise<void> {
-  const iniDir = path.join(root, "etc", "mysql");
-  await mkdir(iniDir, { recursive: true });
-
-  const content = `[mysqld]
+export function mysqlIniContent(root: string): string {
+  const dataDir = quoteIniValue(toIniFilePath(resolvePath(root, "data/mysql")));
+  const baseDir = quoteIniValue(toIniFilePath(resolvePath(root, "bin/mysql")));
+  return `[mysqld]
 port=3306
-datadir=data/mysql
-basedir=bin/mysql
+datadir=${dataDir}
+basedir=${baseDir}
 console
 default_authentication_plugin=mysql_native_password
 max_allowed_packet=512M
 `;
-  await writeFile(path.join(iniDir, "my.ini"), content, "utf-8");
+}
+
+export async function writeMysqlIni(root: string): Promise<void> {
+  const iniDir = path.join(root, "etc", "mysql");
+  await mkdir(iniDir, { recursive: true });
+  await writeFile(path.join(iniDir, "my.ini"), mysqlIniContent(root), "utf-8");
 }
 
 export async function isMysqlDataInitialized(root: string): Promise<boolean> {
@@ -79,10 +84,16 @@ export async function initializeMysql(root: string, onProgress?: (msg: string) =
     throw new Error(`${binaryName("mysqld")} not found — install MySQL via Quick Add first`);
   }
 
-  await mkdir(resolvePath(root, "data/mysql"), { recursive: true });
+  const dataDir = resolvePath(root, "data/mysql");
+  const baseDir = resolvePath(root, "bin/mysql");
+  await mkdir(dataDir, { recursive: true });
   await writeMysqlIni(root);
   log("Initializing MySQL data directory…");
-  await runCommand(root, mysqld, ["--initialize-insecure", "--datadir=data/mysql"]);
+  await runCommand(root, mysqld, [
+    "--initialize-insecure",
+    `--datadir=${dataDir}`,
+    `--basedir=${baseDir}`,
+  ]);
   log("MySQL data directory ready");
 }
 
