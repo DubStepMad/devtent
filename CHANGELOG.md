@@ -8,7 +8,7 @@ All notable changes to DevTent are documented in this file.
 
 ### Fixed
 
-- **Tray Doctor / Quick Access** — opening Doctor (and other dashboard views) from the tray no longer destroys the popup before the dashboard can open.
+- **Tray Quick Access** — Doctor, Services, Mail, Dumps, Database, Logs, Settings, and Full Dashboard open the dashboard on that page. The target view is queued until the window finishes loading.
 - **Tray popup border** — remove the extra Windows outline around the rounded panel.
 
 ## [2.4.1] - 2026-11-05

@@ -307,6 +307,7 @@
     onUpdateAvailable: noop,
     onUpdateDownloadProgress: noop,
     onNavigate: noop,
+    consumePendingNavigate: ok(null),
     onWwwChanged: noop,
     closeQuickPanel: noop,
     startAll: ok([]),

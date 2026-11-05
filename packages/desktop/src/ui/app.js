@@ -2898,6 +2898,12 @@ async function boot() {
     await Promise.all([refreshServices(), refreshProjects(), refreshProfiles()]);
   }
 
+  const setupVisible = !document.getElementById("view-setup")?.classList.contains("hidden");
+  const pendingView = api.consumePendingNavigate ? await api.consumePendingNavigate() : null;
+  if (pendingView && !setupVisible) {
+    await navigateToView(pendingView);
+  }
+
   document.querySelectorAll(".migrate-project-actions button").forEach((btn) => {
     btn.onclick = () => {
       const list = document.getElementById(btn.dataset.target);

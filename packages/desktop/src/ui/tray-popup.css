@@ -115,6 +115,10 @@ body {
   -webkit-app-region: drag;
 }
 
+.popup-header .header-actions {
+  -webkit-app-region: no-drag;
+}
+
 .popup-close {
   -webkit-app-region: no-drag;
   width: 28px;

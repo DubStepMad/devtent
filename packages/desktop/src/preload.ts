@@ -183,6 +183,7 @@ const api = {
     ipcRenderer.invoke("devtent:removeTool", toolId, options),
   quit: () => ipcRenderer.invoke("devtent:quit"),
   openDashboard: (view?: string) => ipcRenderer.invoke("devtent:openDashboard", view),
+  consumePendingNavigate: () => ipcRenderer.invoke("devtent:consumePendingNavigate"),
   closeQuickPanel: () => ipcRenderer.invoke("devtent:closeQuickPanel"),
   setWindowMode: (mode: "setup" | "dashboard") => ipcRenderer.invoke("devtent:setWindowMode", mode),
   onProgress: (callback: (message: string) => void) => {

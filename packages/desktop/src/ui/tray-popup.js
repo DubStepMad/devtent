@@ -166,6 +166,10 @@ function bind() {
     }
   });
 
+  function openDashboard(view) {
+    return api.openDashboard(view).catch((err) => console.error(err));
+  }
+
   document.getElementById("btn-popup-close")?.addEventListener("click", () => {
     api.closeQuickPanel?.();
   });
@@ -180,23 +184,23 @@ function bind() {
     refresh();
   };
 
-  document.getElementById("btn-www").onclick = () => api.openPath("www");
-  document.getElementById("btn-dashboard").onclick = () => api.openDashboard();
-  document.getElementById("btn-mail")?.addEventListener("click", () => api.openDashboard("mail"));
-  document.getElementById("btn-dumps")?.addEventListener("click", () => api.openDashboard("dumps"));
-  document.getElementById("btn-database")?.addEventListener("click", () => api.openDashboard("database"));
-  document.getElementById("btn-doctor")?.addEventListener("click", () => api.openDashboard("doctor"));
-  document.getElementById("btn-services")?.addEventListener("click", () => api.openDashboard("services"));
-  document.getElementById("btn-settings").onclick = () => api.openDashboard("settings");
-  document.getElementById("btn-terminal").onclick = () => api.openTerminal();
-  document.getElementById("btn-logs").onclick = () => api.openDashboard("logs");
+  document.getElementById("btn-www").onclick = () => api.openPath("www").catch(console.error);
+  document.getElementById("btn-dashboard").onclick = () => openDashboard();
+  document.getElementById("btn-mail").onclick = () => openDashboard("mail");
+  document.getElementById("btn-dumps").onclick = () => openDashboard("dumps");
+  document.getElementById("btn-database").onclick = () => openDashboard("database");
+  document.getElementById("btn-doctor").onclick = () => openDashboard("doctor");
+  document.getElementById("btn-services").onclick = () => openDashboard("services");
+  document.getElementById("btn-settings").onclick = () => openDashboard("settings");
+  document.getElementById("btn-logs").onclick = () => openDashboard("logs");
+  document.getElementById("btn-terminal").onclick = () => api.openTerminal().catch(console.error);
   document.getElementById("btn-quit").onclick = () => api.quit();
 
   document.getElementById("btn-sites").onclick = () => {
     const section = document.getElementById("sites-section");
     section.classList.toggle("hidden");
     if (!section.classList.contains("hidden")) {
-      api.syncVhosts().then(refresh);
+      api.syncVhosts().then(refresh).catch(console.error);
     }
   };
 

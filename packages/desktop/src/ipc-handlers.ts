@@ -56,6 +56,7 @@ import {
 let currentRoot = "";
 let openDashboardHandler: (() => BrowserWindow | null) | null = null;
 let requestQuitHandler: (() => void) | null = null;
+let pendingDashboardView: string | null = null;
 
 export function setOpenDashboardHandler(handler: () => BrowserWindow | null): void {
   openDashboardHandler = handler;
@@ -1061,18 +1062,27 @@ export function registerIpcHandlers(): void {
     hideTrayPopup();
   });
 
+  ipcMain.handle("devtent:consumePendingNavigate", () => {
+    const view = pendingDashboardView;
+    pendingDashboardView = null;
+    return view;
+  });
+
   ipcMain.handle("devtent:openDashboard", async (_e, view?: string) => {
     // Create/show the dashboard BEFORE destroying the tray popup. The IPC
     // comes from the popup; destroying it first aborts the rest of this handler.
     const win = openDashboardHandler?.() ?? null;
-    if (view && win && !win.isDestroyed()) {
-      const send = () => {
-        if (!win.isDestroyed()) win.webContents.send("devtent:navigate", view);
-      };
+    const targetView = typeof view === "string" && view.trim() ? view.trim() : undefined;
+    if (targetView && win && !win.isDestroyed()) {
       if (win.webContents.isLoading()) {
-        win.webContents.once("did-finish-load", send);
+        pendingDashboardView = targetView;
+        win.webContents.once("did-finish-load", () => {
+          if (win.isDestroyed()) return;
+          win.webContents.send("devtent:navigate", targetView);
+        });
       } else {
-        send();
+        pendingDashboardView = null;
+        win.webContents.send("devtent:navigate", targetView);
       }
     }
     setImmediate(() => hideTrayPopup());
