@@ -4,6 +4,13 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-11-05
+
+### Fixed
+
+- **Tray Doctor / Quick Access** — opening Doctor (and other dashboard views) from the tray no longer destroys the popup before the dashboard can open.
+- **Tray popup border** — remove the extra Windows outline around the rounded panel.
+
 ## [2.4.1] - 2026-11-05
 
 ### Fixed

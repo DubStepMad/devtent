@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 2.4.1.exe`
+Output: `packages/desktop/release/DevTent Setup 2.4.2.exe`
 
 ### CLI (optional)
 

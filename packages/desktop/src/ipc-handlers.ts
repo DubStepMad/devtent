@@ -54,10 +54,10 @@ import {
 } from "./startup-settings.js";
 
 let currentRoot = "";
-let openDashboardHandler: (() => void) | null = null;
+let openDashboardHandler: (() => BrowserWindow | null) | null = null;
 let requestQuitHandler: (() => void) | null = null;
 
-export function setOpenDashboardHandler(handler: () => void): void {
+export function setOpenDashboardHandler(handler: () => BrowserWindow | null): void {
   openDashboardHandler = handler;
 }
 
@@ -1062,13 +1062,20 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("devtent:openDashboard", async (_e, view?: string) => {
-    openDashboardHandler?.();
-    if (view) {
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) {
-          win.webContents.send("devtent:navigate", view);
-        }
+    // Create/show the dashboard BEFORE destroying the tray popup. The IPC
+    // comes from the popup; destroying it first aborts the rest of this handler.
+    const win = openDashboardHandler?.() ?? null;
+    if (view && win && !win.isDestroyed()) {
+      const send = () => {
+        if (!win.isDestroyed()) win.webContents.send("devtent:navigate", view);
+      };
+      if (win.webContents.isLoading()) {
+        win.webContents.once("did-finish-load", send);
+      } else {
+        send();
       }
     }
+    setImmediate(() => hideTrayPopup());
+    return { ok: true };
   });
 }

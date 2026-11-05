@@ -107,6 +107,8 @@ export function createWindow(options?: { setup?: boolean }): BrowserWindow {
   if (mainWindow) {
     if (options?.setup) applyWindowMode("setup");
     else applyWindowMode("dashboard");
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
     return mainWindow;
   }
@@ -224,10 +226,7 @@ app.whenReady().then(async () => {
   const root = await refreshRoot();
   setWwwWatchGetRoot(() => getCurrentRoot());
 
-  setOpenDashboardHandler(() => {
-    hideTrayPopup();
-    createWindow();
-  });
+  setOpenDashboardHandler(() => createWindow());
 
   await setupTray(
     () => {

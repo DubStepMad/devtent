@@ -12,11 +12,8 @@ import { __dirname } from "./dir.js";
 import { openFolderInShell } from "./open-folder.js";
 import { loadSettings, saveSettings } from "./paths.js";
 
-const POPUP_PAD = 16;
-const POPUP_CARD_WIDTH = 380;
-const POPUP_CARD_HEIGHT = 620;
-const POPUP_WIDTH = POPUP_CARD_WIDTH + POPUP_PAD * 2;
-const POPUP_HEIGHT = POPUP_CARD_HEIGHT + POPUP_PAD * 2;
+const POPUP_WIDTH = 380;
+const POPUP_HEIGHT = 620;
 
 export type RefreshScope = "all" | "services" | "sites" | "profiles" | "tooling" | "settings";
 
@@ -162,8 +159,9 @@ export function createTrayPopup(): BrowserWindow {
     transparent: true,
     backgroundColor: "#00000000",
     hasShadow: false,
-    thickFrame: false,
-    roundedCorners: true,
+    // Win11 draws its own outline when roundedCorners/thickFrame are set on a
+    // padded transparent HWND — keep the card filling the window instead.
+    roundedCorners: false,
     focusable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -172,6 +170,7 @@ export function createTrayPopup(): BrowserWindow {
     },
   });
   trayPopup.setBackgroundColor("#00000000");
+  trayPopup.setMenu(null);
 
   trayPopup.loadFile(path.join(__dirname, "ui", "tray-popup.html"));
   trayPopup.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
