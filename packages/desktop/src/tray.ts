@@ -12,10 +12,27 @@ import { __dirname } from "./dir.js";
 import { openFolderInShell } from "./open-folder.js";
 import { loadSettings, saveSettings } from "./paths.js";
 
-const POPUP_WIDTH = 380;
-const POPUP_HEIGHT = 620;
+const POPUP_PAD = 16;
+const POPUP_CARD_WIDTH = 380;
+const POPUP_CARD_HEIGHT = 620;
+const POPUP_WIDTH = POPUP_CARD_WIDTH + POPUP_PAD * 2;
+const POPUP_HEIGHT = POPUP_CARD_HEIGHT + POPUP_PAD * 2;
 
 export type RefreshScope = "all" | "services" | "sites" | "profiles" | "tooling" | "settings";
+
+export interface WwwChangedPayload {
+  added: string[];
+  removed: string[];
+  result?: {
+    vhosts?: unknown[];
+    hosts?: {
+      updated?: boolean;
+      requiresAdmin?: boolean;
+      hostsCurrent?: boolean;
+      elevationPending?: boolean;
+    };
+  };
+}
 
 let tray: Tray | null = null;
 let trayPopup: BrowserWindow | null = null;
@@ -51,6 +68,14 @@ export function broadcastRefresh(scope: RefreshScope = "all"): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send("devtent:refresh", scope);
+    }
+  }
+}
+
+export function broadcastWwwChanged(payload: WwwChangedPayload): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("devtent:www-changed", payload);
     }
   }
 }
@@ -135,7 +160,10 @@ export function createTrayPopup(): BrowserWindow {
     skipTaskbar: true,
     alwaysOnTop: true,
     transparent: true,
-    hasShadow: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    thickFrame: false,
+    roundedCorners: true,
     focusable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -143,6 +171,7 @@ export function createTrayPopup(): BrowserWindow {
       nodeIntegration: false,
     },
   });
+  trayPopup.setBackgroundColor("#00000000");
 
   trayPopup.loadFile(path.join(__dirname, "ui", "tray-popup.html"));
   trayPopup.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });

@@ -86,6 +86,7 @@ const api = {
   createDatabase: (name: string) => ipcRenderer.invoke("devtent:createDatabase", name),
   getDatabaseAdminStatus: () => ipcRenderer.invoke("devtent:getDatabaseAdminStatus"),
   listInstalledPhpVersions: () => ipcRenderer.invoke("devtent:listInstalledPhpVersions"),
+  listPhpVersionChoices: () => ipcRenderer.invoke("devtent:listPhpVersionChoices"),
   getActivePhpVersion: () => ipcRenderer.invoke("devtent:getActivePhpVersion"),
   readPhpIni: (phpVersion: string) => ipcRenderer.invoke("devtent:readPhpIni", phpVersion),
   writePhpIni: (phpVersion: string, content: string) =>
@@ -212,6 +213,38 @@ const api = {
     const handler = (_event: IpcRendererEvent, view: string) => callback(view);
     ipcRenderer.on("devtent:navigate", handler);
     return () => ipcRenderer.removeListener("devtent:navigate", handler);
+  },
+  onWwwChanged: (
+    callback: (payload: {
+      added: string[];
+      removed: string[];
+      result?: {
+        hosts?: {
+          updated?: boolean;
+          requiresAdmin?: boolean;
+          hostsCurrent?: boolean;
+          elevationPending?: boolean;
+        };
+      };
+    }) => void
+  ) => {
+    const handler = (
+      _event: IpcRendererEvent,
+      payload: {
+        added: string[];
+        removed: string[];
+        result?: {
+          hosts?: {
+            updated?: boolean;
+            requiresAdmin?: boolean;
+            hostsCurrent?: boolean;
+            elevationPending?: boolean;
+          };
+        };
+      }
+    ) => callback(payload);
+    ipcRenderer.on("devtent:www-changed", handler);
+    return () => ipcRenderer.removeListener("devtent:www-changed", handler);
   },
 };
 

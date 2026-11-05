@@ -1,0 +1,9 @@
+name: php-8.5
+version: "8.5.12"
+description: PHP 8.5 FPM+CLI (static-php.dev common) for macOS Intel
+platform: darwin
+arch: x64
+url: https://dl.static-php.dev/static-php-cli/common/php-8.5.12-fpm-macos-x86_64.tar.gz
+installPath: bin/php/php-8.5
+binary: sbin/php-fpm
+downloadType: tar.gz

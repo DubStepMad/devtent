@@ -4,6 +4,20 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-05
+
+Live project detection, PHP 8.5, and tray popup polish.
+
+### Added
+
+- **www/ auto-detect** — new project folders generate Nginx/Apache vhosts immediately and suggest a hosts-file update when the TLD needs one. Running web servers reload instead of requiring a DevTent restart.
+- **PHP 8.5** in Quick Add (Windows NTS and macOS/Linux static-php builds). Latest patch is resolved at install time.
+
+### Fixed
+
+- **Profiles** (and the site PHP picker) list PHP versions already present under `bin/php/`, so a manually installed PHP 8.5 can be selected.
+- **Tray popup** no longer shows square corners around the rounded card on Windows.
+
 ## [2.3.0] - 2026-10-04
 
 Windows portability release: absolute MySQL/MariaDB data paths, PHP `php.ini` / PATH fixes, and per-project terminals.

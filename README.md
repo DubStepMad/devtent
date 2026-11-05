@@ -164,7 +164,7 @@ If `*.test` URLs do not resolve after **Sync Virtual Hosts**, approve the **Admi
 npm run dist
 ```
 
-Output: `packages/desktop/release/DevTent Setup 2.3.0.exe`
+Output: `packages/desktop/release/DevTent Setup 2.4.0.exe`
 
 ### CLI (optional)
 
@@ -240,7 +240,7 @@ devtent node list                  # List installable Node versions
 devtent node install <version>     # Install Node (e.g. node-22)
 devtent node use <version>         # Set active Node for profile
 devtent sites link <path>       # Link external project
-devtent sites php <name> <ver> # Per-site PHP (php-8.2, php-8.3, php-8.4)
+devtent sites php <name> <ver> # Per-site PHP (php-8.2, php-8.3, php-8.4, php-8.5)
 devtent sites workers [site]   # List queue / Vite / schedule workers
 devtent sites worker <site> <kind> --on|--off
 devtent share <site>           # Public quick tunnel (Ctrl+C to stop)

@@ -13,7 +13,7 @@ DevTent serves:
 | **Linked** | **Projects → Link project…** | external path with a chosen name |
 | **Quick App** | Scaffold into `www/` | created for you |
 
-Then click **Sync virtual hosts** so Nginx/Apache configs match.
+New folders in `www/` are detected while DevTent is running: virtual host configs are written, Nginx/Apache reload if they are already up, and you are prompted to update the hosts file when the TLD needs it (for example `.test`). You can still click **Sync virtual hosts** to force a refresh.
 
 ## Quick App
 

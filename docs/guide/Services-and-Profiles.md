@@ -16,7 +16,7 @@ Global **Start All** / **Stop All** live in the dashboard top bar and the tray.
 
 ![Profiles](../screenshots/profiles.png)
 
-A **profile** is a named stack: default PHP version, web server, database engine, and optional services (Redis, Mailpit, Meilisearch, MinIO, …).
+A **profile** is a named stack: default PHP version, web server, database engine, and optional services (Redis, Mailpit, Meilisearch, MinIO, …). The PHP dropdown includes every `bin/php/php-*` folder (so a manual PHP 8.5 install appears) plus versions available in **Quick Add**.
 
 1. Open **System → Profiles**
 2. **New profile** or edit an existing one

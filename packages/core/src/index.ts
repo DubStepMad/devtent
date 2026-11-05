@@ -35,6 +35,7 @@ export {
   isPhpStackServiceName,
   resolveProcfileServiceNames,
   listServicesWithStatus,
+  reloadWebServers,
 } from "./services.js";
 
 export {
@@ -60,6 +61,8 @@ export {
   linkSite,
   unlinkSite,
   setSitePhpVersion,
+  listWwwProjectNames,
+  diffNameLists,
 } from "./sites.js";
 
 export { runDoctor } from "./doctor.js";
@@ -164,6 +167,7 @@ export type {
 
 export {
   listInstalledPhpVersions,
+  listPhpVersionChoices,
   getActivePhpVersion,
   readPhpIni,
   writePhpIni,
@@ -171,7 +175,7 @@ export {
   ensurePhpRuntimeIni,
   XDEBUG_IDE_HINT,
 } from "./php-ini.js";
-export type { PhpIniSummary, PhpIniExtension } from "./php-ini.js";
+export type { PhpIniSummary, PhpIniExtension, PhpVersionChoice } from "./php-ini.js";
 
 export {
   backupMariaDb,

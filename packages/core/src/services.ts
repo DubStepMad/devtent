@@ -412,6 +412,66 @@ export async function restartService(root: string, name: string): Promise<Servic
   return startService(root, name);
 }
 
+async function signalProcfileReload(
+  root: string,
+  name: string,
+  extraArgs: string[]
+): Promise<boolean> {
+  try {
+    const entries = await parseProcfile(root);
+    const entry = entries.find((e) => e.name === name);
+    if (!entry) return false;
+    const { executable, args } = parseProcfileCommand(entry.command);
+    const exePath = resolvePath(root, executable);
+    if (!(await pathExists(exePath))) return false;
+    const spawnArgs = name === "apache" ? [...extraArgs, ...args] : [...args, ...extraArgs];
+    return await new Promise((resolve) => {
+      const child = spawn(exePath, spawnArgs, {
+        cwd: root,
+        windowsHide: true,
+        stdio: "ignore",
+      });
+      const timer = setTimeout(() => {
+        child.kill();
+        resolve(false);
+      }, 5000);
+      child.once("error", () => {
+        clearTimeout(timer);
+        resolve(false);
+      });
+      child.once("exit", (code) => {
+        clearTimeout(timer);
+        resolve(code === 0);
+      });
+    });
+  } catch {
+    return false;
+  }
+}
+
+/** Reload Nginx (`-s reload`) and Apache (`-k graceful`) without a full stack restart. */
+export async function reloadWebServers(
+  root: string
+): Promise<{ nginx: boolean; apache: boolean }> {
+  const nginx = isServiceRunning("nginx")
+    ? await signalProcfileReload(root, "nginx", ["-s", "reload"])
+    : false;
+
+  let apache = false;
+  if (isServiceRunning("apache")) {
+    apache = await signalProcfileReload(root, "apache", ["-k", "graceful"]);
+    if (!apache) {
+      try {
+        apache = (await restartService(root, "apache")).running;
+      } catch {
+        apache = false;
+      }
+    }
+  }
+
+  return { nginx, apache };
+}
+
 export async function stopService(name: string, root?: string, options?: { skipBackup?: boolean }): Promise<ServiceStatus> {
   // Expand logical php-fpm → all versioned PHP processes currently running or in Procfile
   if (name === "php-fpm") {

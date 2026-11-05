@@ -34,6 +34,23 @@ export async function discoverProjectNames(wwwRoot: string): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
+/** Top-level project folder names under the install `www/` directory. */
+export async function listWwwProjectNames(root: string): Promise<string[]> {
+  return discoverProjectNames(resolvePath(root, "www"));
+}
+
+export function diffNameLists(
+  previous: string[],
+  next: string[]
+): { added: string[]; removed: string[] } {
+  const prev = new Set(previous);
+  const nxt = new Set(next);
+  return {
+    added: next.filter((name) => !prev.has(name)),
+    removed: previous.filter((name) => !nxt.has(name)),
+  };
+}
+
 function normalizeSites(config: DevTentConfig): Required<SitesConfig> & { phpOverrides: Record<string, string> } {
   return {
     parked: config.sites?.parked ?? [],

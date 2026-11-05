@@ -89,6 +89,19 @@ describe("Services", () => {
     assert.deepEqual(parsed.args, ["--datadir=data/mysql", "--console"]);
   });
 
+  it("reloadWebServers is a no-op when nginx and apache are not running", async () => {
+    const { reloadWebServers, isServiceRunning } = await import("./services.js");
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-reload-"));
+    try {
+      await initDevTent(tmp);
+      assert.equal(isServiceRunning("nginx"), false);
+      assert.equal(isServiceRunning("apache"), false);
+      assert.deepEqual(await reloadWebServers(tmp), { nginx: false, apache: false });
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("parses Procfile with comments and blank lines", async () => {
     const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-svc-"));
     try {

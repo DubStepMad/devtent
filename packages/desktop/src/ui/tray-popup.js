@@ -125,10 +125,46 @@ async function refresh() {
   });
 }
 
+function showWwwNotice(payload) {
+  const added = payload?.added ?? [];
+  if (!added.length) return;
+  const notice = document.getElementById("www-notice");
+  const text = document.getElementById("www-notice-text");
+  const hostsBtn = document.getElementById("www-notice-hosts");
+  if (!notice || !text) return;
+  const names = added.join(", ");
+  const hosts = payload?.result?.hosts;
+  const needsHosts = Boolean(
+    hosts && !hosts.hostsCurrent && (hosts.elevationPending || hosts.requiresAdmin)
+  );
+  text.textContent = needsHosts
+    ? `New project ${names} — update hosts so it resolves.`
+    : `New project ${names} is live.`;
+  notice.classList.remove("hidden");
+  if (hostsBtn) hostsBtn.classList.toggle("hidden", !needsHosts);
+}
+
 function bind() {
   if (!api) return;
 
   api.onRefresh(() => refresh());
+  api.onWwwChanged?.((payload) => {
+    refresh();
+    showWwwNotice(payload);
+  });
+
+  document.getElementById("www-notice-dismiss")?.addEventListener("click", () => {
+    document.getElementById("www-notice")?.classList.add("hidden");
+  });
+  document.getElementById("www-notice-hosts")?.addEventListener("click", async () => {
+    try {
+      await api.elevateHostsSync();
+      document.getElementById("www-notice")?.classList.add("hidden");
+      refresh();
+    } catch {
+      // keep the notice so the user can retry
+    }
+  });
 
   document.getElementById("btn-popup-close")?.addEventListener("click", () => {
     api.closeQuickPanel?.();

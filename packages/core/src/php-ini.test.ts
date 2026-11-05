@@ -3,7 +3,13 @@ import { mkdir, writeFile, rm, mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { setPhpExtension, readPhpIni, XDEBUG_IDE_HINT } from "./php-ini.js";
+import {
+  setPhpExtension,
+  readPhpIni,
+  listInstalledPhpVersions,
+  listPhpVersionChoices,
+  XDEBUG_IDE_HINT,
+} from "./php-ini.js";
 
 describe("php-ini xdebug", () => {
   it("enables xdebug as zend_extension with IDE defaults", async () => {
@@ -95,6 +101,25 @@ describe("php-ini xdebug", () => {
       assert.match(content, /^zend_extension=opcache$/m);
       assert.doesNotMatch(content, /^extension=opcache$/m);
       assert.ok(content.includes('include="devtent.ini"'));
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("lists installed PHP folders including versions without a Quick Add manifest", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-phpver-"));
+    try {
+      await mkdir(path.join(tmp, "bin", "php", "php-8.3"), { recursive: true });
+      await mkdir(path.join(tmp, "bin", "php", "php-8.5"), { recursive: true });
+      await mkdir(path.join(tmp, "bin", "php", "not-php"), { recursive: true });
+      const installed = await listInstalledPhpVersions(tmp);
+      assert.deepEqual(installed, ["php-8.3", "php-8.5"]);
+      const choices = await listPhpVersionChoices(tmp, ["php-8.4", "php-8.5", "nginx"]);
+      assert.deepEqual(choices, [
+        { name: "php-8.3", installed: true },
+        { name: "php-8.4", installed: false },
+        { name: "php-8.5", installed: true },
+      ]);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

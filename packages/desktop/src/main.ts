@@ -4,6 +4,11 @@ import { existsSync, watch as watchFs } from "node:fs";
 import { registerIpcHandlers, refreshRoot, getCurrentRoot, setOpenDashboardHandler, setRequestQuitHandler, broadcastUpdateAvailable } from "./ipc-handlers.js";
 import { __dirname } from "./dir.js";
 import { setupTray, hideTrayPopup, setTrayRunning, getIconPath, destroyTray } from "./tray.js";
+import {
+  setWwwWatchGetRoot,
+  restartWwwProjectWatcher,
+  stopWwwProjectWatcher,
+} from "./www-watch.js";
 import { ensureEnvironmentReady } from "./startup-environment.js";
 import { syncLaunchAtLoginFromSettings } from "./startup-settings.js";
 import { maybeAutoStartServices } from "./auto-start-services.js";
@@ -30,6 +35,10 @@ function shouldBlockForInstallLock(): boolean {
 }
 
 initAppLogger();
+
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("enable-transparent-visuals");
+}
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -76,6 +85,7 @@ if (!hasInstanceLock) {
 function requestQuit(): void {
   if (isQuitting) return;
   isQuitting = true;
+  stopWwwProjectWatcher();
   destroyTray();
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.destroy();
@@ -210,6 +220,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers();
   setRequestQuitHandler(() => requestQuit());
   const root = await refreshRoot();
+  setWwwWatchGetRoot(() => getCurrentRoot());
 
   setOpenDashboardHandler(() => {
     hideTrayPopup();
@@ -238,6 +249,7 @@ app.whenReady().then(async () => {
     void maybeAutoStartServices(getCurrentRoot()).catch((err) => {
       console.error("Auto-start services failed:", err);
     });
+    void restartWwwProjectWatcher();
   }
 
   // Warm the core module after tray is up so the first IPC call is faster.
@@ -295,6 +307,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", (event) => {
   isQuitting = true;
+  stopWwwProjectWatcher();
   destroyTray();
   const installerPath = takePendingInstallerPath();
   if (installerPath && process.platform === "win32") {

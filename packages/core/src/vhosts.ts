@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, readdir, mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, resolvePath, pathExists } from "./config.js";
 import type { VirtualHost } from "./types.js";
@@ -98,6 +98,7 @@ export async function generateVirtualHosts(
       await Promise.all([writeNginxSite(root, vhost), writeApacheSite(root, vhost)]);
     })
   );
+  await pruneStaleSiteConfs(root, vhosts);
 
   await syncPhpCgiProcfile(root, vhosts);
 
@@ -112,6 +113,33 @@ export async function generateVirtualHosts(
         });
 
   return { vhosts, hosts };
+}
+
+async function pruneStaleSiteConfs(root: string, vhosts: VirtualHost[]): Promise<void> {
+  const keep = new Set(vhosts.map((vhost) => `${vhost.name}.conf`));
+  for (const rel of ["etc/nginx/sites", "etc/apache/sites"]) {
+    const dir = resolvePath(root, rel);
+    if (!(await pathExists(dir))) continue;
+    let files: string[] = [];
+    try {
+      files = await readdir(dir);
+    } catch {
+      continue;
+    }
+    await Promise.all(
+      files.map(async (file) => {
+        if (!file.endsWith(".conf") || keep.has(file)) return;
+        const full = path.join(dir, file);
+        try {
+          const content = await readFile(full, "utf-8");
+          if (!content.includes("# DevTent auto-generated")) return;
+          await unlink(full);
+        } catch {
+          // ignore unreadable/locked files
+        }
+      })
+    );
+  }
 }
 
 async function writeNginxSite(root: string, vhost: VirtualHost): Promise<void> {

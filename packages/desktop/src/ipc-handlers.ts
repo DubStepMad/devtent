@@ -44,6 +44,7 @@ import {
   rollbackAppBinary,
 } from "./update-backup.js";
 import { completeStandaloneHostsElevation } from "./hosts-elevation.js";
+import { restartWwwProjectWatcher } from "./www-watch.js";
 import { openFileInEditor } from "./open-in-editor.js";
 import {
   applyLaunchAtLoginSetting,
@@ -209,6 +210,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("devtent:setRoot", async (_e, root: string) => {
     await saveSettings({ root });
     currentRoot = root;
+    void restartWwwProjectWatcher();
     return { root, initialized: await isInitialized(root) };
   });
 
@@ -363,6 +365,13 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("devtent:listInstalledPhpVersions", async () => {
     return await (await loadCore()).listInstalledPhpVersions(currentRoot);
+  });
+
+  ipcMain.handle("devtent:listPhpVersionChoices", async () => {
+    const core = await loadCore();
+    const manifests = await core.listManifests(getManifestsDir());
+    const extra = manifests.filter((m) => m.name.startsWith("php-")).map((m) => m.name);
+    return await core.listPhpVersionChoices(currentRoot, extra);
   });
 
   ipcMain.handle("devtent:getActivePhpVersion", async () => {
@@ -552,6 +561,7 @@ export function registerIpcHandlers(): void {
     await (await loadCore()).initDevTent(target, (msg: string, percent?: number) => sendProgress(msg, percent));
     currentRoot = target;
     await markSetupCompleted(target);
+    void restartWwwProjectWatcher();
     return { root: target, initialized: true };
   });
 

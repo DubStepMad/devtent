@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolvePath, pathExists, loadConfig, loadProfile } from "./config.js";
 import { DEFAULT_PHP_VERSION, resolvePhpPaths } from "./profile-runtime.js";
+import { compareVersionStrings } from "./runtime-record.js";
 import { ensurePhpCaptureForVersion } from "./dump-capture.js";
 import {
   quoteIniValue,
@@ -70,14 +71,39 @@ function iniPathFor(root: string, phpVersion: string): string {
   return resolvePath(root, path.join(paths.phpRc, "php.ini"));
 }
 
+const PHP_VERSION_ID = /^php-\d+(?:\.\d+)*$/i;
+
+export interface PhpVersionChoice {
+  name: string;
+  installed: boolean;
+}
+
 export async function listInstalledPhpVersions(root: string): Promise<string[]> {
   const phpRoot = resolvePath(root, "bin/php");
   if (!(await pathExists(phpRoot))) return [];
   const entries = await readdir(phpRoot, { withFileTypes: true });
   return entries
-    .filter((e) => e.isDirectory() && /^php-\d/.test(e.name))
+    .filter((e) => e.isDirectory() && PHP_VERSION_ID.test(e.name))
     .map((e) => e.name)
-    .sort();
+    .sort((a, b) => compareVersionStrings(a.replace(/^php-/i, ""), b.replace(/^php-/i, "")));
+}
+
+/** Manifest PHP lines plus any folders already present under `bin/php/`. */
+export async function listPhpVersionChoices(
+  root: string,
+  extraNames: string[] = []
+): Promise<PhpVersionChoice[]> {
+  const installed = await listInstalledPhpVersions(root);
+  const installedSet = new Set(installed);
+  const names = new Set<string>();
+  for (const name of [...installed, ...extraNames]) {
+    const trimmed = name.trim();
+    if (!PHP_VERSION_ID.test(trimmed)) continue;
+    names.add(trimmed);
+  }
+  return [...names]
+    .sort((a, b) => compareVersionStrings(a.replace(/^php-/i, ""), b.replace(/^php-/i, "")))
+    .map((name) => ({ name, installed: installedSet.has(name) }));
 }
 
 export async function getActivePhpVersion(root: string): Promise<string> {

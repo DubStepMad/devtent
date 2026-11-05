@@ -10,6 +10,8 @@ import {
   discoverAllVirtualHosts,
   listParkedPaths,
   listLinkedSites,
+  listWwwProjectNames,
+  diffNameLists,
 } from "./sites.js";
 import { generateVirtualHosts } from "./vhosts.js";
 
@@ -48,5 +50,32 @@ describe("sites", () => {
     await generateVirtualHosts(tmp, { skipHostsSync: true });
     assert.equal((await listParkedPaths(tmp)).length, 1);
     assert.equal((await listLinkedSites(tmp)).length, 1);
+    assert.deepEqual(await listWwwProjectNames(tmp), ["app-a"]);
+  });
+
+  it("diffs www project names and prunes stale auto-generated site confs", async () => {
+    assert.deepEqual(diffNameLists(["keep", "gone"], ["keep", "new"]), {
+      added: ["new"],
+      removed: ["gone"],
+    });
+
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "devtent-sites-prune-"));
+    await initDevTent(tmp, () => {});
+    const www = path.join(tmp, "www", "keep-me");
+    await mkdir(www, { recursive: true });
+    await writeFile(path.join(www, "index.php"), "<?php", "utf-8");
+
+    const staleNginx = path.join(tmp, "etc", "nginx", "sites", "gone.conf");
+    const staleApache = path.join(tmp, "etc", "apache", "sites", "gone.conf");
+    await mkdir(path.dirname(staleNginx), { recursive: true });
+    await mkdir(path.dirname(staleApache), { recursive: true });
+    await writeFile(staleNginx, "# DevTent auto-generated — gone.localhost\n", "utf-8");
+    await writeFile(staleApache, "# DevTent auto-generated — gone.localhost\n", "utf-8");
+
+    await generateVirtualHosts(tmp, { skipHostsSync: true });
+    const { pathExists } = await import("./config.js");
+    assert.equal(await pathExists(staleNginx), false);
+    assert.equal(await pathExists(staleApache), false);
+    assert.equal(await pathExists(path.join(tmp, "etc", "nginx", "sites", "keep-me.conf")), true);
   });
 });

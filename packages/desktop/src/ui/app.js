@@ -561,6 +561,49 @@ async function runUpdateCheck({ showDialogOnAvailable = false, respectSkip = fal
   return result;
 }
 
+const promptedWwwHosts = new Set();
+
+function hostsUpdateNeeded(hosts) {
+  if (!hosts) return false;
+  if (hosts.hostsCurrent) return false;
+  return Boolean(hosts.elevationPending || hosts.requiresAdmin);
+}
+
+async function handleWwwChanged(payload) {
+  await handleScopedRefresh("sites").catch(console.error);
+  const added = Array.isArray(payload?.added) ? payload.added : [];
+  if (!added.length) return;
+  const setupEl = document.getElementById("view-setup");
+  if (setupEl && !setupEl.classList.contains("hidden")) return;
+  const names = added.join(", ");
+  const hosts = payload?.result?.hosts;
+  if (hostsUpdateNeeded(hosts)) {
+    showToast(
+      `New project ${names} detected. Update the hosts file so it opens in the browser.`,
+      "info",
+      8000
+    );
+    const key = [...added].sort().join("|");
+    if (promptedWwwHosts.has(key)) return;
+    promptedWwwHosts.add(key);
+    const ok = await showAppDialog({
+      title: "Add to hosts file?",
+      message: `DevTent found ${names} in www/. Add it to the hosts file so the site works without restarting? This needs Administrator permission.`,
+      confirmLabel: "Update hosts",
+      cancelLabel: "Later",
+    });
+    if (ok) {
+      try {
+        handleHostsSyncResult(await api.elevateHostsSync());
+      } catch (err) {
+        showToast(err.message || String(err), "error");
+      }
+    }
+    return;
+  }
+  showToast(`New project ${names} is live — no restart needed.`, "success");
+}
+
 function handleHostsSyncResult(result) {
   const hosts = result?.hosts;
   if (hosts?.updated) {
@@ -1931,13 +1974,11 @@ async function openSiteDrawer(vhost) {
 
   const phpSelect = document.getElementById("site-drawer-php");
   if (phpSelect) {
-    const phpVersions = (await api.listManifests())
-      .filter((m) => m.name.startsWith("php-"))
-      .map((m) => m.name);
-    phpSelect.innerHTML = phpVersions
+    const versions = await loadPhpVersionChoices(vhost.phpVersion);
+    phpSelect.innerHTML = versions
       .map(
-        (id) =>
-          `<option value="${escapeHtml(id)}" ${vhost.phpVersion === id ? "selected" : ""}>${escapeHtml(id.replace(/^php-/, "PHP "))}</option>`
+        (m) =>
+          `<option value="${escapeHtml(m.name)}" ${vhost.phpVersion === m.name ? "selected" : ""}>${escapeHtml(m.name.replace(/^php-/, "PHP "))}</option>`
       )
       .join("");
   }
@@ -2325,25 +2366,51 @@ function applyProfileServicesToEditor(profile) {
   syncProfileDatabaseToggle();
 }
 
+async function loadPhpVersionChoices(selected) {
+  let versions = [];
+  if (api.listPhpVersionChoices) {
+    versions = await api.listPhpVersionChoices().catch(() => []);
+  }
+  if (!versions.length) {
+    const [manifests, installed] = await Promise.all([
+      api.listManifests().catch(() => []),
+      api.listInstalledPhpVersions
+        ? api.listInstalledPhpVersions().catch(() => [])
+        : Promise.resolve([]),
+    ]);
+    const installedSet = new Set(installed);
+    const names = new Set([
+      ...installed,
+      ...manifests.filter((m) => /^php-\d/.test(m.name)).map((m) => m.name),
+    ]);
+    versions = [...names]
+      .sort()
+      .map((name) => ({ name, installed: installedSet.has(name) }));
+  }
+  if (!versions.length) {
+    versions = [
+      { name: "php-8.2", installed: false },
+      { name: "php-8.3", installed: false },
+      { name: "php-8.4", installed: false },
+      { name: "php-8.5", installed: false },
+    ];
+  }
+  if (selected && !versions.some((m) => m.name === selected)) {
+    versions.push({ name: selected, installed: true });
+  }
+  return versions;
+}
+
 async function populatePhpVersionSelect(selected) {
   const select = document.getElementById("profile-php-version");
   if (!select) return;
-  const manifests = await api.listManifests();
-  const phpManifests = manifests.filter((m) => m.name.startsWith("php-"));
-  const versions = phpManifests.length
-    ? phpManifests
-    : [
-        { name: "php-8.2", installed: false },
-        { name: "php-8.3", installed: false },
-        { name: "php-8.4", installed: false },
-      ];
+  const versions = await loadPhpVersionChoices(selected);
   select.innerHTML = versions
     .map((m) => {
       const label =
-        m.name.replace(/^php-/, "PHP ") +
-        (m.installed === false ? " (not installed)" : m.installed ? "" : "");
+        m.name.replace(/^php-/, "PHP ") + (m.installed === false ? " (not installed)" : "");
       const isSelected = m.name === selected;
-      return `<option value="${m.name}" ${isSelected ? "selected" : ""}>${label}</option>`;
+      return `<option value="${escapeHtml(m.name)}" ${isSelected ? "selected" : ""}>${escapeHtml(label)}</option>`;
     })
     .join("");
 }
@@ -2772,6 +2839,7 @@ async function boot() {
 
   api.onProgress((payload) => handleProgress(payload));
   api.onRefresh((scope) => handleScopedRefresh(scope).catch(console.error));
+  api.onWwwChanged?.((payload) => handleWwwChanged(payload).catch(console.error));
   api.onUpdateAvailable((result) => {
     if (result.status !== "available" || !result.update) return;
     setUpdateStatusLine(result);

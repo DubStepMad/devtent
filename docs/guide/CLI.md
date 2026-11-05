@@ -12,7 +12,7 @@ devtent open [view]            # Open dashboard (optional view name)
 
 devtent vhost sync             # Regenerate virtual hosts
 devtent quick-app laravel blog # Scaffold a site
-devtent sites php blog php-8.4 # Per-site PHP
+devtent sites php blog php-8.5 # Per-site PHP
 devtent sites workers blog     # Queue / Vite / schedule
 
 devtent doctor                 # Health check
@@ -31,7 +31,7 @@ devtent profile list
 devtent profile use laravel
 devtent profile create api --redis --mailpit
 devtent quick-add list
-devtent quick-add php-8.4
+devtent quick-add php-8.5
 devtent stack install          # Recommended stack
 ```
 

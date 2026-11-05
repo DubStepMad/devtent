@@ -12,6 +12,7 @@ describe("php ports", () => {
     assert.equal(resolvePhpCgiPort("php-8.2"), 9082);
     assert.equal(resolvePhpCgiPort("php-8.3"), 9083);
     assert.equal(resolvePhpCgiPort("php-8.4"), 9084);
+    assert.equal(resolvePhpCgiPort("php-8.5"), 9085);
   });
 
   it("builds procfile service names per platform", () => {
