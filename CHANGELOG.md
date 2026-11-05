@@ -4,6 +4,12 @@ All notable changes to DevTent are documented in this file.
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-11-05
+
+### Fixed
+
+- **Windows E2E smoke** — `--e2e-smoke` now exits 0 on headless CI. `app.exit(0)` was reporting 1 after a GPU helper crash, and the tray transparency switch is skipped in that path.
+
 ## [2.4.0] - 2026-11-05
 
 Live project detection, PHP 8.5, and tray popup polish.

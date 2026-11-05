@@ -36,7 +36,7 @@ function shouldBlockForInstallLock(): boolean {
 
 initAppLogger();
 
-if (process.platform === "win32") {
+if (process.platform === "win32" && !isE2eSmoke) {
   app.commandLine.appendSwitch("enable-transparent-visuals");
 }
 
@@ -53,7 +53,9 @@ if (shouldBlockForInstallLock()) {
 if (isE2eSmoke) {
   app.whenReady().then(() => {
     console.log("E2E_SMOKE_OK");
-    app.exit(0);
+    // process.exit — app.exit(0) still reports 1 on headless Windows when a GPU
+    // helper crashes, and before-quit would preventDefault the intended 0.
+    process.exit(0);
   });
 } else {
 const hasInstanceLock = app.requestSingleInstanceLock();
@@ -306,6 +308,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
+  if (isE2eSmoke) return;
   isQuitting = true;
   stopWwwProjectWatcher();
   destroyTray();

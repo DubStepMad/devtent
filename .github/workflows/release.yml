@@ -65,7 +65,7 @@ jobs:
       - name: Electron E2E smoke (Windows)
         if: matrix.platform == 'win'
         working-directory: packages/desktop
-        run: npx electron . --e2e-smoke
+        run: npx electron . --e2e-smoke --disable-gpu
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7

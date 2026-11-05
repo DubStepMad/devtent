@@ -36,4 +36,4 @@ jobs:
 
       - name: Electron E2E smoke
         working-directory: packages/desktop
-        run: npx electron . --e2e-smoke
+        run: npx electron . --e2e-smoke --disable-gpu
